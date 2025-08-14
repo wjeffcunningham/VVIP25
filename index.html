@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>VVIP25</title>
+  <meta name="theme-color" content="#0b0b0c" />
+  <style>
+    :root{--bg:#0b0b0c;--fg:#eceff4;--muted:#9aa0a6;--card:#141416;--border:#26272b;--accent:#6ee7b7}
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, "Segoe UI", Roboto, Inter, system-ui, sans-serif}
+    .wrap{max-width:920px;margin:0 auto;padding:16px}
+    header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+    h1{margin:0;font-size:28px;font-weight:bold;letter-spacing:.3px;font-family:"Helvetica Neue", Helvetica, Arial, sans-serif}
+    .player{position:sticky;top:0;z-index:10;background:linear-gradient(180deg,rgba(11,11,12,.97),rgba(11,11,12,.92));backdrop-filter:saturate(120%) blur(8px);border-bottom:1px solid var(--border)}
+    .now{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:12px 0}
+    .cover{width:56px;height:56px;border-radius:8px;background:#1e1f24;display:grid;place-items:center;color:var(--muted);font-weight:700;border:1px solid var(--border)}
+    .meta{min-width:0}
+    .title{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .sub{color:var(--muted);font-size:12px}
+    .controls{display:flex;align-items:center;gap:8px}
+    button{appearance:none;background:var(--card);color:var(--fg);border:1px solid var(--border);border-radius:10px;padding:8px 12px;cursor:pointer}
+    button:disabled{opacity:.55;cursor:not-allowed}
+    .range{display:flex;align-items:center;gap:8px}
+    input[type="range"]{width:160px}
+    .list{margin:12px 0 40px;border:1px solid var(--border);border-radius:14px;overflow:hidden}
+    .row{display:grid;grid-template-columns:56px 1fr auto;gap:12px;align-items:center;padding:10px 12px;border-top:1px solid var(--border);background:var(--card)}
+    .row:first-child{border-top:0}
+    .row:hover{background:#17171b}
+    .badge{display:flex;gap:10px;align-items:center;font-size:12px;justify-self:end}
+    .badge a{color:var(--fg);text-decoration:none;border:1px solid var(--border);padding:4px 8px;border-radius:8px}
+    .badge .muted{color:var(--muted)}
+    .kbd{font:12px/1.2 ui-monospace,Menlo,Consolas;background:#1b1c20;border:1px solid #2a2b30;border-radius:6px;padding:2px 6px;color:#d7dae0}
+    /* Hamburger */
+    details.menu{margin-top:8px}
+    details.menu > summary{cursor:pointer;list-style:none;background:var(--card);border:1px solid var(--border);padding:8px 12px;border-radius:10px;user-select:none}
+    details.menu[open] > summary{border-bottom-left-radius:0;border-bottom-right-radius:0}
+    .sheet{border:1px solid var(--border);border-top:0;border-radius:0 0 10px 10px;background:var(--card);padding:10px;margin-top:-8px}
+    .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    input[type="search"],select,label.toggle{background:var(--card);color:var(--fg);border:1px solid var(--border);border-radius:10px;padding:8px 10px}
+    input[type="search"]{flex:1;min-width:220px}
+    label.toggle{display:flex;gap:6px;align-items:center}
+    @media (max-width:560px){
+      .now{grid-template-columns:1fr;gap:8px}
+      .cover{display:none}
+      .controls{flex-wrap:wrap}
+      .range input[type="range"]{width:120px}
+      .row{grid-template-columns:1fr auto}
+    }
+  </style>
+</head>
+<body>
+  <div class="player">
+    <div class="wrap">
+      <header>
+        <h1>VVIP25</h1>
+        <details class="menu">
+          <summary>☰ Menu</summary>
+          <div class="sheet">
+            <div class="toolbar">
+              <input id="q" type="search" placeholder="Search (filename, title, details)…" autocomplete="off" />
+              <select id="sort" title="Sort">
+                <option value="date_desc">Newest</option>
+                <option value="date_asc">Oldest</option>
+                <option value="name_asc">Name A→Z</option>
+                <option value="name_desc">Name Z→A</option>
+                <option value="bpm_desc">BPM ↓</option>
+                <option value="bpm_asc">BPM ↑</option>
+                <option value="details_asc">Details A→Z</option>
+                <option value="details_desc">Details Z→A</option>
+              </select>
+              <label class="toggle"><input id="nameMode" type="checkbox" /> Show given names</label>
+            </div>
+          </div>
+        </details>
+      </header>
+
+      <div class="now">
+        <div class="cover" id="cover">V25</div>
+        <div class="meta">
+          <div class="title" id="now-title">—</div>
+          <div class="sub" id="now-sub">Ready</div>
+        </div>
+        <div class="controls">
+          <button id="prev" aria-label="Previous">⏮️</button>
+          <button id="toggle" aria-label="Play/Pause">▶️</button>
+          <button id="next" aria-label="Next">⏭️</button>
+          <div class="range">
+            <span id="tcur">0:00</span>
+            <input id="seek" type="range" min="0" max="100" value="0" step="1" aria-label="Seek" />
+            <span id="tdur">0:00</span>
+          </div>
+          <div class="range" title="Volume">
+            <span>🔊</span>
+            <input id="vol" type="range" min="0" max="1" step="0.01" />
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div id="list" class="list" role="list"></div>
+    <p class="sub">Tips: <span class="kbd">Space</span> play/pause, <span class="kbd">←/→</span> seek ±5s, <span class="kbd">↑/↓</span> volume.</p>
+  </div>
+
+  <audio id="audio" preload="none" crossorigin="anonymous"></audio>
+
+  <script>
+  // ====== CONFIG: set your Cloudflare media base URLs ======
+  const BASE_MP3 = 'https://media.vvipmedia.net/audio/mp3/';  // TODO: change if different
+  const BASE_WAV = 'https://media.vvipmedia.net/audio/wav/';  // TODO: change if different
+  // =========================================================
+
+  // Parse YY.MM.DD.SSS_SUB.mp3
+  function parseFromName(name){
+    const m = name.match(/^(\d{2})\.(\d{2})\.(\d{2})\.(\d{3})_(\d{3})\.mp3$/i);
+    if(!m) return {date:null,label:name,seq:null};
+    const [_, yy, mm, dd, seq] = m;
+    const year = 2000 + +yy, month = +mm-1, day = +dd;
+    const date = new Date(Date.UTC(year, month, day));
+    return {date, label: `${year}-${mm}-${dd} · ${seq}`, seq:+seq};
+  }
+  function fmtDur(sec){ sec=Number(sec||0); const m=Math.floor(sec/60), s=Math.floor(sec%60); return `${m}:${String(s).padStart(2,'0')}`; }
+  function debounce(fn,ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); } }
+  function escapeHTML(s){ return String(s).replace(/[&<>"']/g, c=>({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c])); }
+
+  const els = {
+    audio: document.getElementById('audio'),
+    list: document.getElementById('list'),
+    q: document.getElementById('q'),
+    sort: document.getElementById('sort'),
+    toggle: document.getElementById('toggle'),
+    prev: document.getElementById('prev'),
+    next: document.getElementById('next'),
+    seek: document.getElementById('seek'),
+    vol: document.getElementById('vol'),
+    nowTitle: document.getElementById('now-title'),
+    nowSub: document.getElementById('now-sub'),
+    tcur: document.getElementById('tcur'),
+    tdur: document.getElementById('tdur'),
+    nameMode: document.getElementById('nameMode')
+  };
+
+  const state = { tracks: [], filtered: [], i:-1, playing:false };
+
+  // Persisted volume
+  els.vol.value = localStorage.getItem('vvip25:vol') ?? '0.9';
+  els.audio.volume = parseFloat(els.vol.value);
+
+  // Boot
+  init();
+  async function init(){
+    const res = await fetch('./manifest.json', {cache:'no-store'});
+    if(!res.ok){ els.list.innerHTML = `<div class="row"><div></div><div>manifest.json missing</div></div>`; return; }
+    const data = await res.json();
+    state.tracks = data.map((t,idx)=>{
+      const name = t.name;
+      const parsed = parseFromName(name);
+      const base = name.replace(/\.mp3$/i,'');
+      return {
+        id: idx,
+        name,
+        title: t.title || '',
+        bpm: t.bpm ?? null,
+        details: t.details || '',
+        length: t.length || 0, // optional if you precompute
+        src: t.src || (BASE_MP3 + name),
+        wav: t.wav || (BASE_WAV + base + '.wav'),
+        ...parsed
+      };
+    });
+    applyFilterSort();
+    if(state.filtered.length) select(0);
+  }
+
+  function applyFilterSort(){
+    const q = (els.q?.value||'').trim().toLowerCase();
+    let out = state.tracks.filter(t=>{
+      return !q || t.name.toLowerCase().includes(q) ||
+             (t.title && t.title.toLowerCase().includes(q)) ||
+             (t.details && t.details.toLowerCase().includes(q)) ||
+             (t.label && t.label.toLowerCase().includes(q));
+    });
+    switch(els.sort?.value||'date_desc'){
+      case 'date_desc': out.sort((a,b)=>(b.date?.getTime()||0)-(a.date?.getTime()||0)); break;
+      case 'date_asc':  out.sort((a,b)=>(a.date?.getTime()||0)-(b.date?.getTime()||0)); break;
+      case 'name_asc':  out.sort((a,b)=> displayName(a).localeCompare(displayName(b))); break;
+      case 'name_desc': out.sort((a,b)=> displayName(b).localeCompare(displayName(a))); break;
+      case 'bpm_desc':  out.sort((a,b)=> (b.bpm||0)-(a.bpm||0)); break;
+      case 'bpm_asc':   out.sort((a,b)=> (a.bpm||0)-(b.bpm||0)); break;
+      case 'details_asc': out.sort((a,b)=> (a.details||'').localeCompare(b.details||'')); break;
+      case 'details_desc': out.sort((a,b)=> (b.details||'').localeCompare(a.details||'')); break;
+      case 'len_desc':  out.sort((a,b)=> (b.length||0)-(a.length||0)); break;
+      case 'len_asc':   out.sort((a,b)=> (a.length||0)-(b.length||0)); break;
+    }
+    state.filtered = out;
+    renderList();
+  }
+
+  function displayName(t){ return (els.nameMode?.checked && t.title) ? t.title : t.name; }
+
+  function renderList(){
+    if(!state.filtered.length){ els.list.innerHTML = '<div class="row"><div></div><div>No results.</div></div>'; return; }
+    els.list.innerHTML = state.filtered.map(t=>{
+      const active = (state.i>=0 && state.filtered[state.i]?.id===t.id);
+      const mp3 = t.src;
+      const wav = t.wav;
+      const wavDisabled = !wav || /undefined/.test(wav);
+      return `<div class="row" role="listitem" data-id="${t.id}">
+        <div class="cover" aria-hidden="true">${String(t.seq??'').slice(-2) || 'V25'}</div>
+        <div>
+          <div class="title">${active ? '▶︎ ' : ''}${escapeHTML(displayName(t))}</div>
+          <div class="sub">${t.label || ''} ${t.length?` · ${fmtDur(t.length)}`:''}${t.bpm?` · ${t.bpm} BPM`:''}${t.details?` · ${escapeHTML(t.details)}`:''}</div>
+        </div>
+        <div class="badge">
+          <a href="${mp3}" download title="Download MP3">⬇︎ MP3</a>
+          ${wavDisabled ? '<span class="muted" title="No WAV">WAV</span>' : `<a href="${wav}" download title="Download WAV">⬇︎ WAV</a>`}
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function select(indexInFiltered){
+    state.i = indexInFiltered;
+    const t = state.filtered[indexInFiltered];
+    if(!t) return;
+    els.audio.src = t.src;
+    updateNowbar();
+    state.playing = false;
+    updateToggle();
+    renderList();
+  }
+
+  function updateNowbar(){
+    const t = state.filtered[state.i];
+    if(!t) return;
+    els.nowTitle.textContent = displayName(t);
+    els.nowSub.textContent = t.label || '';
+  }
+
+  async function play(){
+    try{
+      await els.audio.play();
+      state.playing = true; updateToggle();
+      if('mediaSession' in navigator){
+        const t = state.filtered[state.i];
+        navigator.mediaSession.metadata = new MediaMetadata({ title: displayName(t) });
+        navigator.mediaSession.setActionHandler('previoustrack', ()=> jump(-1));
+        navigator.mediaSession.setActionHandler('nexttrack', ()=> jump(1));
+        navigator.mediaSession.setActionHandler('seekbackward', ()=> els.audio.currentTime = Math.max(0, els.audio.currentTime-10));
+        navigator.mediaSession.setActionHandler('seekforward', ()=> els.audio.currentTime = Math.min(els.audio.duration||0, els.audio.currentTime+10));
+      }
+    }catch(e){ console.warn(e); }
+  }
+  function pause(){ els.audio.pause(); state.playing=false; updateToggle(); }
+  function updateToggle(){ els.toggle.textContent = state.playing ? '⏸️' : '▶️'; }
+  function jump(dir){
+    if(!state.filtered.length) return;
+    let i = state.i + dir;
+    if(i < 0) i = state.filtered.length-1;
+    if(i >= state.filtered.length) i = 0;
+    select(i); play();
+  }
+
+  // Events
+  document.addEventListener('click', (e)=>{
+    const row = e.target.closest('.row');
+    if(row && e.target.closest('a')==null){
+      const id = Number(row.getAttribute('data-id'));
+      const idx = state.filtered.findIndex(t=>t.id===id);
+      if(idx>=0){ select(idx); play(); }
+    }
+  });
+  els.q?.addEventListener('input', debounce(()=> applyFilterSort(), 80));
+  els.sort?.addEventListener('change', ()=> applyFilterSort());
+  els.toggle.addEventListener('click', ()=> state.playing ? pause() : play());
+  els.prev.addEventListener('click', ()=> jump(-1));
+  els.next.addEventListener('click', ()=> jump(1));
+  els.audio.addEventListener('timeupdate', ()=>{
+    const a=els.audio; if(!isFinite(a.duration)) return;
+    els.seek.max = Math.floor(a.duration);
+    els.seek.value = Math.floor(a.currentTime);
+    els.tcur.textContent = fmtDur(a.currentTime);
+    els.tdur.textContent = isFinite(a.duration) ? fmtDur(a.duration) : '0:00';
+  });
+  els.seek.addEventListener('input', ()=>{ els.audio.currentTime = Number(els.seek.value); });
+  els.vol.addEventListener('input', ()=>{ els.audio.volume = parseFloat(els.vol.value); localStorage.setItem('vvip25:vol', els.vol.value); });
+  els.audio.addEventListener('ended', ()=> jump(1));
+  els.nameMode?.addEventListener('change', ()=>{ renderList(); if(state.i>=0) updateNowbar(); });
+  </script>
+</body>
+</html>
