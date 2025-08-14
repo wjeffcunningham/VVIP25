@@ -318,7 +318,13 @@ const BASE_WAV = 'https://media.vvipmedia.net/ACCESS/';
   });
   els.q?.addEventListener('input', debounce(()=> applyFilterSort(), 80));
   els.sort?.addEventListener('change', ()=> applyFilterSort());
-  els.toggle.addEventListener('click', ()=> state.playing ? pause() : play());
+els.toggle.addEventListener('click', () => {
+  if (state.i < 0 && state.filtered.length) {
+    // no track loaded yet — default to first in the filtered list
+    select(0);
+  }
+  state.playing ? pause() : play();
+});
   els.prev.addEventListener('click', ()=> jump(-1));
   els.next.addEventListener('click', ()=> jump(1));
   els.audio.addEventListener('timeupdate', ()=>{
