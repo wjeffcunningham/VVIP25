@@ -7,55 +7,67 @@
   <link rel="icon" href="/favicon.ico" type="image/x-icon">
   <meta name="theme-color" content="#0b0b0c" />
   <style>
-    :root{--bg:#0b0b0c;--fg:#eceff4;--muted:#9aa0a6;--card:#141416;--border:#26272b;--accent:#6ee7b7}
-    *{box-sizing:border-box}
-    html,body{height:100%}
-    body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, "Segoe UI", Roboto, Inter, system-ui, sans-serif}
-    .wrap{max-width:920px;margin:0 auto;padding:16px}
-    header{display:flex;align-items:center;justify-content:space-between;gap:12px}
-    h1{margin:0;font-size:28px;font-weight:bold;letter-spacing:.3px;font-family:"Helvetica Neue", Helvetica, Arial, sans-serif}
-    .player{position:sticky;top:0;z-index:10;background:linear-gradient(180deg,rgba(11,11,12,.97),rgba(11,11,12,.92));backdrop-filter:saturate(120%) blur(8px);border-bottom:1px solid var(--border)}
-    .now{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:12px 0}
-    .cover{width:56px;height:56px;border-radius:8px;background:#1e1f24;display:grid;place-items:center;color:var(--muted);font-weight:700;border:1px solid var(--border)}
-    .meta{min-width:0}
-    .title{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .sub{color:var(--muted);font-size:12px}
-    .controls{display:flex;align-items:center;gap:8px}
-    button{appearance:none;background:var(--card);color:var(--fg);border:1px solid var(--border);border-radius:10px;padding:8px 12px;cursor:pointer}
-    button:disabled{opacity:.55;cursor:not-allowed}
-    .range{display:flex;align-items:center;gap:8px}
-    input[type="range"]{width:160px}
-    .list{margin:12px 0 40px;border:1px solid var(--border);border-radius:14px;overflow:hidden}
-    .row{display:grid;grid-template-columns:56px 1fr auto;gap:12px;align-items:center;padding:10px 12px;border-top:1px solid var(--border);background:var(--card)}
-    .row:first-child{border-top:0}
-    .row:hover{background:#17171b}
-    .badge{display:flex;gap:10px;align-items:center;font-size:12px;justify-self:end}
-    .badge a{color:var(--fg);text-decoration:none;border:1px solid var(--border);padding:4px 8px;border-radius:8px}
-    .badge .muted{color:var(--muted)}
-    .kbd{font:12px/1.2 ui-monospace,Menlo,Consolas;background:#1b1c20;border:1px solid #2a2b30;border-radius:6px;padding:2px 6px;color:#d7dae0}
-    /* Hamburger */
-    details.menu{margin-top:8px}
-    details.menu > summary{cursor:pointer;list-style:none;background:var(--card);border:1px solid var(--border);padding:8px 12px;border-radius:10px;user-select:none}
-    details.menu[open] > summary{border-bottom-left-radius:0;border-bottom-right-radius:0}
-    .sheet{border:1px solid var(--border);border-top:0;border-radius:0 0 10px 10px;background:var(--card);padding:10px;margin-top:-8px}
-    .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-    input[type="search"],select,label.toggle{background:var(--card);color:var(--fg);border:1px solid var(--border);border-radius:10px;padding:8px 10px}
-    input[type="search"]{flex:1;min-width:220px}
-    label.toggle{display:flex;gap:6px;align-items:center}
-    @media (max-width:560px){
-      .now{grid-template-columns:1fr;gap:8px}
-      .cover{display:none}
-      .controls{flex-wrap:wrap}
-      .range input[type="range"]{width:120px}
-      .row{grid-template-columns:1fr auto}
-    }
-  </style>
-</head>
+  :root{--bg:#0b0b0c;--fg:#eceff4;--muted:#9aa0a6;--card:#141416;--border:#26272b;--accent:#6ee7b7}
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, "Segoe UI", Roboto, Inter, system-ui, sans-serif}
+  .wrap{max-width:920px;margin:0 auto;padding:16px}
+  header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+
+  /* Outline-only VVIP25 title */
+  #site-title{
+    margin:0;
+    font-size:28px;
+    font-weight:bold;
+    font-family:"Helvetica Neue", Helvetica, Arial, sans-serif;
+    color:transparent;
+    -webkit-text-fill-color:transparent; /* Safari */
+    -webkit-text-stroke:2px #fdf6d0;     /* outline color + thickness */
+    text-shadow:-24px 24px 0 rgba(255,255,255,0.093);
+    /* letter-spacing:-0.0476em; Uncomment if you want tighter FCP-style tracking */
+  }
+
+  .player{position:sticky;top:0;z-index:10;background:linear-gradient(180deg,rgba(11,11,12,.97),rgba(11,11,12,.92));backdrop-filter:saturate(120%) blur(8px);border-bottom:1px solid var(--border)}
+  .now{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:12px 0}
+  .cover{width:56px;height:56px;border-radius:8px;background:#1e1f24;display:grid;place-items:center;color:var(--muted);font-weight:700;border:1px solid var(--border)}
+  .meta{min-width:0}
+  .title{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sub{color:var(--muted);font-size:12px}
+  .controls{display:flex;align-items:center;gap:8px}
+  button{appearance:none;background:var(--card);color:var(--fg);border:1px solid var(--border);border-radius:10px;padding:8px 12px;cursor:pointer}
+  button:disabled{opacity:.55;cursor:not-allowed}
+  .range{display:flex;align-items:center;gap:8px}
+  input[type="range"]{width:160px}
+  .list{margin:12px 0 40px;border:1px solid var(--border);border-radius:14px;overflow:hidden}
+  .row{display:grid;grid-template-columns:56px 1fr auto;gap:12px;align-items:center;padding:10px 12px;border-top:1px solid var(--border);background:var(--card)}
+  .row:first-child{border-top:0}
+  .row:hover{background:#17171b}
+  .badge{display:flex;gap:10px;align-items:center;font-size:12px;justify-self:end}
+  .badge a{color:var(--fg);text-decoration:none;border:1px solid var(--border);padding:4px 8px;border-radius:8px}
+  .badge .muted{color:var(--muted)}
+  .kbd{font:12px/1.2 ui-monospace,Menlo,Consolas;background:#1b1c20;border:1px solid #2a2b30;border-radius:6px;padding:2px 6px;color:#d7dae0}
+  /* Hamburger */
+  details.menu{margin-top:8px}
+  details.menu > summary{cursor:pointer;list-style:none;background:var(--card);border:1px solid var(--border);padding:8px 12px;border-radius:10px;user-select:none}
+  details.menu[open] > summary{border-bottom-left-radius:0;border-bottom-right-radius:0}
+  .sheet{border:1px solid var(--border);border-top:0;border-radius:0 0 10px 10px;background:var(--card);padding:10px;margin-top:-8px}
+  .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  input[type="search"],select,label.toggle{background:var(--card);color:var(--fg);border:1px solid var(--border);border-radius:10px;padding:8px 10px}
+  input[type="search"]{flex:1;min-width:220px}
+  label.toggle{display:flex;gap:6px;align-items:center}
+  @media (max-width:560px){
+    .now{grid-template-columns:1fr;gap:8px}
+    .cover{display:none}
+    .controls{flex-wrap:wrap}
+    .range input[type="range"]{width:120px}
+    .row{grid-template-columns:1fr auto}
+  }
+</style></head>
 <body>
   <div class="player">
     <div class="wrap">
       <header>
-        <h1>VVIP25</h1>
+        <h1 id="site-title">VVIP25</h1>
         <details class="menu">
           <summary>☰ Menu</summary>
           <div class="sheet">
