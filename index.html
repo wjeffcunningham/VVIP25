@@ -8,18 +8,26 @@
 <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png">
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
   <meta name="theme-color" content="#0b0b0c" />
-  <style>
+<style>
   :root{--bg:#0b0b0c;--fg:#eceff4;--muted:#9aa0a6;--card:#141416;--border:#26272b;--accent:#6ee7b7}
   *{box-sizing:border-box}
   html,body{height:100%}
-  body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, "Segoe UI", Roboto, Inter, system-ui, sans-serif}
+  body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 -apple-system, BlinkMacSystemFont,"Helvetica Neue",Helvetica,Arial,"Segoe UI",Roboto,Inter,system-ui,sans-serif}
   .wrap{max-width:920px;margin:0 auto;padding:16px}
-  header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+
+  /* Header anchors the overlay panel */
+  header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    position:relative;
+  }
 
   /* Outline-only VVIP25 title, doubled size */
   #site-title{
     margin:0;
-    font-size:56px; /* doubled from 28px */
+    font-size:56px;
     font-weight:bold;
     font-family:"Helvetica Neue", Helvetica, Arial, sans-serif;
     color:transparent;
@@ -46,16 +54,31 @@
   .badge a{color:var(--fg);text-decoration:none;border:1px solid var(--border);padding:4px 8px;border-radius:8px}
   .badge .muted{color:var(--muted)}
   .kbd{font:12px/1.2 ui-monospace,Menlo,Consolas;background:#1b1c20;border:1px solid #2a2b30;border-radius:6px;padding:2px 6px;color:#d7dae0}
-  
-  /* Hamburger */
-  details.menu{margin-top:8px}
-  details.menu > summary{cursor:pointer;list-style:none;background:var(--card);border:1px solid var(--border);padding:8px 12px;border-radius:10px;user-select:none}
-  details.menu[open] > summary{border-bottom-left-radius:0;border-bottom-right-radius:0}
-  .sheet{border:1px solid var(--border);border-top:0;border-radius:0 0 10px 10px;background:var(--card);padding:10px;margin-top:-8px}
+
+  /* Hamburger (overlay) */
+  details.menu{position:static}
+  details.menu > summary{
+    cursor:pointer;list-style:none;background:var(--card);
+    border:1px solid var(--border);padding:8px 12px;border-radius:10px;user-select:none;
+  }
+
+  /* The dropdown panel overlays below the header */
+  .sheet{
+    position:absolute;top:calc(100% + 8px);right:0;z-index:20;
+    width:min(420px, calc(100vw - 32px));
+    background:var(--card);border:1px solid var(--border);border-radius:10px;
+    padding:10px;display:none;box-shadow:0 10px 24px rgba(0,0,0,.35);
+  }
+  details.menu[open] > .sheet{display:block}
+  details.menu[open] > summary{border-bottom-left-radius:10px;border-bottom-right-radius:10px}
+
   .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
   input[type="search"],select,label.toggle{background:var(--card);color:var(--fg);border:1px solid var(--border);border-radius:10px;padding:8px 10px}
-  input[type="search"]{flex:1;min-width:220px}
-  label.toggle{display:flex;gap:6px;align-items:center}
+
+  /* Hide the volume control on iOS Safari (WebKit on iOS), all sizes */
+  @supports (-webkit-touch-callout: none) {
+    .range[title="Volume"]{display:none !important}
+  }
 
   @media (max-width:560px){
     .now{grid-template-columns:1fr;gap:8px}
@@ -63,11 +86,6 @@
     .controls{flex-wrap:wrap}
     .range input[type="range"]{width:120px}
     .row{grid-template-columns:1fr auto}
-
-    /* Hide the volume control entirely on iOS Safari (WebKit) */
-    @supports (-webkit-touch-callout: none) {
-      .range[title="Volume"] { display: none !important; }
-    }
   }
 </style></head>
 <body>
