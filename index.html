@@ -69,6 +69,8 @@
                 <option value="bpm_asc">BPM ↑</option>
                 <option value="details_asc">Details A→Z</option>
                 <option value="details_desc">Details Z→A</option>
+                <option value="len_desc">Longest</option>
+                <option value="len_asc">Shortest</option>
               </select>
               <label class="toggle"><input id="nameMode" type="checkbox" /> Show given names</label>
             </div>
@@ -108,23 +110,36 @@
   <audio id="audio" preload="none" crossorigin="anonymous"></audio>
 
   <script>
-  // ====== CONFIG: set your Cloudflare media base URLs ======
-  const BASE_MP3 = 'https://media.vvipmedia.net/audio/mp3/';  // TODO: change if different
-  const BASE_WAV = 'https://media.vvipmedia.net/audio/wav/';  // TODO: change if different
-  // =========================================================
+  // ====== CONFIG: Cloudflare media base URLs (your live paths) ======
+  const BASE_MP3 = 'https://vvipmedia.net/ACCESS/';
+  const BASE_WAV = 'https://vvipmedia.net/ACCESS/'; // WAVs will be uploaded later
+  // ================================================================
 
-  // Parse YY.MM.DD.SSS_SUB.mp3
-  function parseFromName(name){
-    const m = name.match(/^(\d{2})\.(\d{2})\.(\d{2})\.(\d{3})_(\d{3})\.mp3$/i);
-    if(!m) return {date:null,label:name,seq:null};
-    const [_, yy, mm, dd, seq] = m;
-    const year = 2000 + +yy, month = +mm-1, day = +dd;
-    const date = new Date(Date.UTC(year, month, day));
-    return {date, label: `${year}-${mm}-${dd} · ${seq}`, seq:+seq};
-  }
+  // -------- Helpers --------
   function fmtDur(sec){ sec=Number(sec||0); const m=Math.floor(sec/60), s=Math.floor(sec%60); return `${m}:${String(s).padStart(2,'0')}`; }
   function debounce(fn,ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); } }
   function escapeHTML(s){ return String(s).replace(/[&<>"']/g, c=>({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c])); }
+
+  // BPM utils: supports single BPM or range (bpm_min/bpm_max)
+  function bpmSortValue(t){
+    if (t.bpm != null) return t.bpm;
+    if (t.bpm_min != null && t.bpm_max != null) return (t.bpm_min + t.bpm_max) / 2;
+    return 0;
+  }
+  function bpmLabel(t){
+    if (t.bpm != null) return `${t.bpm} BPM`;
+    if (t.bpm_min != null && t.bpm_max != null) return `${t.bpm_min}–${t.bpm_max} BPM`;
+    return '';
+  }
+
+  // Fallback filename parser (only used if manifest lacks date)
+  const RX = /^(\d{2})\.(\d{2})\.(\d{2})\./;
+  function fallbackDateFromName(name){
+    const m = name.match(RX);
+    if(!m) return null;
+    const [_, yy, mm, dd] = m;
+    return new Date(Date.UTC(2000+ +yy, +mm-1, +dd));
+  }
 
   const els = {
     audio: document.getElementById('audio'),
@@ -153,24 +168,36 @@
   init();
   async function init(){
     const res = await fetch('./manifest.json', {cache:'no-store'});
-    if(!res.ok){ els.list.innerHTML = `<div class="row"><div></div><div>manifest.json missing</div></div>`; return; }
+    if(!res.ok){
+      els.list.innerHTML = `<div class="row"><div></div><div>manifest.json missing</div></div>`;
+      return;
+    }
     const data = await res.json();
+
     state.tracks = data.map((t,idx)=>{
       const name = t.name;
-      const parsed = parseFromName(name);
       const base = name.replace(/\.mp3$/i,'');
+      // date: prefer ISO from manifest; fallback from name
+      const dateObj = t.date ? new Date(t.date) : fallbackDateFromName(name);
+      // human label: prefer manifest.title; else make one
+      const label = t.title || (t.date ? `${t.date}` : (dateObj ? dateObj.toISOString().slice(0,10) : name));
       return {
         id: idx,
         name,
-        title: t.title || '',
-        bpm: t.bpm ?? null,
+        title: t.title || '',        // your “given name” (toggle-able)
+        bpm: t.bpm ?? null,          // number or null
+        bpm_min: t.bpm_min ?? null,  // number or null
+        bpm_max: t.bpm_max ?? null,  // number or null
         details: t.details || '',
-        length: t.length || 0, // optional if you precompute
+        length: t.length || 0,
+        date: dateObj || null,
+        label,
+        // URLs
         src: t.src || (BASE_MP3 + name),
-        wav: t.wav || (BASE_WAV + base + '.wav'),
-        ...parsed
+        wav: t.wav || (t.has_wav ? (BASE_WAV + base + '.wav') : null) // only show when provided/flagged
       };
     });
+
     applyFilterSort();
     if(state.filtered.length) select(0);
   }
@@ -188,8 +215,8 @@
       case 'date_asc':  out.sort((a,b)=>(a.date?.getTime()||0)-(b.date?.getTime()||0)); break;
       case 'name_asc':  out.sort((a,b)=> displayName(a).localeCompare(displayName(b))); break;
       case 'name_desc': out.sort((a,b)=> displayName(b).localeCompare(displayName(a))); break;
-      case 'bpm_desc':  out.sort((a,b)=> (b.bpm||0)-(a.bpm||0)); break;
-      case 'bpm_asc':   out.sort((a,b)=> (a.bpm||0)-(b.bpm||0)); break;
+      case 'bpm_desc':  out.sort((a,b)=> bpmSortValue(b) - bpmSortValue(a)); break;
+      case 'bpm_asc':   out.sort((a,b)=> bpmSortValue(a) - bpmSortValue(b)); break;
       case 'details_asc': out.sort((a,b)=> (a.details||'').localeCompare(b.details||'')); break;
       case 'details_desc': out.sort((a,b)=> (b.details||'').localeCompare(a.details||'')); break;
       case 'len_desc':  out.sort((a,b)=> (b.length||0)-(a.length||0)); break;
@@ -202,21 +229,26 @@
   function displayName(t){ return (els.nameMode?.checked && t.title) ? t.title : t.name; }
 
   function renderList(){
-    if(!state.filtered.length){ els.list.innerHTML = '<div class="row"><div></div><div>No results.</div></div>'; return; }
+    if(!state.filtered.length){
+      els.list.innerHTML = '<div class="row"><div></div><div>No results.</div></div>';
+      return;
+    }
     els.list.innerHTML = state.filtered.map(t=>{
       const active = (state.i>=0 && state.filtered[state.i]?.id===t.id);
       const mp3 = t.src;
-      const wav = t.wav;
-      const wavDisabled = !wav || /undefined/.test(wav);
+      const wav = t.wav; // only present if you set "wav" or "has_wav" later
+      const bpmTxt = bpmLabel(t);
       return `<div class="row" role="listitem" data-id="${t.id}">
-        <div class="cover" aria-hidden="true">${String(t.seq??'').slice(-2) || 'V25'}</div>
+        <div class="cover" aria-hidden="true">${t.bpm!=null ? String(t.bpm).slice(-2) : (t.bpm_max!=null ? String(t.bpm_max).slice(-2) : 'V25')}</div>
         <div>
           <div class="title">${active ? '▶︎ ' : ''}${escapeHTML(displayName(t))}</div>
-          <div class="sub">${t.label || ''} ${t.length?` · ${fmtDur(t.length)}`:''}${t.bpm?` · ${t.bpm} BPM`:''}${t.details?` · ${escapeHTML(t.details)}`:''}</div>
+          <div class="sub">
+            ${t.label ? escapeHTML(t.label) : ''} ${t.length?` · ${fmtDur(t.length)}`:''} ${bpmTxt?` · ${bpmTxt}`:''} ${t.details?` · ${escapeHTML(t.details)}`:''}
+          </div>
         </div>
         <div class="badge">
           <a href="${mp3}" download title="Download MP3">⬇︎ MP3</a>
-          ${wavDisabled ? '<span class="muted" title="No WAV">WAV</span>' : `<a href="${wav}" download title="Download WAV">⬇︎ WAV</a>`}
+          ${wav ? `<a href="${wav}" download title="Download Lossless">⬇︎ WAV</a>` : '<span class="muted" title="Lossless not uploaded">WAV</span>'}
         </div>
       </div>`;
     }).join('');
