@@ -157,17 +157,28 @@
   function fmtDur(sec){ sec=Number(sec||0); const m=Math.floor(sec/60), s=Math.floor(sec%60); return `${m}:${String(s).padStart(2,'0')}`; }
   function debounce(fn,ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); } }
   function escapeHTML(s){ return String(s).replace(/[&<>"']/g, c=>({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c])); }
+
+  // Remove any "… BPM" (single or range with -, –, —) from a token
+  function removeBpm(str){
+    if (!str) return str;
+    // e.g. "98 BPM", "98–100 BPM", "98-100 BPM"
+    const cleaned = String(str).replace(/\b\d+(?:\.\d+)?(?:\s*[–—-]\s*\d+(?:\.\d+)?)?\s*BPM\b/gi, '')
+      .replace(/\s{2,}/g,' ')               // collapse double spaces
+      .replace(/^[·•,;:\-]\s*|\s*[·•,;:\-]$/g,'') // trim stray separators
+      .trim();
+    return cleaned;
+  }
+
+  // Join parts with " · " while removing duplicates (case-insensitive)
   function uniqJoin(parts){
-    const seen = new Set();
-    const out = [];
+    const seen = new Set(); const out = [];
     for (const raw of parts){
       if (!raw) continue;
       const s = String(raw).trim();
       if (!s) continue;
       const key = s.toLowerCase();
       if (seen.has(key)) continue;
-      seen.add(key);
-      out.push(s);
+      seen.add(key); out.push(s);
     }
     return out.join(' · ');
   }
@@ -287,16 +298,21 @@
       const mp3 = t.src;
       const wav = t.wav;
       const bpmTxt = bpmLabel(t);
+
+      // Strip BPM from label/details if we’re already showing bpmTxt
+      const cleanLabel = bpmTxt ? removeBpm(t.label || '') : (t.label || '');
+      const cleanDetails = bpmTxt ? removeBpm(t.details || '') : (t.details || '');
+
       return `<div class="row" role="listitem" data-id="${t.id}">
         <div class="cover" aria-hidden="true">${t.bpm!=null ? String(t.bpm).slice(-2) : (t.bpm_max!=null ? String(t.bpm_max).slice(-2) : 'V25')}</div>
         <div>
           <div class="title">${active ? '▶︎ ' : ''}${escapeHTML(displayName(t))}</div>
           <div class="sub">${escapeHTML(
             uniqJoin([
-              t.label || '',
+              cleanLabel,
               t.length ? fmtDur(t.length) : '',
               bpmTxt || '',
-              t.details || ''
+              cleanDetails
             ])
           )}</div>
         </div>
