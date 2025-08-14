@@ -44,7 +44,7 @@
   .badge a{color:var(--fg);text-decoration:none;border:1px solid var(--border);padding:4px 8px;border-radius:8px}
   .badge .muted{color:var(--muted)}
   .kbd{font:12px/1.2 ui-monospace,Menlo,Consolas;background:#1b1c20;border:1px solid #2a2b30;border-radius:6px;padding:2px 6px;color:#d7dae0}
-
+  
   /* Hamburger */
   details.menu{margin-top:8px}
   details.menu > summary{cursor:pointer;list-style:none;background:var(--card);border:1px solid var(--border);padding:8px 12px;border-radius:10px;user-select:none}
@@ -55,17 +55,17 @@
   input[type="search"]{flex:1;min-width:220px}
   label.toggle{display:flex;gap:6px;align-items:center}
 
-  /* Hide the volume control on iOS Safari (WebKit on iOS) */
-  @supports (-webkit-touch-callout: none) {
-    .range[title="Volume"] { display: none; }
-  }
-
   @media (max-width:560px){
     .now{grid-template-columns:1fr;gap:8px}
     .cover{display:none}
     .controls{flex-wrap:wrap}
     .range input[type="range"]{width:120px}
     .row{grid-template-columns:1fr auto}
+
+    /* Hide the volume control entirely on iOS Safari (WebKit) */
+    @supports (-webkit-touch-callout: none) {
+      .range[title="Volume"] { display: none !important; }
+    }
   }
 </style></head>
 <body>
