@@ -14,16 +14,15 @@
   .wrap{max-width:920px;margin:0 auto;padding:16px}
   header{display:flex;align-items:center;justify-content:space-between;gap:12px}
 
-  /* Outline-only VVIP25 title */
+  /* Outline-only VVIP25 title, doubled size */
   #site-title{
     margin:0;
-    font-size:28px;
+    font-size:56px; /* doubled from 28px */
     font-weight:bold;
     font-family:"Helvetica Neue", Helvetica, Arial, sans-serif;
     color:transparent;
     -webkit-text-fill-color:transparent; /* Safari */
     -webkit-text-stroke:2px #fdf6d0;     /* outline color + thickness */
-    /* letter-spacing:-0.0476em; Uncomment if you want tighter FCP-style tracking */
   }
 
   .player{position:sticky;top:0;z-index:10;background:linear-gradient(180deg,rgba(11,11,12,.97),rgba(11,11,12,.92));backdrop-filter:saturate(120%) blur(8px);border-bottom:1px solid var(--border)}
