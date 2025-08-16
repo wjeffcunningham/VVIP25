@@ -451,15 +451,15 @@ const thumbCandidate = BASE_THUMB + encodeURIComponent(base + 'thumb.jpg');
   }
 
   function rerenderVisibleRowsThumbs(){
-    const rows = els.list.querySelectorAll('.row');
-    rows.forEach(row=>{
-      const id = Number(row.getAttribute('data-id'));
-      const t = state.tracks.find(x=>x.id===id);
-      if (!t) return;
-      const img = row.querySelector('.cover img');
-      if (img) { img.onerror = null; img.src = getResolvedThumb(t); }
-    });
-  }
+  const rows = els.list.querySelectorAll('.row');
+  rows.forEach(row=>{
+    const id = Number(row.getAttribute('data-id'));
+    const t = state.tracks.find(x=>x.id===id);
+    if (!t) return;
+    const img = row.querySelector('.cover img');
+    if (img) { img.src = getResolvedThumb(t); } // keep onerror intact
+  });
+}
 
   // --- Infinite scroll with robust fallbacks ---
   let sentinelObserver;
