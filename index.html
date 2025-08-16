@@ -293,6 +293,7 @@ const thumbCandidate = BASE_THUMB + encodeURIComponent(baseLower + 'thumb.jpg');
     computeThumbCascade();  // default-only cascade (uses DEFAULT_THUMB)
     renderList();           // refresh rows with resolved thumbs
     fillViewport();         // ensure we load enough rows to reach/trigger sentinel
+if (state.filtered.length && state.i === -1) { select(0); }  // preload top item, paused
 
     // 4) Lazy fetch titles + thumbs map
     (requestIdleCallback?.(fetchTitles, {timeout: 1200}) || setTimeout(fetchTitles, 0));
