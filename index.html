@@ -148,12 +148,12 @@
 <audio id="audio" preload="metadata"></audio>
 
 <script>
-  // ====== CONFIG: Cloudflare media base URLs (your live paths) ======
+  // ====== CONFIG ======
   const BASE_MP3    = 'https://media.vvipmedia.net/ACCESS/';  // MP3s
   const BASE_WAV    = 'https://media.vvipmedia.net/WAV/';     // WAVs
-  const BASE_THUMB  = 'https://media.vvipmedia.net/ACCESS/';  // thumbs (base + '_thumb.jpg')
+  const BASE_THUMB  = 'https://media.vvipmedia.net/ACCESS/';  // thumbs + default
   const BASE_VIDEO  = 'https://media.vvipmedia.net/VIDEOS/';  // MOVs
-  // ================================================================
+  const DEFAULT_THUMB = BASE_THUMB + 'default_thumb.jpg';
 
   // -------- Helpers --------
   const $ = sel => document.querySelector(sel);
@@ -161,11 +161,9 @@
   function debounce(fn,ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); } }
   function escapeHTML(s){ return String(s).replace(/[&<>"']/g, c=>({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c])); }
 
-  // BPM helpers
   function bpmSortValue(t){ if(t.bpm!=null) return t.bpm; if(t.bpm_min!=null&&t.bpm_max!=null) return (t.bpm_min+t.bpm_max)/2; return 0; }
   function bpmLabel(t){ if(t.bpm!=null) return `${t.bpm} BPM`; if(t.bpm_min!=null&&t.bpm_max!=null) return `${t.bpm_min}–${t.bpm_max} BPM`; return ''; }
 
-  // Cleanup helpers to avoid duplicate separators / BPM repeats
   function removeBpm(str){
     if (!str) return str;
     return String(str)
@@ -194,7 +192,7 @@
     return out.join(' · ');
   }
 
-  // -------- Filename parsing (supports 25.07.10-2.125.mp3 etc.) --------
+  // -------- Filename/date parsing --------
   const DATE_RX = /^\s*(\d{2})[.\-_](\d{2})[.\-_](\d{2})(?=\D|$)/;
   const WITHIN_DAY_RX = /^\s*\d{2}[.\-_]\d{2}[.\-_]\d{2}(?:-(\d+))?/;
   function fallbackDateFromName(name){
@@ -207,7 +205,7 @@
   }
   function withinDayIndexFromName(name){
     const m = String(name).match(WITHIN_DAY_RX);
-    return m && m[1] ? parseInt(m[1], 10) : 0; // 0 = first take / no suffix
+    return m && m[1] ? parseInt(m[1], 10) : 0;
   }
 
   // -------- Els --------
@@ -235,10 +233,11 @@
     filtered: [],
     i: -1,
     playing: false,
-    // lightweight infinite list
-    pageSize: 48,
+    pageSize: 60,
     renderCount: 0,
-    titles: {} // hydrated lazily
+    titles: {},
+    thumbBases: new Set(),   // bases that *have* a custom thumb (from thumbs.json)
+    resolvedThumb: new Map() // track.id -> resolved thumb URL after cascade
   };
 
   // Persisted volume
@@ -248,15 +247,15 @@
   // Boot
   init();
   async function init(){
-    // 1) Fetch manifest FIRST (fast first paint)
-    const mres = await fetch('./manifest.json'); // allow normal caching in prod
+    // 1) Manifest
+    const mres = await fetch('./manifest.json');
     if(!mres.ok){
       els.list.innerHTML = `<div class="row"><div></div><div>manifest.json missing</div></div>`;
       return;
     }
     const data = await mres.json();
 
-    // 2) Build tracks quickly (no network probing!)
+    // 2) Tracks (fast, no network checks)
     state.tracks = data.map((t,idx)=>{
       const name = t.name;
       const base = name.replace(/\.[^.]+$/,'');
@@ -264,13 +263,16 @@
       const label = (t.title && t.title.trim()) || (t.date ? `${t.date}` : (dateObj ? dateObj.toISOString().slice(0,10) : name));
       const mp3  = t.src || (BASE_MP3 + name);
       const wav  = (t.wav != null) ? t.wav : (t.has_wav ? (BASE_WAV + base + '.wav') : null);
-      const mov  = (t.has_mov ? (BASE_VIDEO + base + '.mov') : null); // requires has_mov in manifest
-      const thumb= `${BASE_THUMB}${base}_thumb.jpg`;
+      const mov  = (t.has_mov ? (BASE_VIDEO + base + '.mov') : null);
+
+      // NOTE: your naming: base + "thumb.jpg" (no underscore)
+      const thumbCandidate = `${BASE_THUMB}${base}thumb.jpg`;
 
       return {
         id: idx,
         name,
-        title: t.title || '',   // may be overridden by titles.json later
+        base,
+        title: t.title || '',
         bpm: t.bpm ?? null,
         bpm_min: t.bpm_min ?? null,
         bpm_max: t.bpm_max ?? null,
@@ -279,42 +281,80 @@
         date: dateObj || null,
         label,
         src: mp3,
-        wav: wav,
+        wav,
         video: mov,
-        thumb
+        thumbCandidate
       };
     });
 
-    // 3) Render ASAP with filenames/manifest titles
-    applyFilterSort(true); // firstPaint=true (bigger chunk initially)
+    // 3) First paint ASAP; use default thumbs until cascade is computed
+    applyFilterSort(true);
+    computeThumbCascade();  // default-only cascade (uses DEFAULT_THUMB)
+    renderList();           // refresh rows with resolved thumbs
 
-    // 4) Fetch titles.json LAZILY; when ready, merge & re-render labels
-    requestIdleCallback?.(fetchTitles, {timeout: 1500}) || setTimeout(fetchTitles, 0);
+    // 4) Lazy fetch titles + thumbs map
+    (requestIdleCallback?.(fetchTitles, {timeout: 1200}) || setTimeout(fetchTitles, 0));
+    (requestIdleCallback?.(fetchThumbs, {timeout: 1500}) || setTimeout(fetchThumbs, 50));
   }
 
   async function fetchTitles(){
     try{
-      const tres = await fetch('./titles.json'); // allow cache; you update file when needed
+      const tres = await fetch('./titles.json');
       if (!tres.ok) return;
       state.titles = await tres.json();
-
-      // merge titles into tracks
       let changed = false;
       for (const t of state.tracks){
         const newTitle = state.titles[t.name];
         if (typeof newTitle === 'string' && newTitle !== t.title){
           t.title = newTitle;
-          // refresh computed label if we were using a placeholder
           const dateISO = t.date ? t.date.toISOString().slice(0,10) : '';
           t.label = t.title || (t.date ? `${dateISO}` : t.name);
           changed = true;
         }
       }
-      if (changed){
-        // keep current sort/search, but re-render visible slice only
-        applyFilterSort(false, /*keepIndex=*/true);
-      }
-    }catch(e){ /* ignore */ }
+      if (changed) applyFilterSort(false, /*keepIndex=*/true);
+    }catch(_){} // silent
+  }
+
+  // thumbs.json can be EITHER:
+  //  - ["24.03.15.105","24.09.19.106", ...]  (bases that have thumbs)
+  //  - {"24.03.15.105": true, ...}
+  async function fetchThumbs(){
+    try{
+      const r = await fetch('./thumbs.json');
+      if (!r.ok) return; // absent is fine -> all default
+      const data = await r.json();
+      const set = new Set();
+      if (Array.isArray(data)) data.forEach(base=> set.add(String(base)));
+      else if (data && typeof data === 'object') Object.keys(data).forEach(base=> data[base] && set.add(base));
+      state.thumbBases = set;
+      computeThumbCascade(); // recompute with real breaks
+      // Only rerender visible window (fast)
+      rerenderVisibleRowsThumbs();
+      if (state.i>=0) updateNowbar();
+    }catch(_){} // ignore
+  }
+
+  // Compute cascade once (global chronology), independent of current sort/filter.
+  function computeThumbCascade(){
+    // Sort ALL tracks by date ascending, then within-day index, then name
+    const asc = [...state.tracks].sort((a,b)=>{
+      const da = a.date?.getTime()||0, db = b.date?.getTime()||0;
+      if (da!==db) return da-db;
+      return withinDayIndexFromName(a.name)-withinDayIndexFromName(b.name) || a.name.localeCompare(b.name);
+    });
+
+    let currentThumb = DEFAULT_THUMB;
+    for (const t of asc){
+      // If this base is explicitly marked as having a custom thumb, switch
+      if (state.thumbBases.has(t.base)) currentThumb = t.thumbCandidate;
+      state.resolvedThumb.set(t.id, currentThumb);
+    }
+  }
+
+  function getResolvedThumb(t){
+    // fall back to default if not yet computed
+    return state.resolvedThumb.get(t.id) || DEFAULT_THUMB;
   }
 
   function applyFilterSort(firstPaint=false, keepIndex=false){
@@ -355,13 +395,12 @@
 
     state.filtered = out;
 
-    // reset/increase render window
     const initialChunk = firstPaint ? Math.max(60, state.pageSize) : state.pageSize;
     state.renderCount = Math.min(state.filtered.length, initialChunk);
 
     if (!keepIndex) state.i = Math.min(state.i, state.renderCount-1);
     renderList();
-    setupInfiniteScroll(); // (re)attach observer
+    setupInfiniteScroll();
   }
 
   function displayName(t){ return (els.nameMode?.checked && t.title) ? t.title : t.name; }
@@ -369,15 +408,15 @@
   function rowHTML(t, active){
     const mp3 = t.src, wav = t.wav, vid = t.video;
     const bpmTxt = bpmLabel(t);
-    const thumbInner = t.thumb
-      ? `<img src="${t.thumb}" alt="" loading="lazy"
-             style="width:56px;height:56px;border-radius:8px;object-fit:cover;"
-             onerror="this.parentElement.textContent='V25'">`
-      : 'V25';
+    const thumbURL = getResolvedThumb(t);
     const subline = uniqJoin([ t.label, t.length ? fmtDur(t.length) : '', bpmTxt, t.details ]);
 
     return `<div class="row" role="listitem" data-id="${t.id}">
-      <div class="cover" aria-hidden="true">${thumbInner}</div>
+      <div class="cover" aria-hidden="true">
+        <img src="${thumbURL}" alt="" loading="lazy"
+             style="width:56px;height:56px;border-radius:8px;object-fit:cover;"
+             onerror="this.src='${DEFAULT_THUMB}'">
+      </div>
       <div>
         <div class="title">${active ? '▶︎ ' : ''}${escapeHTML(displayName(t))}</div>
         <div class="sub">${escapeHTML(subline)}</div>
@@ -395,7 +434,6 @@
       els.list.innerHTML = '<div class="row"><div></div><div>No results.</div></div>';
       return;
     }
-    // render only the current window
     const slice = state.filtered.slice(0, state.renderCount);
     els.list.innerHTML = slice.map(t=>{
       const active = (state.i>=0 && state.filtered[state.i]?.id===t.id);
@@ -403,12 +441,22 @@
     }).join('') + `<div id="sentinel" style="height:1px"></div>`;
   }
 
-  // Infinite scroll via IntersectionObserver (adds chunks smoothly)
+  function rerenderVisibleRowsThumbs(){
+    const rows = els.list.querySelectorAll('.row');
+    rows.forEach(row=>{
+      const id = Number(row.getAttribute('data-id'));
+      const t = state.tracks.find(x=>x.id===id);
+      if (!t) return;
+      const img = row.querySelector('.cover img');
+      if (img) img.src = getResolvedThumb(t);
+    });
+  }
+
+  // Infinite scroll
   let sentinelObserver;
   function setupInfiniteScroll(){
     const sentinel = $('#sentinel');
     if (!sentinel) return;
-
     if (sentinelObserver) sentinelObserver.disconnect();
     sentinelObserver = new IntersectionObserver((entries)=>{
       for (const e of entries){
@@ -416,10 +464,8 @@
           const prev = state.renderCount;
           state.renderCount = Math.min(state.filtered.length, state.renderCount + state.pageSize);
           if (state.renderCount !== prev){
-            // append only the new chunk to avoid full innerHTML writes
             const frag = document.createDocumentFragment();
-            const start = prev, end = state.renderCount;
-            for (let i=start;i<end;i++){
+            for (let i=prev;i<state.renderCount;i++){
               const t = state.filtered[i];
               const div = document.createElement('div');
               div.innerHTML = rowHTML(t, (state.i>=0 && state.filtered[state.i]?.id===t.id));
@@ -441,7 +487,7 @@
     updateNowbar();
     state.playing = false;
     updateToggle();
-    // Update rows' active markers only within rendered window
+    // update active markers in rendered window
     const rendered = els.list.querySelectorAll('.row');
     rendered.forEach(row=>{
       const id = Number(row.getAttribute('data-id'));
@@ -458,13 +504,10 @@
     const t = state.filtered[state.i]; if(!t) return;
     els.nowTitle.textContent = displayName(t);
     els.nowSub.textContent = t.label || '';
-    if (t.thumb) {
-      els.cover.innerHTML = `<img src="${t.thumb}" alt=""
-        style="width:56px;height:56px;border-radius:8px;object-fit:cover;"
-        onerror="this.parentElement.textContent='V25'">`;
-    } else {
-      els.cover.textContent = 'V25';
-    }
+    const url = getResolvedThumb(t);
+    els.cover.innerHTML = `<img src="${url}" alt=""
+      style="width:56px;height:56px;border-radius:8px;object-fit:cover;"
+      onerror="this.src='${DEFAULT_THUMB}'">`;
   }
 
   async function play(){
@@ -479,7 +522,7 @@
         navigator.mediaSession.setActionHandler('seekbackward', ()=> els.audio.currentTime = Math.max(0, els.audio.currentTime-10));
         navigator.mediaSession.setActionHandler('seekforward', ()=> els.audio.currentTime = Math.min(els.audio.duration||0, els.audio.currentTime+10));
       }
-    }catch(e){ /* autoplay blocked etc. */ }
+    }catch(_){} 
   }
   function pause(){ els.audio.pause(); state.playing=false; updateToggle(); }
   function updateToggle(){ els.toggle.textContent = state.playing ? '⏸️' : '▶️'; }
@@ -491,7 +534,7 @@
     select(i); play();
   }
 
-  // Events (passive where sensible)
+  // Events
   document.addEventListener('click', (e)=>{
     const row = e.target.closest('.row');
     if(row && e.target.closest('a')==null){
@@ -520,8 +563,7 @@
   els.seek.addEventListener('input', ()=>{ els.audio.currentTime = Number(els.seek.value); });
   els.vol.addEventListener('input', ()=>{ els.audio.volume = parseFloat(els.vol.value); localStorage.setItem('vvip25:vol', els.vol.value); });
   els.audio.addEventListener('ended', ()=> jump(1));
-  els.nameMode?.addEventListener('change', ()=>{ 
-    // re-render visible rows only
+  els.nameMode?.addEventListener('change', ()=>{
     const rendered = els.list.querySelectorAll('.row');
     rendered.forEach(row=>{
       const id = Number(row.getAttribute('data-id'));
@@ -535,6 +577,5 @@
     });
     if(state.i>=0) updateNowbar();
   });
-</script>
-</body>
+</script></body>
 </html>
