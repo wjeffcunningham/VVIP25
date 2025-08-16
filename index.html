@@ -261,12 +261,13 @@
       const base = name.replace(/\.[^.]+$/,'');
       const dateObj = t.date ? new Date(t.date) : fallbackDateFromName(name);
       const label = (t.title && t.title.trim()) || (t.date ? `${t.date}` : (dateObj ? dateObj.toISOString().slice(0,10) : name));
-      const mp3  = t.src || (BASE_MP3 + name);
-      const wav  = (t.wav != null) ? t.wav : (t.has_wav ? (BASE_WAV + base + '.wav') : null);
-      const mov  = (t.has_mov ? (BASE_VIDEO + base + '.mov') : null);
+      
+      // safer URL building for files that can include spaces, parens, etc.
+const mp3 = t.src || (BASE_MP3 + encodeURIComponent(name));
+const wav = BASE_WAV + encodeURIComponent(base + '.wav');     // ALWAYS show WAV
+const mov = t.has_mov ? (BASE_VIDEO + encodeURIComponent(base + '.mov')) : null;
 
-      // NOTE: naming: base + "thumb.jpg" (no underscore)
-      const thumbCandidate = `${BASE_THUMB}${base}thumb.jpg`;
+const thumbCandidate = BASE_THUMB + encodeURIComponent(base + 'thumb.jpg');
 
       return {
         id: idx,
@@ -431,7 +432,7 @@
       </div>
       <div class="badge">
         <a href="${mp3}" download title="Download MP3">⬇︎ MP3</a>
-        ${wav ? `<a href="${wav}" download title="Download Lossless">⬇︎ WAV</a>` : '<span class="muted">WAV</span>'}
+        <a href="${BASE_WAV + encodeURIComponent(t.base + '.wav')}" download title="Download Lossless">⬇︎ WAV</a>
         ${vid ? `<a href="${vid}" target="_blank" rel="noopener" title="Open Video">▶︎ MOV</a>` : '<span class="muted">MOV</span>'}
       </div>
     </div>`;
