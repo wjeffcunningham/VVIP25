@@ -149,8 +149,8 @@
 
 <script>
   // ====== CONFIG: Cloudflare media base URLs (your live paths) ======
-  const BASE_MP3 = 'https://media.vvipmedia.net/ACCESS/';
-  const BASE_WAV = 'https://media.vvipmedia.net/ACCESS/';
+  const BASE_MP3   = 'https://media.vvipmedia.net/ACCESS/';
+  const BASE_WAV   = 'https://media.vvipmedia.net/ACCESS/';
   const BASE_THUMB = 'https://media.vvipmedia.net/ACCESS/'; // same bucket for thumbs
 
   // -------- Helpers --------
@@ -158,7 +158,7 @@
   function debounce(fn,ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); } }
   function escapeHTML(s){ return String(s).replace(/[&<>"']/g, c=>({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c])); }
 
-  // BPM utils
+  // BPM helpers
   function bpmSortValue(t){
     if (t.bpm != null) return t.bpm;
     if (t.bpm_min != null && t.bpm_max != null) return (t.bpm_min + t.bpm_max) / 2;
@@ -170,7 +170,7 @@
     return '';
   }
 
-  // Cleanup helpers
+  // Cleanup helpers to avoid duplicate separators / BPM repeats
   function removeBpm(str){
     if (!str) return str;
     return String(str)
@@ -181,8 +181,8 @@
   function cleanToken(s){
     if (!s) return '';
     s = String(s).trim();
-    s = s.replace(/^[·•,;:\-]+|[·•,;:\-]+$/g, ''); 
-    s = s.replace(/\s*[.,;:]\s*$/,''); 
+    s = s.replace(/^[·•,;:\-]+|[·•,;:\-]+$/g, ''); // trim leading/trailing separators
+    s = s.replace(/\s*[.,;:]\s*$/,'');             // drop trailing punctuation
     return s.trim();
   }
   function uniqJoin(parts){
@@ -199,13 +199,23 @@
     return out.join(' · ');
   }
 
-  // Fallback filename parser
-  const RX = /^(\d{2})\.(\d{2})\.(\d{2})\./;
+  // -------- Filename parsing (supports 25.07.10-2.125.mp3 etc.) --------
+  // YY.SEP.MM.SEP.DD where SEP can be ".", "-" or "_"
+  const DATE_RX = /^\s*(\d{2})[.\-_](\d{2})[.\-_](\d{2})(?=\D|$)/;
+  // Optional within-day index right after the date, e.g. "25.07.10-2"
+  const WITHIN_DAY_RX = /^\s*\d{2}[.\-_]\d{2}[.\-_]\d{2}(?:-(\d+))?/;
+
   function fallbackDateFromName(name){
-    const m = name.match(RX);
-    if(!m) return null;
-    const [_, yy, mm, dd] = m;
-    return new Date(Date.UTC(2000+ +yy, +mm-1, +dd));
+    const m = String(name).match(DATE_RX);
+    if (!m) return null;
+    const yy = parseInt(m[1], 10);
+    const mm = Math.max(1, Math.min(12, parseInt(m[2], 10)));
+    const dd = Math.max(1, Math.min(31, parseInt(m[3], 10)));
+    return new Date(Date.UTC(2000 + yy, mm - 1, dd));
+  }
+  function withinDayIndexFromName(name){
+    const m = String(name).match(WITHIN_DAY_RX);
+    return m && m[1] ? parseInt(m[1], 10) : 0; // 0 = first take / no suffix
   }
 
   const els = {
@@ -285,8 +295,24 @@
              (t.label && t.label.toLowerCase().includes(q));
     });
     switch(els.sort?.value||'date_desc'){
-      case 'date_desc': out.sort((a,b)=>(b.date?.getTime()||0)-(a.date?.getTime()||0)); break;
-      case 'date_asc':  out.sort((a,b)=>(a.date?.getTime()||0)-(b.date?.getTime()||0)); break;
+      case 'date_desc':
+        out.sort((a,b)=>{
+          const da = a.date?.getTime()||0, db = b.date?.getTime()||0;
+          if (db !== da) return db - da; // newer first
+          // same day → higher take (e.g. "-2") first
+          return withinDayIndexFromName(b.name) - withinDayIndexFromName(a.name)
+                 || b.name.localeCompare(a.name);
+        });
+        break;
+      case 'date_asc':
+        out.sort((a,b)=>{
+          const da = a.date?.getTime()||0, db = b.date?.getTime()||0;
+          if (da !== db) return da - db; // older first
+          // same day → lower take first
+          return withinDayIndexFromName(a.name) - withinDayIndexFromName(b.name)
+                 || a.name.localeCompare(b.name);
+        });
+        break;
       case 'name_asc':  out.sort((a,b)=> displayName(a).localeCompare(displayName(b))); break;
       case 'name_desc': out.sort((a,b)=> displayName(b).localeCompare(displayName(a))); break;
       case 'bpm_desc':  out.sort((a,b)=> bpmSortValue(b) - bpmSortValue(a)); break;
@@ -312,19 +338,23 @@
       const mp3 = t.src;
       const wav = t.wav;
       const bpmTxt = bpmLabel(t);
-      const thumbHTML = t.thumb
-        ? `<img src="${t.thumb}" alt="thumb"
-            style="width:56px;height:56px;border-radius:8px;object-fit:cover;"
-            onerror="this.outerHTML='<div class=&quot;cover&quot;>V25</div>'">`
-        : `<div class="cover">V25</div>`;
+
+      const thumbInner = t.thumb
+        ? `<img src="${t.thumb}" alt=""
+             loading="lazy"
+             style="width:56px;height:56px;border-radius:8px;object-fit:cover;"
+             onerror="this.parentElement.textContent='V25'">`
+        : 'V25';
+
       const subline = uniqJoin([
         t.label,
         t.length ? fmtDur(t.length) : '',
         bpmTxt,
         t.details
       ]);
+
       return `<div class="row" role="listitem" data-id="${t.id}">
-        <div class="cover" aria-hidden="true">${thumbHTML}</div>
+        <div class="cover" aria-hidden="true">${thumbInner}</div>
         <div>
           <div class="title">${active ? '▶︎ ' : ''}${escapeHTML(displayName(t))}</div>
           <div class="sub">${escapeHTML(subline)}</div>
@@ -354,6 +384,7 @@
     els.nowSub.textContent = t.label || '';
     if (t.thumb) {
       els.cover.innerHTML = `<img src="${t.thumb}"
+        alt=""
         style="width:56px;height:56px;border-radius:8px;object-fit:cover;"
         onerror="this.parentElement.textContent='V25'">`;
     } else {
