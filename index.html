@@ -258,20 +258,23 @@
     state.tracks = data.map((t,idx)=>{
       const name = t.name;
       const base = name.replace(/\.[^.]+$/,'');
+      const baseLower = base.toLowerCase();
       const dateObj = t.date ? new Date(t.date) : fallbackDateFromName(name);
       const label = (t.title && t.title.trim()) || (t.date ? `${t.date}` : (dateObj ? dateObj.toISOString().slice(0,10) : name));
-      
-      // safer URL building for files that can include spaces, parens, etc.
-const mp3 = t.src || (BASE_MP3 + encodeURIComponent(name));
-const wav = BASE_WAV + encodeURIComponent(base + '.wav');     // ALWAYS show WAV
-const mov = t.has_mov ? (BASE_VIDEO + encodeURIComponent(base + '.mov')) : null;
 
-const thumbCandidate = BASE_THUMB + encodeURIComponent(base + 'thumb.jpg');
+      // safer URL building for files that can include spaces, parens, etc.
+      const mp3 = t.src || (BASE_MP3 + encodeURIComponent(name));
+      const wav = BASE_WAV + encodeURIComponent(base + '.wav');     // ALWAYS show WAV (server expects original case)
+      const mov = t.has_mov ? (BASE_VIDEO + encodeURIComponent(base + '.mov')) : null;
+
+      // thumbs are stored lowercase on CDN
+      const thumbCandidate = BASE_THUMB + encodeURIComponent(baseLower + 'thumb.jpg');
 
       return {
         id: idx,
         name,
         base,
+        baseLower,
         title: t.title || '',
         bpm: t.bpm ?? null,
         bpm_min: t.bpm_min ?? null,
@@ -320,24 +323,25 @@ const thumbCandidate = BASE_THUMB + encodeURIComponent(base + 'thumb.jpg');
   // thumbs.json can be EITHER:
   //  - ["24.03.15.105","24.09.19.106", ...]  (bases that have thumbs)
   //  - {"24.03.15.105": true, ...}
-async function fetchThumbs(){
-  try{
-    const r = await fetch('./thumbs.json', { cache: 'no-store' });
-    if (!r.ok) return; // absent is fine -> all default
+  async function fetchThumbs(){
+    try{
+      const r = await fetch('./thumbs.json', { cache: 'no-store' });
+      if (!r.ok) return; // absent is fine -> all default
 
-    const data = await r.json();
-    const set = new Set();
-    if (Array.isArray(data)) data.forEach(base => set.add(String(base)));
-    else if (data && typeof data === 'object') {
-      Object.keys(data).forEach(base => data[base] && set.add(base));
-    }
+      const data = await r.json();
+      const set = new Set();
+      if (Array.isArray(data)) {
+        data.forEach(base => set.add(String(base).toLowerCase()));
+      } else if (data && typeof data === 'object') {
+        Object.keys(data).forEach(base => { if (data[base]) set.add(base.toLowerCase()); });
+      }
+      state.thumbBases = set;
 
-    state.thumbBases = set;
-    computeThumbCascade();      // recompute with real breaks
-    rerenderVisibleRowsThumbs();// refresh visible rows
-    if (state.i>=0) updateNowbar();
-  }catch(_){ /* ignore */ }
-}
+      computeThumbCascade();       // recompute with real breaks
+      rerenderVisibleRowsThumbs(); // refresh visible rows
+      if (state.i>=0) updateNowbar();
+    }catch(_){ /* ignore */ }
+  }
 
   // Compute cascade once (global chronology), independent of current sort/filter.
   function computeThumbCascade(){
@@ -350,7 +354,7 @@ async function fetchThumbs(){
 
     let currentThumb = DEFAULT_THUMB;
     for (const t of asc){
-      if (state.thumbBases.has(t.base)) currentThumb = t.thumbCandidate;
+      if (state.thumbBases.has(t.baseLower)) currentThumb = t.thumbCandidate;
       state.resolvedThumb.set(t.id, currentThumb);
     }
   }
@@ -452,16 +456,16 @@ async function fetchThumbs(){
     }).join('') + `<div id="sentinel" style="height:1px"></div>`;
   }
 
-function rerenderVisibleRowsThumbs(){
-  const rows = els.list.querySelectorAll('.row');
-  rows.forEach(row=>{
-    const id = Number(row.getAttribute('data-id'));
-    const t = state.tracks.find(x=>x.id===id);
-    if (!t) return;
-    const img = row.querySelector('.cover img');
-    if (img) { img.src = getResolvedThumb(t); } // keep onerror intact
-  });
-}
+  function rerenderVisibleRowsThumbs(){
+    const rows = els.list.querySelectorAll('.row');
+    rows.forEach(row=>{
+      const id = Number(row.getAttribute('data-id'));
+      const t = state.tracks.find(x=>x.id===id);
+      if (!t) return;
+      const img = row.querySelector('.cover img');
+      if (img) { img.src = getResolvedThumb(t); } // keep onerror intact
+    });
+  }
 
   // --- Infinite scroll with robust fallbacks ---
   let sentinelObserver;
@@ -620,5 +624,6 @@ function rerenderVisibleRowsThumbs(){
     });
     if(state.i>=0) updateNowbar();
   });
-</script></body>
+</script>
+</body>
 </html>
