@@ -143,7 +143,7 @@
 <div class="wrap">
     <div id="list" class="list" role="list"></div>
     <p class="sub">Tips: <span class="kbd">Space</span> play/pause, <span class="kbd">←/→</span> seek ±5s, <span class="kbd">↑/↓</span> volume.</p>
-  </div> --!>
+  </div>
 
 <audio id="audio" preload="metadata"></audio>
 
@@ -151,92 +151,124 @@
   // ====== CONFIG: Cloudflare media base URLs (your live paths) ======
   const BASE_MP3 = 'https://media.vvipmedia.net/ACCESS/';
   const BASE_WAV = 'https://media.vvipmedia.net/ACCESS/';
-  const BASE_IMG = 'https://media.vvipmedia.net/ACCESS/';
-  const BASE_MP4 = 'https://media.vvipmedia.net/ACCESS/';
-  // ================================================================
+  const BASE_THUMB = 'https://media.vvipmedia.net/ACCESS/'; // same bucket for thumbs
 
   // -------- Helpers --------
   function fmtDur(sec){ sec=Number(sec||0); const m=Math.floor(sec/60), s=Math.floor(sec%60); return `${m}:${String(s).padStart(2,'0')}`; }
   function debounce(fn,ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); } }
   function escapeHTML(s){ return String(s).replace(/[&<>"']/g, c=>({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c])); }
 
+  // BPM utils
+  function bpmSortValue(t){
+    if (t.bpm != null) return t.bpm;
+    if (t.bpm_min != null && t.bpm_max != null) return (t.bpm_min + t.bpm_max) / 2;
+    return 0;
+  }
+  function bpmLabel(t){
+    if (t.bpm != null) return `${t.bpm} BPM`;
+    if (t.bpm_min != null && t.bpm_max != null) return `${t.bpm_min}–${t.bpm_max} BPM`;
+    return '';
+  }
+
+  // Cleanup helpers
   function removeBpm(str){
     if (!str) return str;
-    return String(str).replace(/\b\d+(?:\.\d+)?(?:\s*[–—-]\s*\d+(?:\.\d+)?)?\s*BPM\b/gi, '')
+    return String(str)
+      .replace(/\b\d+(?:\.\d+)?(?:\s*[–—-]\s*\d+(?:\.\d+)?)?\s*BPM\b/gi, '')
       .replace(/\s{2,}/g,' ')
-      .replace(/^[·•,;:\-]\s*|\s*[·•,;:\-]$/g,'')
       .trim();
   }
+  function cleanToken(s){
+    if (!s) return '';
+    s = String(s).trim();
+    s = s.replace(/^[·•,;:\-]+|[·•,;:\-]+$/g, ''); 
+    s = s.replace(/\s*[.,;:]\s*$/,''); 
+    return s.trim();
+  }
   function uniqJoin(parts){
-    const seen = new Set(), out=[];
-    for (const raw of parts){
-      if(!raw) continue;
-      const s=String(raw).trim(); if(!s) continue;
-      const key=s.toLowerCase(); if(seen.has(key)) continue;
-      seen.add(key); out.push(s);
+    const seen = new Set(), out = [];
+    for (let raw of parts){
+      if (raw == null) continue;
+      raw = cleanToken(removeBpm(raw));
+      if (!raw) continue;
+      const key = raw.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(raw);
     }
     return out.join(' · ');
   }
-  function bpmSortValue(t){ if(t.bpm!=null) return t.bpm; if(t.bpm_min!=null&&t.bpm_max!=null) return (t.bpm_min+t.bpm_max)/2; return 0; }
-  function bpmLabel(t){ if(t.bpm!=null) return `${t.bpm} BPM`; if(t.bpm_min!=null&&t.bpm_max!=null) return `${t.bpm_min}–${t.bpm_max} BPM`; return ''; }
 
-  const RX=/^(\d{2})\.(\d{2})\.(\d{2})\./;
+  // Fallback filename parser
+  const RX = /^(\d{2})\.(\d{2})\.(\d{2})\./;
   function fallbackDateFromName(name){
-    const m=name.match(RX); if(!m) return null;
-    const [_,yy,mm,dd]=m; return new Date(Date.UTC(2000+ +yy,+mm-1,+dd));
+    const m = name.match(RX);
+    if(!m) return null;
+    const [_, yy, mm, dd] = m;
+    return new Date(Date.UTC(2000+ +yy, +mm-1, +dd));
   }
 
-  const els={
-    audio:document.getElementById('audio'),
-    list:document.getElementById('list'),
-    q:document.getElementById('q'),
-    sort:document.getElementById('sort'),
-    toggle:document.getElementById('toggle'),
-    prev:document.getElementById('prev'),
-    next:document.getElementById('next'),
-    seek:document.getElementById('seek'),
-    vol:document.getElementById('vol'),
-    nowTitle:document.getElementById('now-title'),
-    nowSub:document.getElementById('now-sub'),
-    cover:document.getElementById('cover'),
-    tcur:document.getElementById('tcur'),
-    tdur:document.getElementById('tdur'),
-    nameMode:document.getElementById('nameMode')
+  const els = {
+    audio: document.getElementById('audio'),
+    list: document.getElementById('list'),
+    q: document.getElementById('q'),
+    sort: document.getElementById('sort'),
+    toggle: document.getElementById('toggle'),
+    prev: document.getElementById('prev'),
+    next: document.getElementById('next'),
+    seek: document.getElementById('seek'),
+    vol: document.getElementById('vol'),
+    nowTitle: document.getElementById('now-title'),
+    nowSub: document.getElementById('now-sub'),
+    tcur: document.getElementById('tcur'),
+    tdur: document.getElementById('tdur'),
+    nameMode: document.getElementById('nameMode'),
+    cover: document.getElementById('cover')
   };
 
-  const state={tracks:[],filtered:[],i:-1,playing:false};
+  const state = { tracks: [], filtered: [], i:-1, playing:false };
 
-  els.vol.value=localStorage.getItem('vvip25:vol')??'0.9';
-  els.audio.volume=parseFloat(els.vol.value);
+  // Persisted volume
+  els.vol.value = localStorage.getItem('vvip25:vol') ?? '0.9';
+  els.audio.volume = parseFloat(els.vol.value);
 
+  // Boot
   init();
   async function init(){
-    const res=await fetch('./manifest.json',{cache:'no-store'});
-    if(!res.ok){ els.list.innerHTML=`<div class="row"><div></div><div>manifest.json missing</div></div>`; return; }
-    const data=await res.json();
+    const res = await fetch('./manifest.json', {cache:'no-store'});
+    if(!res.ok){
+      els.list.innerHTML = `<div class="row"><div></div><div>manifest.json missing</div></div>`;
+      return;
+    }
+    const data = await res.json();
 
-    state.tracks=data.map((t,idx)=>{
-      const name=t.name;
-      const base=name.replace(/\.[^.]+$/,'');
-      const dateObj=t.date?new Date(t.date):fallbackDateFromName(name);
-      const label=t.title||(t.date?`${t.date}`:(dateObj?dateObj.toISOString().slice(0,10):name));
+    // optional titles.json merge
+    let titles = {};
+    try {
+      const tres = await fetch('./titles.json', {cache:'no-store'});
+      if (tres.ok) titles = await tres.json();
+    } catch(e){}
 
+    state.tracks = data.map((t,idx)=>{
+      const name = t.name;
+      const base = name.replace(/\.[^.]+$/,'');
+      const dateObj = t.date ? new Date(t.date) : fallbackDateFromName(name);
+      const title = titles[name] || t.title || '';
+      const label = title || (t.date ? `${t.date}` : (dateObj ? dateObj.toISOString().slice(0,10) : name));
       return {
-        id:idx,
+        id: idx,
         name,
-        title:t.title||'',
-        bpm:t.bpm??null,
-        bpm_min:t.bpm_min??null,
-        bpm_max:t.bpm_max??null,
-        details:t.details||'',
-        length:t.length||0,
-        date:dateObj||null,
+        title,
+        bpm: t.bpm ?? null,
+        bpm_min: t.bpm_min ?? null,
+        bpm_max: t.bpm_max ?? null,
+        details: t.details || '',
+        length: t.length || 0,
+        date: dateObj || null,
         label,
-        src:t.src||(BASE_MP3+name),
-        wav:t.wav||(t.has_wav?(BASE_WAV+base+'.wav'):null),
-        thumb:(t.thumb? t.thumb : (BASE_IMG+base+'.jpg')),
-        video:(t.video? t.video : (BASE_MP4+base+'.mp4')),
-        overlay:(t.overlay? t.overlay : (BASE_MP3+base+'.title.txt'))
+        src: t.src || (BASE_MP3 + name),
+        wav: t.wav || (t.has_wav ? (BASE_WAV + base + '.wav') : null),
+        thumb: `${BASE_THUMB}${base}_thumb.jpg`
       };
     });
 
@@ -245,102 +277,142 @@
   }
 
   function applyFilterSort(){
-    const q=(els.q?.value||'').trim().toLowerCase();
-    let out=state.tracks.filter(t=>{
-      return !q||t.name.toLowerCase().includes(q)||(t.title&&t.title.toLowerCase().includes(q))||(t.details&&t.details.toLowerCase().includes(q))||(t.label&&t.label.toLowerCase().includes(q));
+    const q = (els.q?.value||'').trim().toLowerCase();
+    let out = state.tracks.filter(t=>{
+      return !q || t.name.toLowerCase().includes(q) ||
+             (t.title && t.title.toLowerCase().includes(q)) ||
+             (t.details && t.details.toLowerCase().includes(q)) ||
+             (t.label && t.label.toLowerCase().includes(q));
     });
     switch(els.sort?.value||'date_desc'){
-      case'date_desc':out.sort((a,b)=>(b.date?.getTime()||0)-(a.date?.getTime()||0));break;
-      case'date_asc':out.sort((a,b)=>(a.date?.getTime()||0)-(b.date?.getTime()||0));break;
-      case'name_asc':out.sort((a,b)=>displayName(a).localeCompare(displayName(b)));break;
-      case'name_desc':out.sort((a,b)=>displayName(b).localeCompare(displayName(a)));break;
-      case'bpm_desc':out.sort((a,b)=>bpmSortValue(b)-bpmSortValue(a));break;
-      case'bpm_asc':out.sort((a,b)=>bpmSortValue(a)-bpmSortValue(b));break;
-      case'details_asc':out.sort((a,b)=>(a.details||'').localeCompare(b.details||''));break;
-      case'details_desc':out.sort((a,b)=>(b.details||'').localeCompare(a.details||''));break;
-      case'len_desc':out.sort((a,b)=>(b.length||0)-(a.length||0));break;
-      case'len_asc':out.sort((a,b)=>(a.length||0)-(b.length||0));break;
+      case 'date_desc': out.sort((a,b)=>(b.date?.getTime()||0)-(a.date?.getTime()||0)); break;
+      case 'date_asc':  out.sort((a,b)=>(a.date?.getTime()||0)-(b.date?.getTime()||0)); break;
+      case 'name_asc':  out.sort((a,b)=> displayName(a).localeCompare(displayName(b))); break;
+      case 'name_desc': out.sort((a,b)=> displayName(b).localeCompare(displayName(a))); break;
+      case 'bpm_desc':  out.sort((a,b)=> bpmSortValue(b) - bpmSortValue(a)); break;
+      case 'bpm_asc':   out.sort((a,b)=> bpmSortValue(a) - bpmSortValue(b)); break;
+      case 'details_asc': out.sort((a,b)=> (a.details||'').localeCompare(b.details||'')); break;
+      case 'details_desc': out.sort((a,b)=> (b.details||'').localeCompare(a.details||'')); break;
+      case 'len_desc':  out.sort((a,b)=> (b.length||0)-(a.length||0)); break;
+      case 'len_asc':   out.sort((a,b)=> (a.length||0)-(b.length||0)); break;
     }
-    state.filtered=out;
+    state.filtered = out;
     renderList();
   }
 
-  function displayName(t){return (els.nameMode?.checked&&t.title)?t.title:t.name;}
+  function displayName(t){ return (els.nameMode?.checked && t.title) ? t.title : t.name; }
 
   function renderList(){
-    if(!state.filtered.length){ els.list.innerHTML='<div class="row"><div></div><div>No results.</div></div>'; return; }
-    els.list.innerHTML=state.filtered.map(t=>{
-      const active=(state.i>=0&&state.filtered[state.i]?.id===t.id);
-      const mp3=t.src, wav=t.wav, bpmTxt=bpmLabel(t);
-      const cleanLabel=bpmTxt?removeBpm(t.label||''):(t.label||'');
-      const cleanDetails=bpmTxt?removeBpm(t.details||''):(t.details||'');
-
-      const thumbHTML = t.thumb ? `<img src="${t.thumb}" alt="thumb" style="width:56px;height:56px;border-radius:8px;object-fit:cover;">` : `<div class="cover">${t.bpm!=null?String(t.bpm).slice(-2):(t.bpm_max!=null?String(t.bpm_max).slice(-2):'V25')}</div>`;
-
+    if(!state.filtered.length){
+      els.list.innerHTML = '<div class="row"><div></div><div>No results.</div></div>';
+      return;
+    }
+    els.list.innerHTML = state.filtered.map(t=>{
+      const active = (state.i>=0 && state.filtered[state.i]?.id===t.id);
+      const mp3 = t.src;
+      const wav = t.wav;
+      const bpmTxt = bpmLabel(t);
+      const thumbHTML = t.thumb
+        ? `<img src="${t.thumb}" alt="thumb"
+            style="width:56px;height:56px;border-radius:8px;object-fit:cover;"
+            onerror="this.outerHTML='<div class=&quot;cover&quot;>V25</div>'">`
+        : `<div class="cover">V25</div>`;
+      const subline = uniqJoin([
+        t.label,
+        t.length ? fmtDur(t.length) : '',
+        bpmTxt,
+        t.details
+      ]);
       return `<div class="row" role="listitem" data-id="${t.id}">
-        ${thumbHTML}
+        <div class="cover" aria-hidden="true">${thumbHTML}</div>
         <div>
-          <div class="title">${active?'▶︎ ':''}${escapeHTML(displayName(t))}</div>
-          <div class="sub">${escapeHTML(uniqJoin([cleanLabel,t.length?fmtDur(t.length):'',bpmTxt||'',cleanDetails]))}</div>
+          <div class="title">${active ? '▶︎ ' : ''}${escapeHTML(displayName(t))}</div>
+          <div class="sub">${escapeHTML(subline)}</div>
         </div>
         <div class="badge">
           <a href="${mp3}" download title="Download MP3">⬇︎ MP3</a>
-          ${wav?`<a href="${wav}" download title="Download Lossless">⬇︎ WAV</a>`:'<span class="muted">WAV</span>'}
+          ${wav ? `<a href="${wav}" download title="Download Lossless">⬇︎ WAV</a>` : '<span class="muted">WAV</span>'}
         </div>
       </div>`;
     }).join('');
   }
 
   function select(indexInFiltered){
-    state.i=indexInFiltered;
-    const t=state.filtered[indexInFiltered]; if(!t) return;
-    els.audio.src=t.src;
+    state.i = indexInFiltered;
+    const t = state.filtered[indexInFiltered];
+    if(!t) return;
+    els.audio.src = t.src;
     updateNowbar();
-    state.playing=false; updateToggle(); renderList();
+    state.playing = false;
+    updateToggle();
+    renderList();
   }
 
   function updateNowbar(){
-    const t=state.filtered[state.i]; if(!t) return;
-    els.nowTitle.textContent=displayName(t);
-    els.nowSub.textContent=t.label||'';
-    if(t.thumb){ els.cover.innerHTML=`<img src="${t.thumb}" style="width:56px;height:56px;border-radius:8px;object-fit:cover;">`; }
-    else { els.cover.textContent='V25'; }
+    const t = state.filtered[state.i]; if(!t) return;
+    els.nowTitle.textContent = displayName(t);
+    els.nowSub.textContent = t.label || '';
+    if (t.thumb) {
+      els.cover.innerHTML = `<img src="${t.thumb}"
+        style="width:56px;height:56px;border-radius:8px;object-fit:cover;"
+        onerror="this.parentElement.textContent='V25'">`;
+    } else {
+      els.cover.textContent = 'V25';
+    }
   }
 
   async function play(){
-    try{ await els.audio.play(); state.playing=true; updateToggle();
-      if('mediaSession'in navigator){
-        const t=state.filtered[state.i];
-        navigator.mediaSession.metadata=new MediaMetadata({title:displayName(t)});
-        navigator.mediaSession.setActionHandler('previoustrack',()=>jump(-1));
-        navigator.mediaSession.setActionHandler('nexttrack',()=>jump(1));
-        navigator.mediaSession.setActionHandler('seekbackward',()=>els.audio.currentTime=Math.max(0,els.audio.currentTime-10));
-        navigator.mediaSession.setActionHandler('seekforward',()=>els.audio.currentTime=Math.min(els.audio.duration||0,els.audio.currentTime+10));
+    try{
+      await els.audio.play();
+      state.playing = true; updateToggle();
+      if('mediaSession' in navigator){
+        const t = state.filtered[state.i];
+        navigator.mediaSession.metadata = new MediaMetadata({ title: displayName(t) });
+        navigator.mediaSession.setActionHandler('previoustrack', ()=> jump(-1));
+        navigator.mediaSession.setActionHandler('nexttrack', ()=> jump(1));
+        navigator.mediaSession.setActionHandler('seekbackward', ()=> els.audio.currentTime = Math.max(0, els.audio.currentTime-10));
+        navigator.mediaSession.setActionHandler('seekforward', ()=> els.audio.currentTime = Math.min(els.audio.duration||0, els.audio.currentTime+10));
       }
     }catch(e){ console.warn(e); }
   }
-  function pause(){els.audio.pause();state.playing=false;updateToggle();}
-  function updateToggle(){els.toggle.textContent=state.playing?'⏸️':'▶️';}
-  function jump(dir){ if(!state.filtered.length)return; let i=state.i+dir; if(i<0)i=state.filtered.length-1; if(i>=state.filtered.length)i=0; select(i); play(); }
+  function pause(){ els.audio.pause(); state.playing=false; updateToggle(); }
+  function updateToggle(){ els.toggle.textContent = state.playing ? '⏸️' : '▶️'; }
+  function jump(dir){
+    if(!state.filtered.length) return;
+    let i = state.i + dir;
+    if(i < 0) i = state.filtered.length-1;
+    if(i >= state.filtered.length) i = 0;
+    select(i); play();
+  }
 
-  document.addEventListener('click',e=>{
-    const row=e.target.closest('.row');
-    if(row&&e.target.closest('a')==null){
-      const id=Number(row.getAttribute('data-id'));
-      const idx=state.filtered.findIndex(t=>t.id===id);
+  // Events
+  document.addEventListener('click', (e)=>{
+    const row = e.target.closest('.row');
+    if(row && e.target.closest('a')==null){
+      const id = Number(row.getAttribute('data-id'));
+      const idx = state.filtered.findIndex(t=>t.id===id);
       if(idx>=0){ select(idx); play(); }
     }
   });
-  els.q?.addEventListener('input',debounce(()=>applyFilterSort(),80));
-  els.sort?.addEventListener('change',()=>applyFilterSort());
-  els.toggle.addEventListener('click',()=>{ if(state.i<0&&state.filtered.length){select(0);} state.playing?pause():play(); });
-  els.prev.addEventListener('click',()=>jump(-1));
-  els.next.addEventListener('click',()=>jump(1));
-  els.audio.addEventListener('timeupdate',()=>{ const a=els.audio; if(!isFinite(a.duration))return; els.seek.max=Math.floor(a.duration); els.seek.value=Math.floor(a.currentTime); els.tcur.textContent=fmtDur(a.currentTime); els.tdur.textContent=isFinite(a.duration)?fmtDur(a.duration):'0:00'; });
-  els.seek.addEventListener('input',()=>{els.audio.currentTime=Number(els.seek.value);});
-  els.vol.addEventListener('input',()=>{els.audio.volume=parseFloat(els.vol.value);localStorage.setItem('vvip25:vol',els.vol.value);});
-  els.audio.addEventListener('ended',()=>jump(1));
-  els.nameMode?.addEventListener('change',()=>{renderList(); if(state.i>=0)updateNowbar();});
+  els.q?.addEventListener('input', debounce(()=> applyFilterSort(), 80));
+  els.sort?.addEventListener('change', ()=> applyFilterSort());
+  els.toggle.addEventListener('click', () => {
+    if (state.i < 0 && state.filtered.length) select(0);
+    state.playing ? pause() : play();
+  });
+  els.prev.addEventListener('click', ()=> jump(-1));
+  els.next.addEventListener('click', ()=> jump(1));
+  els.audio.addEventListener('timeupdate', ()=>{
+    const a=els.audio; if(!isFinite(a.duration)) return;
+    els.seek.max = Math.floor(a.duration);
+    els.seek.value = Math.floor(a.currentTime);
+    els.tcur.textContent = fmtDur(a.currentTime);
+    els.tdur.textContent = isFinite(a.duration) ? fmtDur(a.duration) : '0:00';
+  });
+  els.seek.addEventListener('input', ()=>{ els.audio.currentTime = Number(els.seek.value); });
+  els.vol.addEventListener('input', ()=>{ els.audio.volume = parseFloat(els.vol.value); localStorage.setItem('vvip25:vol', els.vol.value); });
+  els.audio.addEventListener('ended', ()=> jump(1));
+  els.nameMode?.addEventListener('change', ()=>{ renderList(); if(state.i>=0) updateNowbar(); });
 </script>
 </body>
 </html>
