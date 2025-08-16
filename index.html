@@ -149,9 +149,11 @@
 
 <script>
   // ====== CONFIG: Cloudflare media base URLs (your live paths) ======
-  const BASE_MP3   = 'https://media.vvipmedia.net/ACCESS/';
-  const BASE_WAV   = 'https://media.vvipmedia.net/ACCESS/';
-  const BASE_THUMB = 'https://media.vvipmedia.net/ACCESS/'; // same bucket for thumbs
+  const BASE_MP3    = 'https://media.vvipmedia.net/ACCESS/';  // MP3s
+  const BASE_WAV    = 'https://media.vvipmedia.net/WAV/';     // WAVs
+  const BASE_THUMB  = 'https://media.vvipmedia.net/ACCESS/';  // thumbs (base + '_thumb.jpg')
+  const BASE_VIDEO  = 'https://media.vvipmedia.net/VIDEOS/';  // MOVs
+  // ================================================================
 
   // -------- Helpers --------
   function fmtDur(sec){ sec=Number(sec||0); const m=Math.floor(sec/60), s=Math.floor(sec%60); return `${m}:${String(s).padStart(2,'0')}`; }
@@ -200,9 +202,7 @@
   }
 
   // -------- Filename parsing (supports 25.07.10-2.125.mp3 etc.) --------
-  // YY.SEP.MM.SEP.DD where SEP can be ".", "-" or "_"
   const DATE_RX = /^\s*(\d{2})[.\-_](\d{2})[.\-_](\d{2})(?=\D|$)/;
-  // Optional within-day index right after the date, e.g. "25.07.10-2"
   const WITHIN_DAY_RX = /^\s*\d{2}[.\-_]\d{2}[.\-_]\d{2}(?:-(\d+))?/;
 
   function fallbackDateFromName(name){
@@ -242,6 +242,14 @@
   els.vol.value = localStorage.getItem('vvip25:vol') ?? '0.9';
   els.audio.volume = parseFloat(els.vol.value);
 
+  // Simple HEAD checker (requires CORS to allow HEAD on your bucket)
+  async function headOK(url){
+    try{
+      const r = await fetch(url, { method:'HEAD', cache:'no-store' });
+      return r.ok;
+    }catch(e){ return false; }
+  }
+
   // Boot
   init();
   async function init(){
@@ -265,6 +273,12 @@
       const dateObj = t.date ? new Date(t.date) : fallbackDateFromName(name);
       const title = titles[name] || t.title || '';
       const label = title || (t.date ? `${t.date}` : (dateObj ? dateObj.toISOString().slice(0,10) : name));
+      // compose possible asset URLs
+      const mp3  = t.src || (BASE_MP3 + name);
+      const wav  = t.wav || (t.has_wav ? (BASE_WAV + base + '.wav') : (BASE_WAV + base + '.wav')); // optimistic
+      const mov  = BASE_VIDEO + base + '.mov';
+      const thumb= `${BASE_THUMB}${base}_thumb.jpg`;
+
       return {
         id: idx,
         name,
@@ -276,11 +290,27 @@
         length: t.length || 0,
         date: dateObj || null,
         label,
-        src: t.src || (BASE_MP3 + name),
-        wav: t.wav || (t.has_wav ? (BASE_WAV + base + '.wav') : null),
-        thumb: `${BASE_THUMB}${base}_thumb.jpg`
+        src: mp3,
+        wav: null,     // we’ll verify below
+        video: null,   // we’ll verify below
+        thumb
       };
     });
+
+    // Verify presence of WAV and MOV (so we only show buttons that work)
+    // Do these checks in small parallel batches to be polite.
+    const batchSize = 15;
+    for (let i = 0; i < state.tracks.length; i += batchSize){
+      const slice = state.tracks.slice(i, i + batchSize);
+      await Promise.all(slice.map(async (t) => {
+        const base = t.name.replace(/\.[^.]+$/,'');
+        const wavUrl = BASE_WAV + base + '.wav';
+        const movUrl = BASE_VIDEO + base + '.mov';
+        const [wavOk, movOk] = await Promise.all([headOK(wavUrl), headOK(movUrl)]);
+        t.wav   = wavOk ? wavUrl : null;
+        t.video = movOk ? movUrl : null;
+      }));
+    }
 
     applyFilterSort();
     if(state.filtered.length) select(0);
@@ -299,7 +329,6 @@
         out.sort((a,b)=>{
           const da = a.date?.getTime()||0, db = b.date?.getTime()||0;
           if (db !== da) return db - da; // newer first
-          // same day → higher take (e.g. "-2") first
           return withinDayIndexFromName(b.name) - withinDayIndexFromName(a.name)
                  || b.name.localeCompare(a.name);
         });
@@ -308,7 +337,6 @@
         out.sort((a,b)=>{
           const da = a.date?.getTime()||0, db = b.date?.getTime()||0;
           if (da !== db) return da - db; // older first
-          // same day → lower take first
           return withinDayIndexFromName(a.name) - withinDayIndexFromName(b.name)
                  || a.name.localeCompare(b.name);
         });
@@ -337,6 +365,7 @@
       const active = (state.i>=0 && state.filtered[state.i]?.id===t.id);
       const mp3 = t.src;
       const wav = t.wav;
+      const vid = t.video;
       const bpmTxt = bpmLabel(t);
 
       const thumbInner = t.thumb
@@ -362,6 +391,7 @@
         <div class="badge">
           <a href="${mp3}" download title="Download MP3">⬇︎ MP3</a>
           ${wav ? `<a href="${wav}" download title="Download Lossless">⬇︎ WAV</a>` : '<span class="muted">WAV</span>'}
+          ${vid ? `<a href="${vid}" target="_blank" rel="noopener" title="Open Video">▶︎ MOV</a>` : '<span class="muted">MOV</span>'}
         </div>
       </div>`;
     }).join('');
