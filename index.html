@@ -140,6 +140,10 @@
     </div>
   </div>
 
+  <div class="wrap">
+  <div id="list" class="list" role="list"></div>
+</div>
+
 <audio id="audio" preload="metadata"></audio>
 
 <script>
@@ -316,21 +320,24 @@ const thumbCandidate = BASE_THUMB + encodeURIComponent(base + 'thumb.jpg');
   // thumbs.json can be EITHER:
   //  - ["24.03.15.105","24.09.19.106", ...]  (bases that have thumbs)
   //  - {"24.03.15.105": true, ...}
-  async function fetchThumbs(){
-    try{
-      const r = await fetch('./thumbs.json');
-      if (!r.ok) return; // absent is fine -> all default
-      const data = await r.json();
-      const set = new Set();
-      if (Array.isArray(data)) data.forEach(base=> set.add(String(base)));
-      else if (data && typeof data === 'object') Object.keys(data).forEach(base=> data[base] && set.add(base));
-      state.thumbBases = set;
-      computeThumbCascade(); // recompute with real breaks
-      // Only rerender visible window (fast)
-      rerenderVisibleRowsThumbs();
-      if (state.i>=0) updateNowbar();
-    }catch(_){} // ignore
-  }
+async function fetchThumbs(){
+  try{
+    const r = await fetch('./thumbs.json', { cache: 'no-store' });
+    if (!r.ok) return; // absent is fine -> all default
+
+    const data = await r.json();
+    const set = new Set();
+    if (Array.isArray(data)) data.forEach(base => set.add(String(base)));
+    else if (data && typeof data === 'object') {
+      Object.keys(data).forEach(base => data[base] && set.add(base));
+    }
+
+    state.thumbBases = set;
+    computeThumbCascade();      // recompute with real breaks
+    rerenderVisibleRowsThumbs();// refresh visible rows
+    if (state.i>=0) updateNowbar();
+  }catch(_){ /* ignore */ }
+}
 
   // Compute cascade once (global chronology), independent of current sort/filter.
   function computeThumbCascade(){
