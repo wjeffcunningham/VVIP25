@@ -265,7 +265,7 @@
       const wav  = (t.wav != null) ? t.wav : (t.has_wav ? (BASE_WAV + base + '.wav') : null);
       const mov  = (t.has_mov ? (BASE_VIDEO + base + '.mov') : null);
 
-      // NOTE: your naming: base + "thumb.jpg" (no underscore)
+      // NOTE: naming: base + "thumb.jpg" (no underscore)
       const thumbCandidate = `${BASE_THUMB}${base}thumb.jpg`;
 
       return {
@@ -291,6 +291,7 @@
     applyFilterSort(true);
     computeThumbCascade();  // default-only cascade (uses DEFAULT_THUMB)
     renderList();           // refresh rows with resolved thumbs
+    fillViewport();         // ensure we load enough rows to reach/trigger sentinel
 
     // 4) Lazy fetch titles + thumbs map
     (requestIdleCallback?.(fetchTitles, {timeout: 1200}) || setTimeout(fetchTitles, 0));
@@ -346,14 +347,12 @@
 
     let currentThumb = DEFAULT_THUMB;
     for (const t of asc){
-      // If this base is explicitly marked as having a custom thumb, switch
       if (state.thumbBases.has(t.base)) currentThumb = t.thumbCandidate;
       state.resolvedThumb.set(t.id, currentThumb);
     }
   }
 
   function getResolvedThumb(t){
-    // fall back to default if not yet computed
     return state.resolvedThumb.get(t.id) || DEFAULT_THUMB;
   }
 
@@ -401,9 +400,20 @@
     if (!keepIndex) state.i = Math.min(state.i, state.renderCount-1);
     renderList();
     setupInfiniteScroll();
+    // safety: if sentinel not yet reachable, keep appending until we can scroll
+    fillViewport();
   }
 
   function displayName(t){ return (els.nameMode?.checked && t.title) ? t.title : t.name; }
+
+  // --- Safe <img> (no error loops) ---
+  function imgHTML(src){
+    const esc = s => s.replace(/"/g,'&quot;');
+    // onerror handler swaps to default once, then disables itself
+    return `<img src="${esc(src)}" alt="" loading="lazy"
+      style="width:56px;height:56px;border-radius:8px;object-fit:cover;"
+      onerror="if(this.dataset.fbk!=='1'){this.dataset.fbk='1';this.onerror=null;this.src='${DEFAULT_THUMB}';}">`;
+  }
 
   function rowHTML(t, active){
     const mp3 = t.src, wav = t.wav, vid = t.video;
@@ -413,9 +423,7 @@
 
     return `<div class="row" role="listitem" data-id="${t.id}">
       <div class="cover" aria-hidden="true">
-        <img src="${thumbURL}" alt="" loading="lazy"
-             style="width:56px;height:56px;border-radius:8px;object-fit:cover;"
-             onerror="this.src='${DEFAULT_THUMB}'">
+        ${imgHTML(thumbURL)}
       </div>
       <div>
         <div class="title">${active ? '▶︎ ' : ''}${escapeHTML(displayName(t))}</div>
@@ -448,35 +456,66 @@
       const t = state.tracks.find(x=>x.id===id);
       if (!t) return;
       const img = row.querySelector('.cover img');
-      if (img) img.src = getResolvedThumb(t);
+      if (img) { img.onerror = null; img.src = getResolvedThumb(t); }
     });
   }
 
-  // Infinite scroll
+  // --- Infinite scroll with robust fallbacks ---
   let sentinelObserver;
   function setupInfiniteScroll(){
     const sentinel = $('#sentinel');
     if (!sentinel) return;
+
     if (sentinelObserver) sentinelObserver.disconnect();
-    sentinelObserver = new IntersectionObserver((entries)=>{
-      for (const e of entries){
-        if (e.isIntersecting){
-          const prev = state.renderCount;
-          state.renderCount = Math.min(state.filtered.length, state.renderCount + state.pageSize);
-          if (state.renderCount !== prev){
-            const frag = document.createDocumentFragment();
-            for (let i=prev;i<state.renderCount;i++){
-              const t = state.filtered[i];
-              const div = document.createElement('div');
-              div.innerHTML = rowHTML(t, (state.i>=0 && state.filtered[state.i]?.id===t.id));
-              frag.appendChild(div.firstChild);
-            }
-            els.list.insertBefore(frag, sentinel);
-          }
+    if ('IntersectionObserver' in window){
+      sentinelObserver = new IntersectionObserver((entries)=>{
+        for (const e of entries){
+          if (e.isIntersecting) appendChunk();
         }
-      }
-    }, { root: null, rootMargin: '1200px 0px', threshold: 0 });
-    sentinelObserver.observe(sentinel);
+      }, { root: null, rootMargin: '1200px 0px', threshold: 0 });
+      sentinelObserver.observe(sentinel);
+    }
+
+    // Scroll fallback (covers browsers/pages where IO doesn't fire reliably)
+    window.addEventListener('scroll', onScrollMaybeLoad, { passive: true });
+    window.addEventListener('resize', debounce(fillViewport, 120), { passive: true });
+  }
+
+  function appendChunk(){
+    if (state.renderCount >= state.filtered.length) return;
+    const prev = state.renderCount;
+    state.renderCount = Math.min(state.filtered.length, state.renderCount + state.pageSize);
+    const sentinel = $('#sentinel');
+    if (!sentinel) return;
+
+    const frag = document.createDocumentFragment();
+    for (let i=prev;i<state.renderCount;i++){
+      const t = state.filtered[i];
+      const div = document.createElement('div');
+      div.innerHTML = rowHTML(t, (state.i>=0 && state.filtered[state.i]?.id===t.id));
+      frag.appendChild(div.firstChild);
+    }
+    els.list.insertBefore(frag, sentinel);
+  }
+
+  function atBottomBuffer(px=1200){
+    return (window.scrollY + window.innerHeight + px) >= document.documentElement.scrollHeight;
+  }
+
+  function onScrollMaybeLoad(){
+    if (atBottomBuffer()) {
+      appendChunk();
+    }
+  }
+
+  // Ensure we can reach the sentinel / have enough rows to scroll
+  function fillViewport(){
+    let guard = 0;
+    while (guard++ < 10) { // cap to avoid runaway
+      const scrollable = document.documentElement.scrollHeight > window.innerHeight + 200;
+      if (scrollable || state.renderCount >= state.filtered.length) break;
+      appendChunk();
+    }
   }
 
   function select(indexInFiltered){
@@ -505,9 +544,10 @@
     els.nowTitle.textContent = displayName(t);
     els.nowSub.textContent = t.label || '';
     const url = getResolvedThumb(t);
-    els.cover.innerHTML = `<img src="${url}" alt=""
+    // safe image (no error loop)
+    els.cover.innerHTML = `<img src="${url.replace(/"/g,'&quot;')}" alt=""
       style="width:56px;height:56px;border-radius:8px;object-fit:cover;"
-      onerror="this.src='${DEFAULT_THUMB}'">`;
+      onerror="if(this.dataset.fbk!=='1'){this.dataset.fbk='1';this.onerror=null;this.src='${DEFAULT_THUMB}';}">`;
   }
 
   async function play(){
