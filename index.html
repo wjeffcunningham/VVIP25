@@ -266,9 +266,7 @@
       const mp3 = t.src || (BASE_MP3 + encodeURIComponent(name));
       const wav = BASE_WAV + encodeURIComponent(base + '.wav');     // ALWAYS show WAV (server expects original case)
       const mov = t.has_mov ? (BASE_VIDEO + encodeURIComponent(base + '.mov')) : null;
-
-      // thumbs are stored lowercase on CDN
-      const thumbCandidate = BASE_THUMB + encodeURIComponent(baseLower + 'thumb.jpg');
+const thumbCandidate = BASE_THUMB + encodeURIComponent(baseLower + 'thumb.jpg');
 
       return {
         id: idx,
@@ -337,13 +335,12 @@
       }
       state.thumbBases = set;
 
-      computeThumbCascade();       // recompute with real breaks
-      rerenderVisibleRowsThumbs(); // refresh visible rows
+      computeThumbCascade();        // recompute with real breaks
+      rerenderVisibleRowsThumbs();  // refresh visible rows
       if (state.i>=0) updateNowbar();
     }catch(_){ /* ignore */ }
   }
 
-  // Compute cascade once (global chronology), independent of current sort/filter.
   function computeThumbCascade(){
     // Sort ALL tracks by date ascending, then within-day index, then name
     const asc = [...state.tracks].sort((a,b)=>{
@@ -354,6 +351,7 @@
 
     let currentThumb = DEFAULT_THUMB;
     for (const t of asc){
+      // compare using lowercase base keys from thumbs.json
       if (state.thumbBases.has(t.baseLower)) currentThumb = t.thumbCandidate;
       state.resolvedThumb.set(t.id, currentThumb);
     }
