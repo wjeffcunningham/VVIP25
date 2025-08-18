@@ -127,16 +127,16 @@
 
   <audio id="audio" preload="metadata"></audio>
 
- <script>
+<script>
   // ====== CONFIG ======
-  const BASE_MP3   = 'https://media.vvipmedia.net/ACCESS/';   // MP3s
-  const BASE_WAV   = 'https://media.vvipmedia.net/WAV/';      // WAVs
-  const BASE_THUMB = 'https://media.vvipmedia.net/ACCESS/';   // thumbs + default
-  const BASE_VIDEO = 'https://media.vvipmedia.net/VIDEOS/';   // MOVs
+  const BASE_MP3   = 'https://media.vvipmedia.net/ACCESS/';
+  const BASE_WAV   = 'https://media.vvipmedia.net/WAV/';
+  const BASE_THUMB = 'https://media.vvipmedia.net/ACCESS/';
+  const BASE_VIDEO = 'https://media.vvipmedia.net/VIDEOS/';
   const DEFAULT_THUMB = BASE_THUMB + 'default_thumb.jpg';
 
-  // Bump this when you update JSON to beat caches
-  const ASSET_VERSION = 3;
+  // Bump this to beat caches after changes to JSON or this script
+  const ASSET_VERSION = 6;
 
   // -------- Helpers --------
   const $ = sel => document.querySelector(sel);
@@ -157,54 +157,90 @@
     return out.join(' · ');
   }
 
-  // -------- Key normalization for titles.json lookups --------
-  // Maps various inputs like:
-  //  - "2025_08_10-foo.mp3"  → "2025-08-10-foo"
-  //  - "AUDIO/2025-08-10-FOO.MP3" → "2025-08-10-foo"
-  const normKey = (s) => {
-    if (!s) return '';
-    const fname = (String(s).split('/').pop() || '').replace(/\.[a-z0-9]+$/i, '');
-    return fname
-      .toLowerCase()
-      .replace(/[ _]+/g, '-')       // collapse spaces/underscores → hyphen
-      .replace(/-+/g, '-')          // collapse multiple hyphens
-      .replace(/[^a-z0-9\-]/g, ''); // strip odd punctuation to be forgiving
-  };
+  // -------- Key strategies for titles.json --------
+  const rawFile   = (s) => (String(s).split('/').pop() || '');
+  const stripExt  = (s) => String(s).replace(/\.[a-z0-9]+$/i,'');
+  const softNorm  = (s) => stripExt(s).toLowerCase().replace(/[ _]+/g,'-').replace(/-+/g,'-');
 
-  // Give us multiple candidate keys for a track (filename, base, src)
-  const candidateKeys = (t) => {
-    const cand = new Set([
-      normKey(t.name),
-      normKey(t.base),
-      normKey(t.src || '')
-    ]);
-    return [...cand].filter(Boolean);
-  };
+  function buildTitleLookup(json){
+    // Accept object or array forms
+    const map = new Map();
 
-  function deriveTitleFromFilename(src){
-    const base = (String(src).split('/').pop() || '').replace(/\.[a-z0-9]+$/i, '');
-    const parts = base.split('-');
-    let pretty = base.replace(/[-_]/g, ' ');
-    if (parts.length >= 3 && /^\d{4}$/.test(parts[0]) && /^\d{2}$/.test(parts[1]) && /^\d{2}$/.test(parts[2])) {
-      const date = parts.slice(0,3).join('-');
-      const rest = parts.slice(3).join(' ').trim();
-      pretty = rest ? `${date} · ${rest}` : date;
+    const add = (k, title) => {
+      if (!k || !title) return;
+      const rawLower = String(k).toLowerCase();
+      const justFile = rawFile(rawLower);
+      const noExt = stripExt(justFile);
+      const norm = softNorm(justFile);
+      // Store all three so we can hit whichever the track offers
+      map.set(justFile, String(title));
+      map.set(noExt,   String(title));
+      map.set(norm,    String(title));
+    };
+
+    if (Array.isArray(json)) {
+      for (const row of json || []) {
+        if (!row) continue;
+        const k = row.key || row.src || row.name;
+        const t = row.title || row.t || row.display;
+        add(k, t);
+      }
+    } else if (json && typeof json === 'object') {
+      for (const [k,v] of Object.entries(json)) {
+        const t = (typeof v === 'string') ? v : (v && typeof v.title === 'string' ? v.title : '');
+        add(k, t);
+      }
     }
-    return pretty.replace(/\s+/g, ' ').trim();
+    return map;
   }
 
-  const DATE_RX = /^\s*(\d{2})[.\-_](\d{2})[.\-_](\d{2})(?=\D|$)/;
-  const WITHIN_DAY_RX = /^\s*\d{2}[.\-_]\d{2}[.\-_]\d{2}(?:-(\d+))?/;
+  function bestTitleForTrack(t, lookup){
+    // try exact-with-ext, without-ext, then soft norm; consider both name and src/base
+    const f = rawFile(t.name).toLowerCase();
+    const noExt = stripExt(f);
+    const norm = softNorm(f);
+    const fromSrc = t.src ? rawFile(t.src).toLowerCase() : '';
+    const candidates = [
+      f, noExt, norm,
+      fromSrc, stripExt(fromSrc), softNorm(fromSrc),
+      t.base?.toLowerCase?.(), softNorm(t.base || '')
+    ].filter(Boolean);
+
+    for (const c of candidates){
+      if (lookup.has(c)) return lookup.get(c);
+    }
+    return '';
+  }
+
+  // -------- Filename/date parsing (robust for YYYY or YY + optional index) --------
+  const DATE_RX_YYYY   = /^\s*(\d{4})[.\-_](\d{2})[.\-_](\d{2})(?=\D|$)/;
+  const DATE_RX_YY     = /^\s*(\d{2})[.\-_](\d{2})[.\-_](\d{2})(?=\D|$)/;
+  const WITHIN_DAY_RX  = /^\s*(?:\d{4}|\d{2})[.\-_]\d{2}[.\-_]\d{2}(?:[.\-_](\d+))?/;
+
   function fallbackDateFromName(name){
-    const m = String(name).match(DATE_RX);
-    if (!m) return null;
-    const yy = parseInt(m[1],10), mm=Math.max(1, Math.min(12, parseInt(m[2],10))), dd=Math.max(1, Math.min(31, parseInt(m[3],10)));
-    return new Date(Date.UTC(2000+yy, mm-1, dd));
+    const s = String(name);
+    let m = s.match(DATE_RX_YYYY);
+    if (m) {
+      const yyyy = Math.max(1970, Math.min(2100, parseInt(m[1],10)));
+      const mm   = Math.max(1, Math.min(12,  parseInt(m[2],10)));
+      const dd   = Math.max(1, Math.min(31,  parseInt(m[3],10)));
+      return new Date(Date.UTC(yyyy, mm-1, dd));
+    }
+    m = s.match(DATE_RX_YY);
+    if (m) {
+      const yy = parseInt(m[1],10);
+      const yyyy = (yy >= 70 ? 1900+yy : 2000+yy); // pivot at 1970
+      const mm   = Math.max(1, Math.min(12, parseInt(m[2],10)));
+      const dd   = Math.max(1, Math.min(31, parseInt(m[3],10)));
+      return new Date(Date.UTC(yyyy, mm-1, dd));
+    }
+    return null;
   }
   function withinDayIndexFromName(name){
     const m = String(name).match(WITHIN_DAY_RX);
     return m && m[1] ? parseInt(m[1],10) : 0;
   }
+
   function bpmSortValue(t){ if(t.bpm!=null) return t.bpm; if(t.bpm_min!=null&&t.bpm_max!=null) return (t.bpm_min+t.bpm_max)/2; return 0; }
   function bpmLabel(t){ if(t.bpm!=null) return `${t.bpm} BPM`; if(t.bpm_min!=null&&t.bpm_max!=null) return `${t.bpm_min}–${t.bpm_max} BPM`; return ''; }
 
@@ -239,7 +275,7 @@
     playing: false,
     pageSize: 60,
     renderCount: 0,
-    titlesLookup: new Map(), // normalizedKey -> title
+    titlesLookup: new Map(),
     thumbBases: new Set(),
     resolvedThumb: new Map(),
     showTitles: true,
@@ -261,8 +297,10 @@
   // Boot
   init();
   async function init(){
-    // 1) Fetch manifest (no-store) and build tracks
-    const mres = await fetch(`./manifest.json?v=${ASSET_VERSION}`, { cache: 'no-store' });
+    // 1) Fetch manifest and build tracks
+    const murl = `./manifest.json?v=${ASSET_VERSION}`;
+    const mres = await fetch(murl, { cache: 'no-store' });
+    console.info('[VVIP25] Fetch manifest:', murl, mres.status, mres.statusText);
     if(!mres.ok){
       els.list.innerHTML = `<div class="row"><div></div><div>manifest.json missing</div></div>`;
       return;
@@ -271,7 +309,7 @@
 
     state.tracks = data.map((t,idx)=>{
       const name = t.name || t.file || t.src?.split('/').pop() || `track-${idx}.mp3`;
-      const base = name.replace(/\.[^.]+$/,'');
+      const base = stripExt(name);
       const baseLower = base.toLowerCase();
       const dateObj = t.date ? new Date(t.date) : fallbackDateFromName(name);
       const labelDate = dateObj ? dateObj.toISOString().slice(0,10) : '';
@@ -285,8 +323,8 @@
       return {
         id: idx,
         name, base, baseLower,
-        // Start with *no* title to ensure titles.json is authoritative later
-        title: (t.title && String(t.title)) || '', // will be overridden by titles.json if present
+        // Keep manifest title but allow titles.json to override it
+        title: t.title ? String(t.title) : '',
         bpm: t.bpm ?? null,
         bpm_min: t.bpm_min ?? null,
         bpm_max: t.bpm_max ?? null,
@@ -307,64 +345,58 @@
     fillViewport();
     if (state.filtered.length && state.i === -1) { select(0); }
 
-    // 2) Fetch titles + thumbs lazily (but with cache-busting)
-    (requestIdleCallback?.(fetchTitles, {timeout: 800}) || setTimeout(fetchTitles, 0));
-    (requestIdleCallback?.(fetchThumbs, {timeout: 1200}) || setTimeout(fetchThumbs, 50));
+    // 2) Fetch titles + thumbs lazily (with cache-busting)
+    (requestIdleCallback?.(fetchTitles, {timeout: 600}) || setTimeout(fetchTitles, 0));
+    (requestIdleCallback?.(fetchThumbs, {timeout: 900}) || setTimeout(fetchThumbs, 50));
 
-    // Menu: keep open when interacting
     els.toolbar?.addEventListener('click', keepMenuOpen);
   }
 
   async function fetchTitles(){
+    const turl = `./titles.json?v=${ASSET_VERSION}`;
     try{
-      const tres = await fetch(`./titles.json?v=${ASSET_VERSION}`, { cache: 'no-store' });
-      if (!tres.ok) return;
+      const tres = await fetch(turl, { cache: 'no-store' });
+      console.info('[VVIP25] Fetch titles:', turl, tres.status, tres.statusText);
+      if (!tres.ok) { console.warn('[VVIP25] titles.json not loaded'); return; }
       const json = await tres.json();
 
-      // Build normalized lookup
-      const map = new Map();
-      if (Array.isArray(json)) {
-        for (const row of json) {
-          if (!row) continue;
-          const keyRaw = row.key || row.src || row.name;
-          const title = row.title || row.t || row.display || '';
-          if (!keyRaw || !title) continue;
-          map.set(normKey(keyRaw), String(title));
-        }
-      } else if (json && typeof json === 'object') {
-        for (const [k,v] of Object.entries(json)){
-          const title = (typeof v === 'string') ? v : (v && typeof v.title === 'string' ? v.title : '');
-          if (!title) continue;
-          map.set(normKey(k), String(title));
-        }
-      }
-      state.titlesLookup = map;
+      const lookup = buildTitleLookup(json);
+      state.titlesLookup = lookup;
 
-      // Apply authoritative titles: titles.json → manifest.title → filename-derived
+      // Diagnostics
+      const sampleKeys = Array.from(lookup.keys()).slice(0, 5);
+      console.info('[VVIP25] titles keys (sample):', sampleKeys);
+
       let changed = false;
       for (const t of state.tracks){
-        const keys = candidateKeys(t);
-        let titleFromTitles = '';
-        for (const k of keys){
-          if (state.titlesLookup.has(k)) { titleFromTitles = state.titlesLookup.get(k); break; }
-        }
-        const finalTitle = titleFromTitles || t.title || deriveTitleFromFilename(t.name);
+        const fromTitles = bestTitleForTrack(t, lookup);
+        const finalTitle = fromTitles || t.title || deriveTitleFromFilename(t.name);
         if (finalTitle !== t.title){
           t.title = finalTitle;
           changed = true;
+        }
+        if (!fromTitles) {
+          console.debug('[VVIP25] no titles.json match for', {
+            want: [rawFile(t.name).toLowerCase(), stripExt(rawFile(t.name).toLowerCase()), softNorm(t.name)],
+            src: t.src && rawFile(t.src).toLowerCase()
+          });
         }
       }
       if (changed){
         applyFilterSort(false, /*keepIndex=*/true);
         refreshTitles();
       }
-    }catch(_){ /* ignore */ }
+    }catch(err){
+      console.error('[VVIP25] titles.json fetch error', err);
+    }
   }
 
   // thumbs.json can be array of bases or object of base:true
   async function fetchThumbs(){
     try{
-      const r = await fetch(`./thumbs.json?v=${ASSET_VERSION}`, { cache: 'no-store' });
+      const url = `./thumbs.json?v=${ASSET_VERSION}`;
+      const r = await fetch(url, { cache: 'no-store' });
+      console.info('[VVIP25] Fetch thumbs:', url, r.status, r.statusText);
       if (!r.ok) return;
       const data = await r.json();
       const set = new Set();
@@ -451,7 +483,7 @@
     const bpmTxt = bpmLabel(t);
     const thumbURL = getResolvedThumb(t);
     const subline = uniqJoin([
-      t.title || '',           // titles.json first
+      t.title || '',
       bpmTxt,
       t.length ? fmtDur(t.length) : '',
       t.details || ''
@@ -648,7 +680,7 @@
   els.vol.addEventListener('input', ()=>{ els.audio.volume = parseFloat(els.vol.value); localStorage.setItem('vvip25:vol', els.vol.value); });
   els.audio.addEventListener('ended', ()=> jump(1));
 
-  // Toggles — keep menu open after each click
+  // Toggles
   els.btnTitles?.addEventListener('click', (e)=>{
     state.showTitles = !state.showTitles;
     els.btnTitles.classList.toggle('on', state.showTitles);
