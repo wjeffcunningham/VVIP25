@@ -15,7 +15,6 @@
     body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 -apple-system, BlinkMacSystemFont,"Helvetica Neue",Helvetica,Arial,"Segoe UI",Roboto,Inter,system-ui,sans-serif}
     .wrap{max-width:920px;margin:0 auto;padding:16px}
 
-    /* Header anchors the overlay panel */
     header{
       display:flex;
       align-items:center;
@@ -24,15 +23,14 @@
       position:relative;
     }
 
-    /* Outline-only VVIP25 title, doubled size */
     #site-title{
       margin:0;
       font-size:56px;
       font-weight:bold;
       font-family:"Helvetica Neue", Helvetica, Arial, sans-serif;
       color:transparent;
-      -webkit-text-fill-color:transparent; /* Safari */
-      -webkit-text-stroke:2px #fdf6d0;     /* outline color + thickness */
+      -webkit-text-fill-color:transparent;
+      -webkit-text-stroke:2px #fdf6d0;
     }
 
     .player{position:sticky;top:0;z-index:10;background:linear-gradient(180deg,rgba(11,11,12,.97),rgba(11,11,12,.92));backdrop-filter:saturate(120%) blur(8px);border-bottom:1px solid var(--border)}
@@ -43,15 +41,14 @@
     .sub{
       color:var(--muted);
       font-size:12px;
-      white-space:nowrap;      /* prevent multi-line “folding” */
-      overflow:hidden;
-      text-overflow:ellipsis;
+      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
     }
     .controls{display:flex;align-items:center;gap:8px}
     button{appearance:none;background:var(--card);color:var(--fg);border:1px solid var(--border);border-radius:10px;padding:8px 12px;cursor:pointer}
     button:disabled{opacity:.55;cursor:not-allowed}
     .range{display:flex;align-items:center;gap:8px}
     input[type="range"]{width:160px}
+
     .list{margin:12px 0 40px;border:1px solid var(--border);border-radius:14px;overflow:hidden}
     .row{
       display:grid;
@@ -61,23 +58,19 @@
       padding:10px 12px;
       border-top:1px solid var(--border);
       background:var(--card);
-      min-height:78px;         /* fixed height to prevent tap-induced jump */
+      min-height:78px; /* prevents mobile tap “folding” jump */
     }
     .row:first-child{border-top:0}
     .row:hover{background:#17171b}
     .badge{display:flex;gap:10px;align-items:center;font-size:12px;justify-self:end}
     .badge a{color:var(--fg);text-decoration:none;border:1px solid var(--border);padding:4px 8px;border-radius:8px}
     .badge .muted{color:var(--muted)}
-    .kbd{font:12px/1.2 ui-monospace,Menlo,Consolas;background:#1b1c20;border:1px solid #2a2b30;border-radius:6px;padding:2px 6px;color:#d7dae0}
 
     /* Toolbar + toggles */
     .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-    input[type="search"],select{background:var(--card);color:var(--fg);border:1px solid var(--border);border-radius:10px;padding:8px 10px}
+    select{background:var(--card);color:var(--fg);border:1px solid var(--border);border-radius:10px;padding:8px 10px}
     .tog, .btn{
-      padding:8px 10px;
-      border-radius:10px;
-      border:1px solid var(--border);
-      background:var(--card);
+      padding:8px 10px;border-radius:10px;border:1px solid var(--border);background:var(--card);
     }
     .tog{opacity:.6;transition:opacity .15s, box-shadow .15s}
     .tog.on{opacity:1; box-shadow:0 0 0 2px var(--accent) inset}
@@ -116,11 +109,10 @@
     <div class="wrap">
       <header>
         <h1 id="site-title">VVIP25</h1>
-        <details class="menu">
+        <details class="menu" id="menu">
           <summary>☰ Menu</summary>
           <div class="sheet">
             <div class="toolbar">
-              <input id="q" type="search" placeholder="Search (filename, title, details)…" autocomplete="off" />
               <select id="sort" title="Sort">
                 <option value="date_desc">Newest</option>
                 <option value="date_asc">Oldest</option>
@@ -131,9 +123,9 @@
               </select>
 
               <!-- Emoji toggles -->
-              <button class="tog on" id="togTitles" title="Song Titles (on/off)">📝</button>
-              <button class="tog" id="togWav" title="Show WAV buttons">🎚️</button>
-              <button class="tog" id="togMov" title="Show MOV buttons">🎬</button>
+              <button class="tog on" id="togTitles" title="Song Titles (on/off)" aria-pressed="true">📝</button>
+              <button class="tog" id="togWav" title="Show WAV buttons" aria-pressed="false">🎚️</button>
+              <button class="tog" id="togMov" title="Show MOV buttons" aria-pressed="false">🎬</button>
 
               <!-- Info / Shop -->
               <button class="btn" id="btnAbout" title="About">ℹ️</button>
@@ -175,10 +167,10 @@
 
   <script>
     // ====== CONFIG ======
-    const BASE_MP3    = 'https://media.vvipmedia.net/ACCESS/';  // MP3s
-    const BASE_WAV    = 'https://media.vvipmedia.net/WAV/';     // WAVs
-    const BASE_THUMB  = 'https://media.vvipmedia.net/ACCESS/';  // thumbs + default
-    const BASE_VIDEO  = 'https://media.vvipmedia.net/VIDEOS/';  // MOVs
+    const BASE_MP3    = 'https://media.vvipmedia.net/ACCESS/';
+    const BASE_WAV    = 'https://media.vvipmedia.net/WAV/';
+    const BASE_THUMB  = 'https://media.vvipmedia.net/ACCESS/';
+    const BASE_VIDEO  = 'https://media.vvipmedia.net/VIDEOS/';
     const DEFAULT_THUMB = BASE_THUMB + 'default_thumb.jpg';
 
     // -------- Helpers --------
@@ -186,37 +178,11 @@
     function fmtDur(sec){ sec=Number(sec||0); const m=Math.floor(sec/60), s=Math.floor(sec%60); return `${m}:${String(s).padStart(2,'0')}`; }
     function debounce(fn,ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); } }
     function escapeHTML(s){ return String(s).replace(/[&<>"']/g, c=>({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c])); }
-
     function bpmSortValue(t){ if(t.bpm!=null) return t.bpm; if(t.bpm_min!=null&&t.bpm_max!=null) return (t.bpm_min+t.bpm_max)/2; return 0; }
     function bpmLabel(t){ if(t.bpm!=null) return `${t.bpm} BPM`; if(t.bpm_min!=null&&t.bpm_max!=null) return `${t.bpm_min}–${t.bpm_max} BPM`; return ''; }
-
-    function removeBpm(str){
-      if (!str) return str;
-      return String(str)
-        .replace(/\b\d+(?:\.\d+)?(?:\s*[–—-]\s*\d+(?:\.\d+)?)?\s*BPM\b/gi, '')
-        .replace(/\s{2,}/g,' ')
-        .trim();
-    }
-    function cleanToken(s){
-      if (!s) return '';
-      s = String(s).trim();
-      s = s.replace(/^[·•,;:\-]+|[·•,;:\-]+$/g, '');
-      s = s.replace(/\s*[.,;:]\s*$/,'');
-      return s.trim();
-    }
-    function uniqJoin(parts){
-      const seen = new Set(), out = [];
-      for (let raw of parts){
-        if (raw == null) continue;
-        raw = cleanToken(removeBpm(raw));
-        if (!raw) continue;
-        const key = raw.toLowerCase();
-        if (seen.has(key)) continue;
-        seen.add(key);
-        out.push(raw);
-      }
-      return out.join(' · ');
-    }
+    function removeBpm(str){ if (!str) return str; return String(str).replace(/\b\d+(?:\.\d+)?(?:\s*[–—-]\s*\d+(?:\.\d+)?)?\s*BPM\b/gi, '').replace(/\s{2,}/g,' ').trim(); }
+    function cleanToken(s){ if (!s) return ''; s=String(s).trim(); s=s.replace(/^[·•,;:\-]+|[·•,;:\-]+$/g,''); s=s.replace(/\s*[.,;:]\s*$/,''); return s.trim(); }
+    function uniqJoin(parts){ const seen=new Set(), out=[]; for (let raw of parts){ if (raw==null) continue; raw=cleanToken(removeBpm(raw)); if (!raw) continue; const key=raw.toLowerCase(); if (seen.has(key)) continue; seen.add(key); out.push(raw);} return out.join(' · '); }
 
     // -------- Filename/date parsing --------
     const DATE_RX = /^\s*(\d{2})[.\-_](\d{2})[.\-_](\d{2})(?=\D|$)/;
@@ -238,7 +204,6 @@
     const els = {
       audio: $('#audio'),
       list: $('#list'),
-      q: $('#q'),
       sort: $('#sort'),
       toggle: $('#toggle'),
       prev: $('#prev'),
@@ -249,15 +214,13 @@
       nowSub: $('#now-sub'),
       tcur: $('#tcur'),
       tdur: $('#tdur'),
-      cover: $('#cover')
+      cover: $('#cover'),
+      menu: $('#menu'),
+      btnTitles: $('#togTitles'),
+      btnWav: $('#togWav'),
+      btnMov: $('#togMov'),
+      btnAbout: $('#btnAbout')
     };
-
-    // extra toolbar elements
-    const btnTitles = document.querySelector('#togTitles');
-    const btnWav    = document.querySelector('#togWav');
-    const btnMov    = document.querySelector('#togMov');
-    const btnAbout  = document.querySelector('#btnAbout');
-    // const btnShop = document.querySelector('#btnShop'); // link only
 
     // -------- State --------
     const state = {
@@ -268,11 +231,11 @@
       pageSize: 60,
       renderCount: 0,
       titles: {},
-      thumbBases: new Set(),   // bases that *have* a custom thumb (from thumbs.json)
-      resolvedThumb: new Map(),// track.id -> resolved thumb URL after cascade
-      showTitles: true,        // 📝 default ON
-      showWavButtons: false,   // 🎚️ default OFF
-      showMovButtons: false    // 🎬 default OFF
+      thumbBases: new Set(),
+      resolvedThumb: new Map(),
+      showTitles: true,      // 📝 default ON
+      showWavButtons: false, // 🎚️ default OFF
+      showMovButtons: false  // 🎬 default OFF
     };
 
     // Persisted volume
@@ -282,7 +245,6 @@
     // Boot
     init();
     async function init(){
-      // 1) Manifest
       const mres = await fetch('./manifest.json');
       if(!mres.ok){
         els.list.innerHTML = `<div class="row"><div></div><div>manifest.json missing</div></div>`;
@@ -290,7 +252,6 @@
       }
       const data = await mres.json();
 
-      // 2) Tracks (fast, no network checks)
       state.tracks = data.map((t,idx)=>{
         const name = t.name;
         const base = name.replace(/\.[^.]+$/,'');
@@ -298,44 +259,35 @@
         const dateObj = t.date ? new Date(t.date) : fallbackDateFromName(name);
         const label = (t.title && t.title.trim()) || (t.date ? `${t.date}` : (dateObj ? dateObj.toISOString().slice(0,10) : name));
 
-        // safer URL building for files that can include spaces, parens, etc.
         const mp3 = t.src || (BASE_MP3 + encodeURIComponent(name));
-        const wav = BASE_WAV + encodeURIComponent(base + '.wav');     // ALWAYS show WAV (server expects original case)
+        const wav = BASE_WAV + encodeURIComponent(base + '.wav');
         const mov = t.has_mov ? (BASE_VIDEO + encodeURIComponent(base + '.mov')) : null;
-
-        // thumbs stored lowercase on CDN
         const thumbCandidate = BASE_THUMB + encodeURIComponent(baseLower + 'thumb.jpg');
 
-        return {
-          id: idx,
-          name,
-          base,
-          baseLower,
-          title: t.title || '',
-          bpm: t.bpm ?? null,
-          bpm_min: t.bpm_min ?? null,
-          bpm_max: t.bpm_max ?? null,
-          details: t.details || '',
-          length: t.length || 0,
-          date: dateObj || null,
-          label,
-          src: mp3,
-          wav,
-          video: mov,
-          thumbCandidate
-        };
+        return { id: idx, name, base, baseLower, title: t.title || '', bpm: t.bpm ?? null,
+          bpm_min: t.bpm_min ?? null, bpm_max: t.bpm_max ?? null, details: t.details || '',
+          length: t.length || 0, date: dateObj || null, label, src: mp3, wav, video: mov, thumbCandidate };
       });
 
-      // 3) First paint ASAP; use default thumbs until cascade is computed
       applyFilterSort(true);
-      computeThumbCascade();  // default-only cascade (uses DEFAULT_THUMB)
-      renderList();           // refresh rows with resolved thumbs
-      fillViewport();         // ensure we load enough rows to reach/trigger sentinel
-      if (state.filtered.length && state.i === -1) { select(0); }  // preload top item, paused
+      computeThumbCascade();
+      renderList();
+      fillViewport();
+      if (state.filtered.length && state.i === -1) { select(0); }  // preload top item
 
-      // 4) Lazy fetch titles + thumbs map
       (requestIdleCallback?.(fetchTitles, {timeout: 1200}) || setTimeout(fetchTitles, 0));
       (requestIdleCallback?.(fetchThumbs, {timeout: 1500}) || setTimeout(fetchThumbs, 50));
+
+      syncToggles(); // make sure emoji buttons reflect state on first load
+    }
+
+    function syncToggles(){
+      els.btnTitles?.classList.toggle('on', state.showTitles);
+      els.btnTitles?.setAttribute('aria-pressed', String(state.showTitles));
+      els.btnWav?.classList.toggle('on', state.showWavButtons);
+      els.btnWav?.setAttribute('aria-pressed', String(state.showWavButtons));
+      els.btnMov?.classList.toggle('on', state.showMovButtons);
+      els.btnMov?.setAttribute('aria-pressed', String(state.showMovButtons));
     }
 
     async function fetchTitles(){
@@ -354,55 +306,42 @@
           }
         }
         if (changed) applyFilterSort(false, /*keepIndex=*/true);
-      }catch(_){} // silent
+      }catch(_){} 
     }
 
-    // thumbs.json can be EITHER:
-    //  - ["24.03.15.105","24.09.19.106", ...]  (bases that have thumbs)
-    //  - {"24.03.15.105": true, ...}
     async function fetchThumbs(){
       try{
         const r = await fetch('./thumbs.json', { cache: 'no-store' });
-        if (!r.ok) return; // absent is fine -> all default
-
+        if (!r.ok) return;
         const data = await r.json();
         const set = new Set();
-        if (Array.isArray(data)) {
-          data.forEach(base => set.add(String(base).toLowerCase()));
-        } else if (data && typeof data === 'object') {
-          Object.keys(data).forEach(base => { if (data[base]) set.add(base.toLowerCase()); });
-        }
+        if (Array.isArray(data)) data.forEach(base => set.add(String(base).toLowerCase()));
+        else if (data && typeof data === 'object') Object.keys(data).forEach(base => { if (data[base]) set.add(base.toLowerCase()); });
         state.thumbBases = set;
 
-        computeThumbCascade();        // recompute with real breaks
-        rerenderVisibleRowsThumbs();  // refresh visible rows
+        computeThumbCascade();
+        rerenderVisibleRowsThumbs();
         if (state.i>=0) updateNowbar();
-      }catch(_){ /* ignore */ }
+      }catch(_){}
     }
 
-    // Compute cascade once (global chronology), independent of current sort/filter.
     function computeThumbCascade(){
-      // Sort ALL tracks by date ascending, then within-day index, then name
       const asc = [...state.tracks].sort((a,b)=>{
-        const da = a.date?.getTime()||0, db = b.date?.getTime()||0;
+        const da=a.date?.getTime()||0, db=b.date?.getTime()||0;
         if (da!==db) return da-db;
         return withinDayIndexFromName(a.name)-withinDayIndexFromName(b.name) || a.name.localeCompare(b.name);
       });
-
       let currentThumb = DEFAULT_THUMB;
       for (const t of asc){
-        // compare using lowercase base keys from thumbs.json
         if (state.thumbBases.has(t.baseLower)) currentThumb = t.thumbCandidate;
         state.resolvedThumb.set(t.id, currentThumb);
       }
     }
 
-    function getResolvedThumb(t){
-      return state.resolvedThumb.get(t.id) || DEFAULT_THUMB;
-    }
+    function getResolvedThumb(t){ return state.resolvedThumb.get(t.id) || DEFAULT_THUMB; }
 
     function applyFilterSort(firstPaint=false, keepIndex=false){
-      const q = (els.q?.value||'').trim().toLowerCase();
+      const q = ''; // search removed
       let out = state.tracks.filter(t=>{
         return !q || t.name.toLowerCase().includes(q) ||
                (t.title && t.title.toLowerCase().includes(q)) ||
@@ -413,18 +352,16 @@
       switch(els.sort?.value||'date_desc'){
         case 'date_desc':
           out.sort((a,b)=>{
-            const da = a.date?.getTime()||0, db = b.date?.getTime()||0;
-            if (db !== da) return db - da;
-            return withinDayIndexFromName(b.name) - withinDayIndexFromName(a.name)
-                   || b.name.localeCompare(a.name);
+            const da=a.date?.getTime()||0, db=b.date?.getTime()||0;
+            if (db!==da) return db-da;
+            return withinDayIndexFromName(b.name)-withinDayIndexFromName(a.name) || b.name.localeCompare(a.name);
           });
           break;
         case 'date_asc':
           out.sort((a,b)=>{
-            const da = a.date?.getTime()||0, db = b.date?.getTime()||0;
-            if (da !== db) return da - db;
-            return withinDayIndexFromName(a.name) - withinDayIndexFromName(b.name)
-                   || a.name.localeCompare(b.name);
+            const da=a.date?.getTime()||0, db=b.date?.getTime()||0;
+            if (da!==db) return da-db;
+            return withinDayIndexFromName(a.name)-withinDayIndexFromName(b.name) || a.name.localeCompare(b.name);
           });
           break;
         case 'bpm_desc':  out.sort((a,b)=> bpmSortValue(b) - bpmSortValue(a)); break;
@@ -434,41 +371,32 @@
       }
 
       state.filtered = out;
-
       const initialChunk = firstPaint ? Math.max(60, state.pageSize) : state.pageSize;
       state.renderCount = Math.min(state.filtered.length, initialChunk);
-
       if (!keepIndex) state.i = Math.min(state.i, state.renderCount-1);
       renderList();
       setupInfiniteScroll();
-      // safety: if sentinel not yet reachable, keep appending until we can scroll
       fillViewport();
     }
 
     function displayName(t){ return (state.showTitles && t.title) ? t.title : t.name; }
 
-    // --- Safe <img> (no error loops) ---
     function imgHTML(src){
       const esc = s => s.replace(/"/g,'&quot;');
-      // onerror handler swaps to default once, then disables itself
       return `<img src="${esc(src)}" alt="" loading="lazy"
         style="width:56px;height:56px;border-radius:8px;object-fit:cover;"
         onerror="if(this.dataset.fbk!=='1'){this.dataset.fbk='1';this.onerror=null;this.src='${DEFAULT_THUMB}';}">`;
     }
 
+    // WAV/MOV buttons hidden when toggles are off
     function badgeHTML(t){
-      const parts = [
-        `<a href="${t.src}" download title="Download MP3">⬇︎ MP3</a>`
-      ];
+      const parts = [`<a href="${t.src}" download title="Download MP3">⬇︎ MP3</a>`];
       if (state.showWavButtons){
         parts.push(`<a href="${BASE_WAV + encodeURIComponent(t.base + '.wav')}" download title="Download Lossless">⬇︎ WAV</a>`);
-      } else {
-        parts.push('<span class="muted">WAV</span>');
       }
       if (state.showMovButtons){
-        parts.push(t.video ? `<a href="${t.video}" target="_blank" rel="noopener" title="Open Video">▶︎ MOV</a>` : '<span class="muted">MOV</span>');
-      } else {
-        parts.push('<span class="muted">MOV</span>');
+        if (t.video) parts.push(`<a href="${t.video}" target="_blank" rel="noopener" title="Open Video">▶︎ MOV</a>`);
+        else parts.push('<span class="muted">MOV</span>');
       }
       return `<div class="badge">${parts.join('\n')}</div>`;
     }
@@ -509,7 +437,7 @@
         const t = state.tracks.find(x=>x.id===id);
         if (!t) return;
         const img = row.querySelector('.cover img');
-        if (img) { img.src = getResolvedThumb(t); } // keep onerror intact
+        if (img) { img.src = getResolvedThumb(t); }
       });
     }
 
@@ -520,9 +448,7 @@
         const t = state.tracks.find(x=>x.id===id);
         if (!t) return;
         const badge = row.querySelector('.badge');
-        if (badge){
-          badge.outerHTML = badgeHTML(t);
-        }
+        if (badge){ badge.outerHTML = badgeHTML(t); }
       });
     }
 
@@ -542,7 +468,7 @@
       if (state.i>=0) updateNowbar();
     }
 
-    // --- Infinite scroll with robust fallbacks ---
+    // --- Infinite scroll ---
     let sentinelObserver;
     function setupInfiniteScroll(){
       const sentinel = $('#sentinel');
@@ -551,14 +477,11 @@
       if (sentinelObserver) sentinelObserver.disconnect();
       if ('IntersectionObserver' in window){
         sentinelObserver = new IntersectionObserver((entries)=>{
-          for (const e of entries){
-            if (e.isIntersecting) appendChunk();
-          }
+          for (const e of entries){ if (e.isIntersecting) appendChunk(); }
         }, { root: null, rootMargin: '1200px 0px', threshold: 0 });
         sentinelObserver.observe(sentinel);
       }
 
-      // Scroll fallback (covers browsers/pages where IO doesn't fire reliably)
       window.addEventListener('scroll', onScrollMaybeLoad, { passive: true });
       window.addEventListener('resize', debounce(fillViewport, 120), { passive: true });
     }
@@ -580,20 +503,12 @@
       els.list.insertBefore(frag, sentinel);
     }
 
-    function atBottomBuffer(px=1200){
-      return (window.scrollY + window.innerHeight + px) >= document.documentElement.scrollHeight;
-    }
+    function atBottomBuffer(px=1200){ return (window.scrollY + window.innerHeight + px) >= document.documentElement.scrollHeight; }
+    function onScrollMaybeLoad(){ if (atBottomBuffer()) appendChunk(); }
 
-    function onScrollMaybeLoad(){
-      if (atBottomBuffer()) {
-        appendChunk();
-      }
-    }
-
-    // Ensure we can reach the sentinel / have enough rows to scroll
     function fillViewport(){
       let guard = 0;
-      while (guard++ < 10) { // cap to avoid runaway
+      while (guard++ < 10) {
         const scrollable = document.documentElement.scrollHeight > window.innerHeight + 200;
         if (scrollable || state.renderCount >= state.filtered.length) break;
         appendChunk();
@@ -608,7 +523,6 @@
       updateNowbar();
       state.playing = false;
       updateToggle();
-      // update active markers in rendered window
       const rendered = els.list.querySelectorAll('.row');
       rendered.forEach(row=>{
         const id = Number(row.getAttribute('data-id'));
@@ -626,7 +540,6 @@
       els.nowTitle.textContent = displayName(t);
       els.nowSub.textContent = t.label || '';
       const url = getResolvedThumb(t);
-      // safe image (no error loop)
       els.cover.innerHTML = `<img src="${url.replace(/"/g,'&quot;')}" alt=""
         style="width:56px;height:56px;border-radius:8px;object-fit:cover;"
         onerror="if(this.dataset.fbk!=='1'){this.dataset.fbk='1';this.onerror=null;this.src='${DEFAULT_THUMB}';}">`;
@@ -656,6 +569,9 @@
       select(i); play();
     }
 
+    // Close the menu sheet after pressing a toolbar control
+    function closeMenu(){ if (els.menu?.open) els.menu.open = false; }
+
     // Events
     document.addEventListener('click', (e)=>{
       const row = e.target.closest('.row');
@@ -666,8 +582,11 @@
       }
     }, { passive: true });
 
-    els.q?.addEventListener('input', debounce(()=> applyFilterSort(), 80), { passive: true });
-    els.sort?.addEventListener('change', ()=> applyFilterSort(), { passive: true });
+    els.sort?.addEventListener('change', ()=>{
+      applyFilterSort();
+      closeMenu();
+    }, { passive: true });
+
     els.toggle.addEventListener('click', () => {
       if (state.i < 0 && state.filtered.length) select(0);
       state.playing ? pause() : play();
@@ -687,25 +606,29 @@
     els.audio.addEventListener('ended', ()=> jump(1));
 
     // Toggle wiring
-    btnTitles?.addEventListener('click', ()=>{
+    els.btnTitles?.addEventListener('click', ()=>{
       state.showTitles = !state.showTitles;
-      btnTitles.classList.toggle('on', state.showTitles);
+      syncToggles();
       refreshTitles();
+      closeMenu();
     });
-    btnWav?.addEventListener('click', ()=>{
+    els.btnWav?.addEventListener('click', ()=>{
       state.showWavButtons = !state.showWavButtons;
-      btnWav.classList.toggle('on', state.showWavButtons);
+      syncToggles();
       rerenderVisibleRowsBadges();
       if (state.i>=0) updateNowbar();
+      closeMenu();
     });
-    btnMov?.addEventListener('click', ()=>{
+    els.btnMov?.addEventListener('click', ()=>{
       state.showMovButtons = !state.showMovButtons;
-      btnMov.classList.toggle('on', state.showMovButtons);
+      syncToggles();
       rerenderVisibleRowsBadges();
       if (state.i>=0) updateNowbar();
+      closeMenu();
     });
-    btnAbout?.addEventListener('click', ()=>{
+    els.btnAbout?.addEventListener('click', ()=>{
       alert("VVIP25 — About\n\nAdd your about copy here or swap this alert for a modal.");
+      closeMenu();
     });
   </script>
 </body>
