@@ -1,4 +1,30 @@
 [
+    {
+    "name": "25.08.15.126.mp3",
+    "title": "2025-08-15 · 126 BPM",
+    "bpm": 126,
+    "bpm_min": null,
+    "bpm_max": null,
+    "details": "",
+    "length": 0,
+    "date": "2025-08-10",
+    "year": 2025,
+    "month": 8,
+    "day": 15
+  },
+    {
+    "name": "25.08.14.129.mp3",
+    "title": "2025-08-14 · 129 BPM",
+    "bpm": 98,
+    "bpm_min": null,
+    "bpm_max": null,
+    "details": "",
+    "length": 0,
+    "date": "2025-08-14",
+    "year": 2025,
+    "month": 8,
+    "day": 14
+  },
   {
     "name": "25.08.10.98.mp3",
     "title": "2025-08-10 · 98 BPM",
