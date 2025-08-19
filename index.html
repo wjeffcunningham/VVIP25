@@ -128,6 +128,25 @@
   <audio id="audio" preload="metadata"></audio>
 
 <script>
+/* ========================== VVIP25 — Phase 3 cleanup ==========================
+
+Implements:
+1) Cache-busting best practices on fetches, plus an optional HTML no-store style.
+2) Fix: pressing Play no longer opens the menu (menu stays closed unless you touch it).
+3) Mobile controls: better wrapping, spacing, range growth (injects tiny CSS patch).
+4) Searchable Notes/tags: add `notes` (string or array) per track in manifest.json, e.g.
+      { "name":"2025-08-10-track.mp3", "notes":"#mbv #shoegaze cool bridge" }
+   or  { "name":"...", "notes":["#mbv","#shoegaze","cool bridge"] }
+   Search via the 🔍 icon; supports plain text and #hashtags.
+5) Adds 🔍 search UI in the menu; live-filters list and Now bar.
+6) Titles default OFF; when ON, only the primary title is shown (splits "A//B" → "A").
+   Subline never repeats the title when titles are ON.
+7) Puts toggles inside a Settings sub-menu (gear ⚙️) under the menu overlay.
+8) Per-track ★ favorites (localStorage). Menu gets a 🎵 “Playlist” button to show only favorites.
+9) Robust titles.json lookup; respects primary title before “//”.
+
+=============================================================================== */
+
   // ====== CONFIG ======
   const BASE_MP3   = 'https://media.vvipmedia.net/ACCESS/';
   const BASE_WAV   = 'https://media.vvipmedia.net/WAV/';
@@ -135,88 +154,95 @@
   const BASE_VIDEO = 'https://media.vvipmedia.net/VIDEOS/';
   const DEFAULT_THUMB = BASE_THUMB + 'default_thumb.jpg';
 
-  // Bump this to beat caches after changes to JSON or this script
-  const ASSET_VERSION = 6;
+  // Bump to beat caches after any JSON/script change
+  const ASSET_VERSION = 7;
+
+  // ---- Light HTML no-store hint (browser-side only) ----
+  (function injectNoStoreMeta(){
+    try{
+      const m = document.createElement('meta');
+      m.httpEquiv = 'Cache-Control';
+      m.content = 'no-store, max-age=0, must-revalidate';
+      document.head.appendChild(m);
+    }catch(_){}
+  })();
+
+  // ---- Mobile CSS & small layout fixes (injected so no HTML edits required) ----
+  (function injectCSS(){
+    const css = `
+    .controls{flex-wrap:wrap;gap:10px}
+    .controls .range{min-width:140px;flex:1}
+    .controls .range input[type="range"]{width:100%}
+    .controls button{min-width:44px}
+    @media (max-width:560px){
+      .controls{gap:6px}
+      .controls button{flex:0 0 44px}
+      .range span{min-width:34px;text-align:center}
+    }
+    /* Submenu styling */
+    details.submenu>summary{
+      cursor:pointer;list-style:none;background:var(--card);
+      border:1px solid var(--border);padding:8px 12px;border-radius:10px;user-select:none
+    }
+    details.submenu[open]>summary{border-bottom-left-radius:10px;border-bottom-right-radius:10px}
+    details.submenu[open] .sheet-inner{display:block}
+    .sheet-inner{display:none;padding:8px 0}
+    /* Search input */
+    .search-wrap{display:flex;gap:8px;align-items:center;margin-top:8px}
+    .search-wrap input{
+      flex:1;min-width:120px;background:var(--card);color:var(--fg);
+      border:1px solid var(--border);border-radius:10px;padding:8px 10px
+    }
+    .pill{border:1px solid var(--border);border-radius:999px;padding:4px 10px;font-size:12px}
+    .star{cursor:pointer}
+    .star.on{filter:drop-shadow(0 0 2px var(--accent))}
+    `;
+    const style = document.createElement('style');
+    style.textContent = css;
+    document.head.appendChild(style);
+  })();
 
   // -------- Helpers --------
   const $ = sel => document.querySelector(sel);
   function fmtDur(sec){ sec=Number(sec||0); const m=Math.floor(sec/60), s=Math.floor(sec%60); return `${m}:${String(s).padStart(2,'0')}`; }
   function debounce(fn,ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); } }
   function escapeHTML(s){ return String(s).replace(/[&<>"']/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+  function removeBpm(str){
+    if (!str) return str;
+    return String(str).replace(/\b\d+(?:\.\d+)?(?:\s*[–—-]\s*\d+(?:\.\d+)?)?\s*BPM\b/gi,'').replace(/\s{2,}/g,' ').trim();
+  }
+  function cleanToken(s){
+    if (!s) return '';
+    s = String(s).trim().replace(/^[·•,;:\-]+|[·•,;:\-]+$/g,'').replace(/\s*[.,;:]\s*$/,'');
+    return s.trim();
+  }
   function uniqJoin(parts){
     const seen = new Set(), out = [];
     for (let raw of parts){
       if (raw == null) continue;
-      raw = String(raw).replace(/\b\d+(?:\.\d+)?(?:\s*[–—-]\s*\d+(?:\.\d+)?)?\s*BPM\b/gi,'').replace(/\s{2,}/g,' ').trim();
+      raw = cleanToken(removeBpm(raw));
       if (!raw) continue;
       const key = raw.toLowerCase();
       if (seen.has(key)) continue;
       seen.add(key);
-      out.push(raw.replace(/^[·•,;:\-]+|[·•,;:\-]+$/g,'').replace(/\s*[.,;:]\s*$/,'').trim());
+      out.push(raw);
     }
     return out.join(' · ');
   }
-
-  // -------- Key strategies for titles.json --------
   const rawFile   = (s) => (String(s).split('/').pop() || '');
   const stripExt  = (s) => String(s).replace(/\.[a-z0-9]+$/i,'');
   const softNorm  = (s) => stripExt(s).toLowerCase().replace(/[ _]+/g,'-').replace(/-+/g,'-');
-
-  function buildTitleLookup(json){
-    // Accept object or array forms
-    const map = new Map();
-
-    const add = (k, title) => {
-      if (!k || !title) return;
-      const rawLower = String(k).toLowerCase();
-      const justFile = rawFile(rawLower);
-      const noExt = stripExt(justFile);
-      const norm = softNorm(justFile);
-      // Store all three so we can hit whichever the track offers
-      map.set(justFile, String(title));
-      map.set(noExt,   String(title));
-      map.set(norm,    String(title));
-    };
-
-    if (Array.isArray(json)) {
-      for (const row of json || []) {
-        if (!row) continue;
-        const k = row.key || row.src || row.name;
-        const t = row.title || row.t || row.display;
-        add(k, t);
-      }
-    } else if (json && typeof json === 'object') {
-      for (const [k,v] of Object.entries(json)) {
-        const t = (typeof v === 'string') ? v : (v && typeof v.title === 'string' ? v.title : '');
-        add(k, t);
-      }
-    }
-    return map;
+  function deriveTitleFromFilename(name){
+    const b = stripExt(rawFile(name)).replace(/^[\d._-]+/,'').replace(/[_-]+/g,' ').trim();
+    return b || stripExt(rawFile(name));
   }
+  // primary part of "A//B//C"
+  const primaryOnly = (t) => String(t||'').split('//')[0].trim();
 
-  function bestTitleForTrack(t, lookup){
-    // try exact-with-ext, without-ext, then soft norm; consider both name and src/base
-    const f = rawFile(t.name).toLowerCase();
-    const noExt = stripExt(f);
-    const norm = softNorm(f);
-    const fromSrc = t.src ? rawFile(t.src).toLowerCase() : '';
-    const candidates = [
-      f, noExt, norm,
-      fromSrc, stripExt(fromSrc), softNorm(fromSrc),
-      t.base?.toLowerCase?.(), softNorm(t.base || '')
-    ].filter(Boolean);
-
-    for (const c of candidates){
-      if (lookup.has(c)) return lookup.get(c);
-    }
-    return '';
-  }
-
-  // -------- Filename/date parsing (robust for YYYY or YY + optional index) --------
+  // -------- Filename/date parsing (YYYY or YY + optional index) --------
   const DATE_RX_YYYY   = /^\s*(\d{4})[.\-_](\d{2})[.\-_](\d{2})(?=\D|$)/;
   const DATE_RX_YY     = /^\s*(\d{2})[.\-_](\d{2})[.\-_](\d{2})(?=\D|$)/;
   const WITHIN_DAY_RX  = /^\s*(?:\d{4}|\d{2})[.\-_]\d{2}[.\-_]\d{2}(?:[.\-_](\d+))?/;
-
   function fallbackDateFromName(name){
     const s = String(name);
     let m = s.match(DATE_RX_YYYY);
@@ -229,7 +255,7 @@
     m = s.match(DATE_RX_YY);
     if (m) {
       const yy = parseInt(m[1],10);
-      const yyyy = (yy >= 70 ? 1900+yy : 2000+yy); // pivot at 1970
+      const yyyy = (yy >= 70 ? 1900+yy : 2000+yy);
       const mm   = Math.max(1, Math.min(12, parseInt(m[2],10)));
       const dd   = Math.max(1, Math.min(31, parseInt(m[3],10)));
       return new Date(Date.UTC(yyyy, mm-1, dd));
@@ -260,11 +286,7 @@
     tdur: $('#tdur'),
     cover: $('#cover'),
     menu: $('#menu'),
-    toolbar: $('#toolbar'),
-    btnTitles: $('#togTitles'),
-    btnWav: $('#togWav'),
-    btnMov: $('#togMov'),
-    btnAbout: $('#btnAbout')
+    toolbar: $('#toolbar')
   };
 
   // -------- State --------
@@ -278,29 +300,26 @@
     titlesLookup: new Map(),
     thumbBases: new Set(),
     resolvedThumb: new Map(),
-    showTitles: true,
+    showTitles: false,          // (6) default OFF
     showWavButtons: false,
-    showMovButtons: false
+    showMovButtons: false,
+    favorites: new Set(JSON.parse(localStorage.getItem('vvip25:favs')||'[]')),
+    searchQuery: ''             // (4)(5) search text / tags
   };
 
   // Persisted volume
   els.vol.value = localStorage.getItem('vvip25:vol') ?? '0.9';
   els.audio.volume = parseFloat(els.vol.value);
 
-  // Keep menu open helper
-  function keepMenuOpen(e){
-    if (!els.menu) return;
-    if (e) { e.preventDefault?.(); e.stopPropagation?.(); }
-    els.menu.open = true;
-  }
-
   // Boot
   init();
   async function init(){
+    // 0) Build Settings sub-menu + Search + Playlist UI
+    buildMenuUI();
+
     // 1) Fetch manifest and build tracks
     const murl = `./manifest.json?v=${ASSET_VERSION}`;
     const mres = await fetch(murl, { cache: 'no-store' });
-    console.info('[VVIP25] Fetch manifest:', murl, mres.status, mres.statusText);
     if(!mres.ok){
       els.list.innerHTML = `<div class="row"><div></div><div>manifest.json missing</div></div>`;
       return;
@@ -320,10 +339,14 @@
 
       const thumbCandidate = BASE_THUMB + encodeURIComponent(baseLower + 'thumb.jpg');
 
+      // (4) notes/tags from manifest: string or array
+      let notes = '';
+      if (Array.isArray(t.notes)) notes = t.notes.join(' ');
+      else if (typeof t.notes === 'string') notes = t.notes;
+
       return {
         id: idx,
         name, base, baseLower,
-        // Keep manifest title but allow titles.json to override it
         title: t.title ? String(t.title) : '',
         bpm: t.bpm ?? null,
         bpm_min: t.bpm_min ?? null,
@@ -335,7 +358,8 @@
         src: mp3,
         wav,
         video: mov,
-        thumbCandidate
+        thumbCandidate,
+        notes: notes || ''
       };
     });
 
@@ -349,23 +373,64 @@
     (requestIdleCallback?.(fetchTitles, {timeout: 600}) || setTimeout(fetchTitles, 0));
     (requestIdleCallback?.(fetchThumbs, {timeout: 900}) || setTimeout(fetchThumbs, 50));
 
-    els.toolbar?.addEventListener('click', keepMenuOpen);
+    // IMPORTANT: only keep menu open when clicking *inside* the menus
+    // (2) Fix accidental open when pressing main controls: do NOT call keepMenuOpen there.
+  }
+
+  // --- Titles (with primaryOnly split) ---
+  function buildTitleLookup(json){
+    const map = new Map();
+    const add = (k, titleRaw) => {
+      if (!k || !titleRaw) return;
+      const title = primaryOnly(titleRaw); // (8) keep only primary part before "//"
+      const rawLower = String(k).toLowerCase();
+      const justFile = rawFile(rawLower);
+      const noExt = stripExt(justFile);
+      const norm = softNorm(justFile);
+      map.set(justFile, String(title));
+      map.set(noExt,   String(title));
+      map.set(norm,    String(title));
+    };
+    if (Array.isArray(json)) {
+      for (const row of json || []) {
+        if (!row) continue;
+        const k = row.key || row.src || row.name;
+        const t = row.title || row.t || row.display;
+        add(k, t);
+      }
+    } else if (json && typeof json === 'object') {
+      for (const [k,v] of Object.entries(json)) {
+        const t = (typeof v === 'string') ? v : (v && typeof v.title === 'string' ? v.title : '');
+        add(k, t);
+      }
+    }
+    return map;
+  }
+
+  function bestTitleForTrack(t, lookup){
+    const f = rawFile(t.name).toLowerCase();
+    const noExt = stripExt(f);
+    const norm = softNorm(f);
+    const fromSrc = t.src ? rawFile(t.src).toLowerCase() : '';
+    const candidates = [
+      f, noExt, norm,
+      fromSrc, stripExt(fromSrc), softNorm(fromSrc),
+      t.base?.toLowerCase?.(), softNorm(t.base || '')
+    ].filter(Boolean);
+    for (const c of candidates){
+      if (lookup.has(c)) return lookup.get(c);
+    }
+    return '';
   }
 
   async function fetchTitles(){
     const turl = `./titles.json?v=${ASSET_VERSION}`;
     try{
       const tres = await fetch(turl, { cache: 'no-store' });
-      console.info('[VVIP25] Fetch titles:', turl, tres.status, tres.statusText);
-      if (!tres.ok) { console.warn('[VVIP25] titles.json not loaded'); return; }
+      if (!tres.ok) return;
       const json = await tres.json();
-
       const lookup = buildTitleLookup(json);
       state.titlesLookup = lookup;
-
-      // Diagnostics
-      const sampleKeys = Array.from(lookup.keys()).slice(0, 5);
-      console.info('[VVIP25] titles keys (sample):', sampleKeys);
 
       let changed = false;
       for (const t of state.tracks){
@@ -375,20 +440,12 @@
           t.title = finalTitle;
           changed = true;
         }
-        if (!fromTitles) {
-          console.debug('[VVIP25] no titles.json match for', {
-            want: [rawFile(t.name).toLowerCase(), stripExt(rawFile(t.name).toLowerCase()), softNorm(t.name)],
-            src: t.src && rawFile(t.src).toLowerCase()
-          });
-        }
       }
       if (changed){
         applyFilterSort(false, /*keepIndex=*/true);
         refreshTitles();
       }
-    }catch(err){
-      console.error('[VVIP25] titles.json fetch error', err);
-    }
+    }catch(_){}
   }
 
   // thumbs.json can be array of bases or object of base:true
@@ -396,7 +453,6 @@
     try{
       const url = `./thumbs.json?v=${ASSET_VERSION}`;
       const r = await fetch(url, { cache: 'no-store' });
-      console.info('[VVIP25] Fetch thumbs:', url, r.status, r.statusText);
       if (!r.ok) return;
       const data = await r.json();
       const set = new Set();
@@ -407,7 +463,7 @@
       computeThumbCascade();
       rerenderVisibleRowsThumbs();
       if (state.i>=0) updateNowbar();
-    }catch(_){ /* ignore */ }
+    }catch(_){}
   }
 
   function computeThumbCascade(){
@@ -424,8 +480,26 @@
   }
   const getResolvedThumb = t => state.resolvedThumb.get(t.id) || DEFAULT_THUMB;
 
+  // ---- Filtering, search, sort ----
+  function matchesSearch(t){
+    const q = state.searchQuery.trim().toLowerCase();
+    if (!q) return true;
+    // Support #tags and plain text. If query contains any #tag, require all tags present.
+    const tokens = q.split(/\s+/).filter(Boolean);
+    const hayName  = (t.name||'').toLowerCase();
+    const hayTitle = (t.title||'').toLowerCase();
+    const hayNotes = (t.notes||'').toLowerCase();
+    // AND-match all tokens
+    return tokens.every(tok=>{
+      if (tok.startsWith('#')){
+        return hayNotes.includes(tok); // tags should be written as #tag in notes
+      }
+      return hayName.includes(tok) || hayTitle.includes(tok) || hayNotes.includes(tok);
+    });
+  }
+
   function applyFilterSort(firstPaint=false, keepIndex=false){
-    let out = [...state.tracks];
+    let out = [...state.tracks].filter(matchesSearch);
 
     switch(els.sort?.value||'date_desc'){
       case 'date_desc':
@@ -465,16 +539,22 @@
       onerror="if(this.dataset.fbk!=='1'){this.dataset.fbk='1';this.onerror=null;this.src='${DEFAULT_THUMB}';}">`;
   }
 
+  function favHTML(t){
+    const on = state.favorites.has(t.name) ? 'on' : '';
+    const title = state.favorites.has(t.name) ? 'Unfavourite' : 'Favourite';
+    return `<button class="star ${on}" data-fav="${escapeHTML(t.name)}" title="${title}">★</button>`;
+  }
+
   function badgeHTML(t){
-    const parts = [`<a href="${t.src}" download title="Download MP3">⬇︎ MP3</a>`];
+    const parts = [favHTML(t), `<a class="pill" href="${t.src}" download title="Download MP3">MP3</a>`];
     if (state.showWavButtons){
-      parts.push(`<a href="${BASE_WAV + encodeURIComponent(t.base + '.wav')}" download title="Download Lossless">⬇︎ WAV</a>`);
+      parts.push(`<a class="pill" href="${BASE_WAV + encodeURIComponent(t.base + '.wav')}" download title="Download Lossless">WAV</a>`);
     }
     if (state.showMovButtons && t.video){
-      parts.push(`<a href="${t.video}" target="_blank" rel="noopener" title="Open Video">▶︎ MOV</a>`);
+      parts.push(`<a class="pill" href="${t.video}" target="_blank" rel="noopener" title="Open Video">MOV</a>`);
     }
     if (state.showMovButtons && !t.video){
-      parts.push('<span class="muted">MOV</span>');
+      parts.push('<span class="pill muted">MOV</span>');
     }
     return `<div class="badge">${parts.join('\n')}</div>`;
   }
@@ -482,12 +562,16 @@
   function rowHTML(t, active){
     const bpmTxt = bpmLabel(t);
     const thumbURL = getResolvedThumb(t);
+
+    // (6) When titles are ON, do NOT echo title in subline (avoid “dropshadow” dupe).
     const subline = uniqJoin([
-      t.title || '',
+      state.showTitles ? '' : (t.title || ''),   // suppress duplicate title when ON
       bpmTxt,
       t.length ? fmtDur(t.length) : '',
-      t.details || ''
+      t.details || '',
+      t.notes ? t.notes : ''                     // show tags softly in subline
     ]);
+
     return `<div class="row" role="listitem" data-id="${t.id}">
       <div class="cover" aria-hidden="true">${imgHTML(thumbURL)}</div>
       <div>
@@ -546,7 +630,13 @@
       }
       if (subEl){
         const bpmTxt = bpmLabel(t);
-        const subline = uniqJoin([ t.title || '', bpmTxt, t.length ? fmtDur(t.length) : '', t.details || '' ]);
+        const subline = uniqJoin([
+          state.showTitles ? '' : (t.title || ''),
+          bpmTxt,
+          t.length ? fmtDur(t.length) : '',
+          t.details || '',
+          t.notes || ''
+        ]);
         subEl.textContent = subline;
       }
     });
@@ -623,7 +713,13 @@
     const t = state.filtered[state.i]; if(!t) return;
     els.nowTitle.textContent = displayName(t);
     const bpmTxt = bpmLabel(t);
-    els.nowSub.textContent = uniqJoin([ t.title || '', bpmTxt, t.length ? fmtDur(t.length) : '', t.details || '' ]);
+    els.nowSub.textContent = uniqJoin([
+      state.showTitles ? '' : (t.title || ''),
+      bpmTxt,
+      t.length ? fmtDur(t.length) : '',
+      t.details || '',
+      t.notes || ''
+    ]);
     const url = getResolvedThumb(t);
     els.cover.innerHTML = `<img src="${url.replace(/"/g,'&quot;')}" alt=""
       style="width:56px;height:56px;border-radius:8px;object-fit:cover;"
@@ -642,7 +738,7 @@
         navigator.mediaSession.setActionHandler('seekbackward', ()=> els.audio.currentTime = Math.max(0, els.audio.currentTime-10));
         navigator.mediaSession.setActionHandler('seekforward', ()=> els.audio.currentTime = Math.min(els.audio.duration||0, els.audio.currentTime+10));
       }
-    }catch(_){/* ignore */}
+    }catch(_){}
   }
   function pause(){ els.audio.pause(); state.playing=false; updateToggle(); }
   function updateToggle(){ const btn=$('#toggle'); if(btn) btn.textContent = state.playing ? '⏸️' : '▶️'; }
@@ -654,57 +750,219 @@
     select(i); play();
   }
 
-  // Events
+  // ---------- MENU / UI wiring ----------
+  function buildMenuUI(){
+    const tb = els.toolbar;
+    if (!tb) return;
+
+    // Wipe toolbar (we’ll rebuild inside a Settings submenu)
+    tb.innerHTML = '';
+
+    // Sort select stays visible
+    const sortSel = document.createElement('select');
+    sortSel.id = 'sort'; sortSel.title = 'Sort';
+    sortSel.innerHTML = `
+      <option value="date_desc">Newest</option>
+      <option value="date_asc">Oldest</option>
+      <option value="bpm_desc">BPM ↓</option>
+      <option value="bpm_asc">BPM ↑</option>
+      <option value="len_desc">Longest</option>
+      <option value="len_asc">Shortest</option>`;
+    tb.appendChild(sortSel);
+    els.sort = sortSel;
+
+    // 🔍 Search button + input
+    const btnSearch = document.createElement('button');
+    btnSearch.className = 'btn'; btnSearch.id = 'btnSearch'; btnSearch.title = 'Search';
+    btnSearch.textContent = '🔍';
+    tb.appendChild(btnSearch);
+
+    const searchWrap = document.createElement('div');
+    searchWrap.className = 'search-wrap'; searchWrap.style.display = 'none';
+    searchWrap.innerHTML = `<input id="searchInput" placeholder="Search… use #tags (e.g. #mbv)" inputmode="search" />`;
+    tb.appendChild(searchWrap);
+    const searchInput = searchWrap.querySelector('#searchInput');
+
+    btnSearch.addEventListener('click', (e)=>{
+      e.preventDefault(); e.stopPropagation();
+      const show = searchWrap.style.display === 'none';
+      searchWrap.style.display = show ? 'flex' : 'none';
+      if (show) { searchInput.value = state.searchQuery; searchInput.focus(); }
+      keepMenuOpen(e);
+    });
+
+    searchInput.addEventListener('input', debounce(()=>{
+      state.searchQuery = searchInput.value || '';
+      applyFilterSort(false, /*keepIndex=*/true);
+    }, 150));
+
+    // 🎵 Favorites playlist filter
+    const btnFavList = document.createElement('button');
+    btnFavList.className = 'btn'; btnFavList.id = 'btnFavList'; btnFavList.title = 'My playlist (favorites)';
+    btnFavList.textContent = '🎵';
+    tb.appendChild(btnFavList);
+
+    btnFavList.addEventListener('click', (e)=>{
+      e.preventDefault(); e.stopPropagation();
+      // Toggle favorites-only view. We’ll implement it as a search preset: "#fav:" token
+      if (state.searchQuery.trim() === '#favorites'){
+        state.searchQuery = '';
+      } else {
+        state.searchQuery = '#favorites';
+      }
+      // Hook into matchesSearch: treat #favorites specially
+      applyFilterSort(false);
+      updateSearchUIReflect();
+      keepMenuOpen(e);
+    });
+
+    function updateSearchUIReflect(){
+      if (searchWrap.style.display !== 'none') searchInput.value = state.searchQuery;
+    }
+
+    // ⚙️ Settings submenu with toggles
+    const settings = document.createElement('details');
+    settings.className = 'submenu';
+    settings.innerHTML = `
+      <summary>⚙️ Settings</summary>
+      <div class="sheet-inner">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <button class="tog" id="togTitles" title="Song Titles (on/off)">📝</button>
+          <button class="tog" id="togWav" title="Show WAV buttons">🎚️</button>
+          <button class="tog" id="togMov" title="Show MOV buttons">🎬</button>
+          <button class="btn" id="btnAbout" title="About">ℹ️</button>
+          <a class="btn" id="btnShop" href="/shop" target="_blank" rel="noopener" title="Shop">🛍️</a>
+        </div>
+      </div>`;
+    tb.appendChild(settings);
+
+    // Wire toggles (default OFF for titles)
+    const btnTitles = settings.querySelector('#togTitles');
+    const btnWav    = settings.querySelector('#togWav');
+    const btnMov    = settings.querySelector('#togMov');
+    const btnAbout  = settings.querySelector('#btnAbout');
+
+    function toggleBtn(el, on){ el.classList.toggle('on', !!on); }
+    toggleBtn(btnTitles, state.showTitles);
+    toggleBtn(btnWav, state.showWavButtons);
+    toggleBtn(btnMov, state.showMovButtons);
+
+    btnTitles.addEventListener('click', (e)=>{
+      e.preventDefault(); e.stopPropagation();
+      state.showTitles = !state.showTitles;
+      toggleBtn(btnTitles, state.showTitles);
+      refreshTitles();
+      keepMenuOpen(e);
+    });
+    btnWav.addEventListener('click', (e)=>{
+      e.preventDefault(); e.stopPropagation();
+      state.showWavButtons = !state.showWavButtons;
+      toggleBtn(btnWav, state.showWavButtons);
+      rerenderVisibleRowsBadges();
+      if (state.i>=0) updateNowbar();
+      keepMenuOpen(e);
+    });
+    btnMov.addEventListener('click', (e)=>{
+      e.preventDefault(); e.stopPropagation();
+      state.showMovButtons = !state.showMovButtons;
+      toggleBtn(btnMov, state.showMovButtons);
+      rerenderVisibleRowsBadges();
+      if (state.i>=0) updateNowbar();
+      keepMenuOpen(e);
+    });
+    btnAbout.addEventListener('click', (e)=>{
+      e.preventDefault(); e.stopPropagation();
+      alert("VVIP25 — Vancouver Music and Videography Project 2025");
+      keepMenuOpen(e);
+    });
+
+    // Keep the menu open only when actually interacting with the overlay content
+    tb.addEventListener('click', keepMenuOpen);
+  }
+
+  // Keep menu open helper (only for overlay)
+  function keepMenuOpen(e){
+    const menu = els.menu;
+    if (!menu) return;
+    if (e) { e.preventDefault?.(); e.stopPropagation?.(); }
+    menu.open = true;
+  }
+
+  // ---------------- Events ----------------
+
+  // Row click: select + play (do NOT force menu open)
   document.addEventListener('click', (e)=>{
-    const row = e.target.closest('.row');
-    if(row && e.target.closest('a')==null){
+    const row = e.target.closest?.('.row');
+    // Handle favorites toggle
+    const favBtn = e.target.closest?.('.star');
+    if (favBtn && favBtn.hasAttribute('data-fav')){
+      const key = favBtn.getAttribute('data-fav');
+      if (state.favorites.has(key)) state.favorites.delete(key);
+      else state.favorites.add(key);
+      localStorage.setItem('vvip25:favs', JSON.stringify(Array.from(state.favorites)));
+      favBtn.classList.toggle('on', state.favorites.has(key));
+      e.preventDefault(); e.stopPropagation();
+      return;
+    }
+    if(row && !e.target.closest('a')){
       const id = Number(row.getAttribute('data-id'));
       const idx = state.filtered.findIndex(t=>t.id===id);
-      if(idx>=0){ select(idx); play(); keepMenuOpen(e); }
+      if(idx>=0){ select(idx); play(); }
+    }
+  }, { passive: false });
+
+  // Sort change
+  document.addEventListener('change', (e)=>{
+    if (e.target && e.target.id === 'sort'){
+      applyFilterSort(false, /*keepIndex=*/true);
+      keepMenuOpen(e);
     }
   }, { passive: true });
 
-  els.sort?.addEventListener('change', (e)=>{ applyFilterSort(); keepMenuOpen(e); }, { passive: true });
-  $('#toggle')?.addEventListener('click', (e)=>{ if (state.i < 0 && state.filtered.length) select(0); state.playing ? pause() : play(); keepMenuOpen(e); }, { passive: true });
-  els.prev?.addEventListener('click', (e)=>{ jump(-1); keepMenuOpen(e); }, { passive: true });
-  els.next?.addEventListener('click', (e)=>{ jump(1); keepMenuOpen(e); }, { passive: true });
+  // Player controls — IMPORTANT: never call keepMenuOpen here (fixes (2))
+  $('#toggle')?.addEventListener('click', (e)=>{ if (state.i < 0 && state.filtered.length) select(0); state.playing ? pause() : play(); }, { passive: true });
+  els.prev?.addEventListener('click', ()=> jump(-1), { passive: true });
+  els.next?.addEventListener('click', ()=> jump(1), { passive: true });
 
   els.audio.addEventListener('timeupdate', ()=>{
     const a=els.audio; if(!isFinite(a.duration)) return;
     els.seek.max = Math.floor(a.duration);
     els.seek.value = Math.floor(a.currentTime);
-    els.tcur.textContent = fmtDur(a.currentTime);
-    els.tdur.textContent = isFinite(a.duration) ? fmtDur(a.duration) : '0:00';
+    $('#tcur').textContent = fmtDur(a.currentTime);
+    $('#tdur').textContent = isFinite(a.duration) ? fmtDur(a.duration) : '0:00';
   });
   els.seek.addEventListener('input', ()=>{ els.audio.currentTime = Number(els.seek.value); });
   els.vol.addEventListener('input', ()=>{ els.audio.volume = parseFloat(els.vol.value); localStorage.setItem('vvip25:vol', els.vol.value); });
   els.audio.addEventListener('ended', ()=> jump(1));
 
-  // Toggles
-  els.btnTitles?.addEventListener('click', (e)=>{
-    state.showTitles = !state.showTitles;
-    els.btnTitles.classList.toggle('on', state.showTitles);
-    refreshTitles();
-    keepMenuOpen(e);
-  });
-  els.btnWav?.addEventListener('click', (e)=>{
-    state.showWavButtons = !state.showWavButtons;
-    els.btnWav.classList.toggle('on', state.showWavButtons);
-    rerenderVisibleRowsBadges();
-    if (state.i>=0) updateNowbar();
-    keepMenuOpen(e);
-  });
-  els.btnMov?.addEventListener('click', (e)=>{
-    state.showMovButtons = !state.showMovButtons;
-    els.btnMov.classList.toggle('on', state.showMovButtons);
-    rerenderVisibleRowsBadges();
-    if (state.i>=0) updateNowbar();
-    keepMenuOpen(e);
-  });
-  els.btnAbout?.addEventListener('click', (e)=>{
-    alert("VVIP25 — Vancouver Music and Videography Project 2025");
-    keepMenuOpen(e);
-  });
+  // ---------- Favorites-aware search ----------
+  const oldMatchesSearch = matchesSearch;
+  function matchesSearch(t){
+    // favorites preset
+    if (state.searchQuery.trim() === '#favorites'){
+      return state.favorites.has(t.name);
+    }
+    // default behavior
+    const q = state.searchQuery.trim().toLowerCase();
+    if (!q) return true;
+    const tokens = q.split(/\s+/).filter(Boolean);
+    const hayName  = (t.name||'').toLowerCase();
+    const hayTitle = (t.title||'').toLowerCase();
+    const hayNotes = (t.notes||'').toLowerCase();
+    return tokens.every(tok=>{
+      if (tok.startsWith('#')){
+        return hayNotes.includes(tok);
+      }
+      return hayName.includes(tok) || hayTitle.includes(tok) || hayNotes.includes(tok);
+    });
+  }
+
+  // ---------------- Best-practice cache notes (for you) ----------------
+  // – We already add ?v= and {cache:'no-store'} on JSON fetches.
+  // – For the *document HTML*, set Cloudflare Cache Rules: do NOT cache text/html
+  //   (Cache Level: Bypass) and cache static assets only (*.css, *.js, *.png, *.mp3, *.wav, *.mov).
+  // – If you add/rename JSON, bump ASSET_VERSION above.
+
 </script>
 </body>
 </html>
