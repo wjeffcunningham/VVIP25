@@ -128,77 +128,66 @@
   <audio id="audio" preload="metadata"></audio>
 
 <script>
-/* ========= VVIP25 — Phase 3 wrap (complete) =========
-Features:
-– Stable 2-level menu (About+watermark · Playlist · Utilities · Links · Shop · Download All · Sort · Search)
-– Favorites ★ (lights when on) + playlist view in user selection order
-– Utilities: Titles, WAV, MOV, Light Mode, Clock (banner), Enhance (iPhone-friendly EQ/Comp)
-– Titles default OFF; when ON hide date/nameless tracks
-– Search with #tags; sort options
-– Links submenu (YouTube, Bandcamp, Substack, Instagram)
-– “Download all” (M3U + optional batch)
-– Cache-busting on JSON fetches
-*/
+/* ===== VVIP25 — Stable pared-back build ===== */
 
-const ASSET_VERSION = 12; // bump to beat caches
+const ASSET_VERSION = 13; // bump for cache-busting of JSON
 
-/* ---------- Config ---------- */
+/* ---- Config ---- */
 const BASE_MP3   = 'https://media.vvipmedia.net/ACCESS/';
 const BASE_WAV   = 'https://media.vvipmedia.net/WAV/';
 const BASE_THUMB = 'https://media.vvipmedia.net/ACCESS/';
 const BASE_VIDEO = 'https://media.vvipmedia.net/VIDEOS/';
 const DEFAULT_THUMB = BASE_THUMB + 'default_thumb.jpg';
 
-/* ---------- Cache hint ---------- */
-(function(){ try{
-  const m=document.createElement('meta');
-  m.httpEquiv='Cache-Control';
-  m.content='no-store, max-age=0, must-revalidate';
+/* ---- Light cache hint for HTML (media stays cached) ---- */
+(() => { try {
+  const m = document.createElement('meta');
+  m.httpEquiv = 'Cache-Control';
+  m.content = 'no-store, max-age=0, must-revalidate';
   document.head.appendChild(m);
-}catch(_){} })();
+} catch(_){} })();
 
-/* ---------- CSS patches ---------- */
-(function(){
-  const css=`
+/* ---- Minimal CSS patches (layout + menus) ---- */
+(() => {
+  const css = `
   .controls{flex-wrap:wrap;gap:10px}
   .controls .range{min-width:140px;flex:1}
   .controls .range input[type="range"]{width:100%}
-  .controls button{min-width:44px}
   .btn,.tog{display:inline-flex;align-items:center;justify-content:center;height:36px;min-width:36px;padding:0 12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--fg);text-decoration:none;line-height:1;cursor:pointer}
-  .tog{opacity:.7;transition:opacity .15s,box-shadow .15s}
+  .tog{opacity:.75;transition:opacity .15s, box-shadow .15s}
   .tog.on{opacity:1;box-shadow:0 0 0 2px var(--accent) inset}
-  .util-panel,.links-panel{display:none;margin-top:8px;border:1px solid var(--border);border-radius:10px;padding:8px}
-  .util-row,.links-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .panel{display:none;margin-top:8px;border:1px solid var(--border);border-radius:10px;padding:8px}
+  .row-flex{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
   .search-wrap{display:none;gap:8px;align-items:center;margin-top:8px}
   .search-wrap input{flex:1;min-width:140px;background:var(--card);color:var(--fg);border:1px solid var(--border);border-radius:10px;padding:8px 10px}
   .pill{border:1px solid var(--border);border-radius:999px;padding:4px 10px;font-size:12px;text-decoration:none;color:var(--fg)}
   .star{cursor:pointer}
-  .star.on{filter:drop-shadow(0 0 2px var(--accent)) brightness(1.2)}
-  .wm{font-style:italic;font-size:12px;opacity:.6;margin-left:6px;user-select:none}
+  .star.on{filter:drop-shadow(0 0 2px var(--accent)) brightness(1.1)}
   body.light{--bg:#f7f7f8;--fg:#111;--muted:#4b5563;--card:#ffffff;--border:#d1d5db;--accent:#2563eb}
   body.light .player{background:linear-gradient(180deg,rgba(255,255,255,.96),rgba(255,255,255,.92))}
   body.light #site-title{-webkit-text-stroke:2px #111}
   body.light .row.has-title .title{padding-left:8px}
-  #clockbar{display:none;color:var(--muted);font-size:12px;padding:4px 0;text-align:right}
-  @media (max-width:560px){.controls{gap:6px}.controls button{flex:0 0 44px}.range span{min-width:34px;text-align:center}#clockbar{text-align:left}}
+  @media (max-width:560px){.controls{gap:6px}.controls button{flex:0 0 44px}.range span{min-width:34px;text-align:center}}
   `;
-  const style=document.createElement('style'); style.textContent=css; document.head.appendChild(style);
+  const style = document.createElement('style');
+  style.textContent = css;
+  document.head.appendChild(style);
 })();
 
-/* ---------- Helpers ---------- */
-const $=s=>document.querySelector(s);
-function fmtDur(sec){sec=Number(sec||0); const m=Math.floor(sec/60),s=Math.floor(sec%60); return `${m}:${String(s).padStart(2,'0')}`;}
-function debounce(fn,ms){let t; return(...a)=>{clearTimeout(t); t=setTimeout(()=>fn(...a),ms);};}
+/* ---- Helpers ---- */
+const $ = s => document.querySelector(s);
+const $mk = (tag, attrs={}) => Object.assign(document.createElement(tag), attrs);
+function fmtDur(sec){sec=Number(sec||0);const m=Math.floor(sec/60),s=Math.floor(sec%60);return `${m}:${String(s).padStart(2,'0')}`;}
+function debounce(fn,ms){let t;return(...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),ms);};}
 function escapeHTML(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-function removeBpm(str){return !str?str:String(str).replace(/\b\d+(?:\.\d+)?(?:\s*[–—-]\s*\d+(?:\.\d+)?)?\s*BPM\b/gi,'').replace(/\s{2,}/g,' ').trim();}
-function cleanToken(s){if(!s) return ''; s=String(s).trim().replace(/^[·•,;:\-]+|[·•,;:\-]+$/g,'').replace(/\s*[.,;:]\s*$/,''); return s.trim();}
-function uniqJoin(parts){const seen=new Set(),out=[]; for(let raw of parts){if(raw==null) continue; raw=cleanToken(removeBpm(raw)); if(!raw) continue; const k=raw.toLowerCase(); if(seen.has(k)) continue; seen.add(k); out.push(raw);} return out.join(' · ');}
+function uniqJoin(parts){const seen=new Set(),out=[];for(let raw of parts){if(raw==null)continue;raw=String(raw).replace(/\b\d+(?:\.\d+)?(?:\s*[–—-]\s*\d+(?:\.\d+)?)?\s*BPM\b/gi,'').replace(/^[·•,;:\-]+|[·•,;:\-]+$/g,'').replace(/\s{2,}/g,' ').trim();if(!raw)continue;const k=raw.toLowerCase();if(seen.has(k))continue;seen.add(k);out.push(raw);}return out.join(' · ');}
 const rawFile=s=>(String(s).split('/').pop()||'');
 const stripExt=s=>String(s).replace(/\.[a-z0-9]+$/i,'');
 const softNorm=s=>stripExt(s).toLowerCase().replace(/[ _]+/g,'-').replace(/-+/g,'-');
-function deriveTitleFromFilename(name){const b=stripExt(rawFile(name)).replace(/^[\d._-]+/,'').replace(/[_-]+/g,' ').trim(); return b || stripExt(rawFile(name));}
+function deriveTitleFromFilename(name){const b=stripExt(rawFile(name)).replace(/^[\d._-]+/,'').replace(/[_-]+/g,' ').trim();return b || stripExt(rawFile(name));}
 const primaryOnly = t => String(t||'').split('//')[0].trim();
 
+/* ---- Date parsing for sort/thumb cascade ---- */
 const DATE_RX_YYYY=/^\s*(\d{4})[.\-_](\d{2})[.\-_](\d{2})(?=\D|$)/;
 const DATE_RX_YY=/^\s*(\d{2})[.\-_](\d{2})[.\-_](\d{2})(?=\D|$)/;
 const WITHIN_DAY_RX=/^\s*(?:\d{4}|\d{2})[.\-_]\d{2}[.\-_]\d{2}(?:[.\-_](\d+))?/;
@@ -213,46 +202,53 @@ function fallbackDateFromName(name){
   }
   return null;
 }
-function withinDayIndexFromName(name){const m=String(name).match(WITHIN_DAY_RX); return m&&m[1]?parseInt(m[1],10):0;}
-function bpmSortValue(t){if(t.bpm!=null) return t.bpm; if(t.bpm_min!=null&&t.bpm_max!=null) return (t.bpm_min+t.bpm_max)/2; return 0;}
-function bpmLabel(t){if(t.bpm!=null) return `${t.bpm} BPM`; if(t.bpm_min!=null&&t.bpm_max!=null) return `${t.bpm_min}–${t.bpm_max} BPM`; return '';}
+function withinDayIndexFromName(name){ const m=String(name).match(WITHIN_DAY_RX); return m&&m[1]?parseInt(m[1],10):0; }
+function bpmSortValue(t){ if(t.bpm!=null) return t.bpm; if(t.bpm_min!=null&&t.bpm_max!=null) return (t.bpm_min+t.bpm_max)/2; return 0; }
+function bpmLabel(t){ if(t.bpm!=null) return `${t.bpm} BPM`; if(t.bpm_min!=null&&t.bpm_max!=null) return `${t.bpm_min}–${t.bpm_max} BPM`; return ''; }
 
-/* ---------- Elements & State ---------- */
+/* ---- Elements ---- */
 const els = {
-  audio:$('#audio'), list:$('#list'), sort:$('#sort'),
-  toggle:$('#toggle'), prev:$('#prev'), next:$('#next'),
-  seek:$('#seek'), vol:$('#vol'),
-  nowTitle:$('#now-title'), nowSub:$('#now-sub'),
-  tcur:$('#tcur'), tdur:$('#tdur'), cover:$('#cover'),
-  menu:$('#menu'), toolbar:$('#toolbar')
+  audio: $('#audio'), list: $('#list'), menu: $('#menu'),
+  sort: $('#sort'), toggle: $('#toggle'), prev: $('#prev'), next: $('#next'),
+  seek: $('#seek'), vol: $('#vol'),
+  nowTitle: $('#now-title'), nowSub: $('#now-sub'), cover: $('#cover'),
+  toolbar: $('#toolbar')
 };
 
+/* ---- State ---- */
 const state = {
-  tracks:[], filtered:[], i:-1, playing:false,
-  pageSize:60, renderCount:0,
-  titlesLookup:new Map(), thumbBases:new Set(), resolvedThumb:new Map(),
-  showTitles:false, showWavButtons:false, showMovButtons:false, lightMode:false,
-  showClock:false,
-  favorites:new Set(JSON.parse(localStorage.getItem('vvip25:favs')||'[]')),
+  tracks: [], filtered: [], i: -1, playing: false,
+  pageSize: 60, renderCount: 0,
+  titlesLookup: new Map(), thumbBases: new Set(), resolvedThumb: new Map(),
+  showTitles: false, showWavButtons: false, showMovButtons: false, lightMode: false,
+  favorites: new Set(JSON.parse(localStorage.getItem('vvip25:favs')||'[]')),
   favOrder: JSON.parse(localStorage.getItem('vvip25:favOrder')||'[]'),
-  searchQuery:''
+  searchQuery: ''
 };
 
-// Persisted volume
+/* ---- Persisted volume ---- */
 els.vol.value = localStorage.getItem('vvip25:vol') ?? '0.9';
 els.audio.volume = parseFloat(els.vol.value);
 
-/* ---------- Boot ---------- */
+/* ==== Boot ==== */
 init();
 async function init(){
   buildMenuUI();
-  buildClockBar();
 
-  const mres = await fetch(`./manifest.json?v=${ASSET_VERSION}`, { cache:'no-store' });
-  if(!mres.ok){ els.list.innerHTML = `<div class="row"><div></div><div>manifest.json missing</div></div>`; return; }
-  const data = await mres.json();
+  // Fetch manifest
+  let resp;
+  try {
+    resp = await fetch(`./manifest.json?v=${ASSET_VERSION}`, { cache: 'no-store' });
+  } catch (e) {
+    showError('Could not request manifest.json'); return;
+  }
+  if (!resp.ok) { showError('manifest.json missing or blocked'); return; }
 
-  state.tracks = data.map((t,idx)=>{
+  let data;
+  try { data = await resp.json(); } catch(e){ showError('manifest.json is not valid JSON'); return; }
+
+  // Build track objects
+  state.tracks = (data||[]).map((t,idx)=>{
     const name = t.name || t.file || t.src?.split('/').pop() || `track-${idx}.mp3`;
     const base = stripExt(name), baseLower = base.toLowerCase();
     const dateObj = t.date ? new Date(t.date) : fallbackDateFromName(name);
@@ -261,35 +257,43 @@ async function init(){
     const wav = BASE_WAV + encodeURIComponent(base + '.wav');
     const mov = t.has_mov ? (BASE_VIDEO + encodeURIComponent(base + '.mov')) : null;
     const thumbCandidate = BASE_THUMB + encodeURIComponent(baseLower + 'thumb.jpg');
+
     let notes=''; if (Array.isArray(t.notes)) notes=t.notes.join(' '); else if (typeof t.notes==='string') notes=t.notes;
 
-    return { id:idx, name, base, baseLower, title: t.title?String(t.title):'', bpm:t.bpm??null, bpm_min:t.bpm_min??null, bpm_max:t.bpm_max??null,
-      details:t.details||'', length:t.length||0, date:dateObj||null, labelDate, src:mp3, wav, video:mov, thumbCandidate, notes:notes||'' };
+    return { id:idx, name, base, baseLower, title: t.title?String(t.title):'',
+      bpm:t.bpm??null, bpm_min:t.bpm_min??null, bpm_max:t.bpm_max??null, details:t.details||'',
+      length:t.length||0, date:dateObj||null, labelDate, src:mp3, wav, video:mov, thumbCandidate, notes:notes||'' };
   });
 
+  // Titles + thumbs lazy
+  (requestIdleCallback?.(fetchTitles,{timeout:600})||setTimeout(fetchTitles,0));
+  (requestIdleCallback?.(fetchThumbs,{timeout:900})||setTimeout(fetchThumbs,50));
+
+  // Render
   applyFilterSort(true);
   computeThumbCascade();
   renderList();
   fillViewport();
-  if (state.filtered.length && state.i === -1) { select(0); }
+  if (state.filtered.length && state.i === -1) select(0);
 
-  (requestIdleCallback?.(fetchTitles,{timeout:600})||setTimeout(fetchTitles,0));
-  (requestIdleCallback?.(fetchThumbs,{timeout:900})||setTimeout(fetchThumbs,50));
-
-  // Restore persisted light/clock
-  const lm = localStorage.getItem('vvip25:light'); if (lm==='1'){ state.lightMode=true; document.body.classList.add('light'); }
-  const clk = localStorage.getItem('vvip25:clock'); if (clk==='1'){ state.showClock=true; toggleClockBar(true); }
+  // Restore persisted light
+  if (localStorage.getItem('vvip25:light') === '1'){ state.lightMode=true; document.body.classList.add('light'); }
 }
 
-/* ---------- Titles (primary only) ---------- */
+/* ---- Error helper ---- */
+function showError(msg){
+  els.list.innerHTML = `<div class="row"><div></div><div>${escapeHTML(msg)}</div></div>`;
+}
+
+/* ---- Titles (primary only) ---- */
 function buildTitleLookup(json){
   const map=new Map();
   const add=(k,titleRaw)=>{ if(!k||!titleRaw) return; const title=primaryOnly(titleRaw);
     const L=String(k).toLowerCase(), f=rawFile(L), n=stripExt(f), s=softNorm(f);
     map.set(f,String(title)); map.set(n,String(title)); map.set(s,String(title));
   };
-  if (Array.isArray(json)){ for(const row of json||[]){ if(!row) continue; add(row.key||row.src||row.name, row.title||row.t||row.display); } }
-  else if (json && typeof json==='object'){ for(const [k,v] of Object.entries(json)){ add(k, (typeof v==='string')?v:(v&&typeof v.title==='string'?v.title:'')); } }
+  if (Array.isArray(json)) (json||[]).forEach(row=> add(row?.key||row?.src||row?.name, row?.title||row?.t||row?.display));
+  else if (json && typeof json==='object') Object.entries(json).forEach(([k,v])=> add(k, (typeof v==='string')?v:(v&&v.title)));
   return map;
 }
 function bestTitleForTrack(t,lookup){
@@ -299,8 +303,8 @@ function bestTitleForTrack(t,lookup){
 }
 async function fetchTitles(){
   try{
-    const tres=await fetch(`./titles.json?v=${ASSET_VERSION}`,{cache:'no-store'}); if(!tres.ok) return;
-    const json=await tres.json(), lookup=buildTitleLookup(json); state.titlesLookup=lookup;
+    const r=await fetch(`./titles.json?v=${ASSET_VERSION}`,{cache:'no-store'}); if(!r.ok) return;
+    const json=await r.json(); const lookup=buildTitleLookup(json); state.titlesLookup=lookup;
     let changed=false;
     for(const t of state.tracks){
       const from=bestTitleForTrack(t,lookup);
@@ -311,7 +315,7 @@ async function fetchTitles(){
   }catch(_){}
 }
 
-/* ---------- Thumbs ---------- */
+/* ---- Thumbs ---- */
 async function fetchThumbs(){
   try{
     const r=await fetch(`./thumbs.json?v=${ASSET_VERSION}`,{cache:'no-store'}); if(!r.ok) return;
@@ -331,30 +335,30 @@ function computeThumbCascade(){
 }
 const getResolvedThumb=t=>state.resolvedThumb.get(t.id)||DEFAULT_THUMB;
 
-/* ---------- Filtering / sorting ---------- */
+/* ---- Filtering / sorting ---- */
 function isNameless(t){ const derived=deriveTitleFromFilename(t.name); return !t.title || t.title===derived; }
-function matchesSearchBase(t,tokens){
+function matchesSearch(t, tokens){
   if(!tokens.length) return true;
   const hn=(t.name||'').toLowerCase(), ht=(t.title||'').toLowerCase(), hno=(t.notes||'').toLowerCase();
   return tokens.every(tok=> tok.startsWith('#') ? hno.includes(tok) : (hn.includes(tok)||ht.includes(tok)||hno.includes(tok)));
 }
-function applyFilterSort(firstPaint=false, keepIndex=false){
+function applyFilterSort(first=false, keepIndex=false){
   const q=state.searchQuery.trim().toLowerCase();
   const tokens=q? q.split(/\s+/).filter(Boolean):[];
   let out=[...state.tracks];
 
-  let favOnly=false;
-  if (tokens.includes('#favorites')){ favOnly=true; out=out.filter(t=>state.favorites.has(t.name)); }
-  if (state.showTitles){ out=out.filter(t=>!isNameless(t)); }
-  out = out.filter(t=>matchesSearchBase(t, tokens.filter(tk=>tk!=='#favorites')));
+  let favOnly = tokens.includes('#favorites');
+  if (favOnly) out = out.filter(t=>state.favorites.has(t.name));
+  if (state.showTitles) out = out.filter(t=>!isNameless(t));
+  out = out.filter(t=>matchesSearch(t, tokens.filter(tk=>tk!=='#favorites')));
 
   if (favOnly){
     const orderIndex=new Map(state.favOrder.map((name,idx)=>[name,idx]));
     out.sort((a,b)=>(orderIndex.get(a.name)??1e9)-(orderIndex.get(b.name)??1e9));
   } else {
     switch(els.sort?.value||'date_desc'){
-      case 'date_desc': out.sort((a,b)=>{ const da=a.date?.getTime()||0, db=b.date?.getTime()||0; if (db!==da) return db-da; return withinDayIndexFromName(b.name)-withinDayIndexFromName(a.name) || b.name.localeCompare(a.name); }); break;
-      case 'date_asc':  out.sort((a,b)=>{ const da=a.date?.getTime()||0, db=b.date?.getTime()||0; if (da!==db) return da-db; return withinDayIndexFromName(a.name)-withinDayIndexFromName(b.name) || a.name.localeCompare(b.name); }); break;
+      case 'date_desc': out.sort((a,b)=>{const da=a.date?.getTime()||0,db=b.date?.getTime()||0;if(db!==da)return db-da;return withinDayIndexFromName(b.name)-withinDayIndexFromName(a.name)||b.name.localeCompare(a.name);}); break;
+      case 'date_asc':  out.sort((a,b)=>{const da=a.date?.getTime()||0,db=b.date?.getTime()||0;if(da!==db)return da-db;return withinDayIndexFromName(a.name)-withinDayIndexFromName(b.name)||a.name.localeCompare(b.name);}); break;
       case 'bpm_desc':  out.sort((a,b)=> bpmSortValue(b)-bpmSortValue(a)); break;
       case 'bpm_asc':   out.sort((a,b)=> bpmSortValue(a)-bpmSortValue(b)); break;
       case 'len_desc':  out.sort((a,b)=> (b.length||0)-(a.length||0)); break;
@@ -363,17 +367,15 @@ function applyFilterSort(firstPaint=false, keepIndex=false){
   }
 
   state.filtered=out;
-  const initial=firstPaint ? Math.max(60,state.pageSize) : state.pageSize;
-  state.renderCount=Math.min(state.filtered.length, initial);
-  if (!keepIndex) state.i=Math.min(state.i, state.renderCount-1);
+  const initial = first ? Math.max(60, state.pageSize) : state.pageSize;
+  state.renderCount = Math.min(state.filtered.length, initial);
+  if (!keepIndex) state.i = Math.min(state.i, state.renderCount-1);
   renderList(); setupInfiniteScroll(); fillViewport();
 }
-const displayName=t=>(state.showTitles && t.title) ? t.title : t.name;
+const displayName = t => (state.showTitles && t.title) ? t.title : t.name;
 
-/* ---------- Renderers ---------- */
-function imgHTML(src){ const esc=s=>s.replace(/"/g,'&quot;');
-  return `<img src="${esc(src)}" alt="" loading="lazy" style="width:56px;height:56px;border-radius:8px;object-fit:cover;" onerror="if(this.dataset.fbk!=='1'){this.dataset.fbk='1';this.onerror=null;this.src='${DEFAULT_THUMB}';}">`;
-}
+/* ---- Renderers ---- */
+function imgHTML(src){const esc=s=>s.replace(/"/g,'&quot;');return `<img src="${esc(src)}" alt="" loading="lazy" style="width:56px;height:56px;border-radius:8px;object-fit:cover;" onerror="if(this.dataset.fbk!=='1'){this.dataset.fbk='1';this.onerror=null;this.src='${DEFAULT_THUMB}';}">`; }
 function favHTML(t){ const on=state.favorites.has(t.name)?'on':''; const title=state.favorites.has(t.name)?'Remove from favorites':'Add to favorites';
   return `<button class="star ${on}" data-fav="${escapeHTML(t.name)}" title="${title}">★</button>`;
 }
@@ -384,10 +386,10 @@ function badgeHTML(t){
   if (state.showMovButtons && !t.video) parts.push('<span class="pill muted">MOV</span>');
   return `<div class="badge">${parts.join('\n')}</div>`;
 }
-function rowHTML(t,active){
-  const bpmTxt=bpmLabel(t), thumbURL=getResolvedThumb(t);
+function rowHTML(t, active){
+  const thumbURL=getResolvedThumb(t), bpmTxt=bpmLabel(t);
   const subline=uniqJoin([ state.showTitles? '' : (t.title||''), bpmTxt, t.length?fmtDur(t.length):'', t.details||'', t.notes||'' ]);
-  const hasTitleClass=(t.title && !isNameless(t)) ? 'has-title':'';
+  const hasTitleClass=(t.title && !isNameless(t)) ? 'has-title' : '';
   return `<div class="row ${hasTitleClass}" role="listitem" data-id="${t.id}">
     <div class="cover" aria-hidden="true">${imgHTML(thumbURL)}</div>
     <div>
@@ -399,17 +401,21 @@ function rowHTML(t,active){
 }
 function renderList(){
   if(!state.filtered.length){ els.list.innerHTML='<div class="row"><div></div><div>No results.</div></div>'; return; }
-  const slice=state.filtered.slice(0,state.renderCount);
+  const slice = state.filtered.slice(0, state.renderCount);
   els.list.innerHTML = slice.map(t=>rowHTML(t,(state.i>=0 && state.filtered[state.i]?.id===t.id))).join('') + `<div id="sentinel" style="height:1px"></div>`;
 }
-function rerenderVisibleRowsThumbs(){ els.list.querySelectorAll('.row').forEach(row=>{
-  const id=Number(row.getAttribute('data-id')); const t=state.tracks.find(x=>x.id===id); if(!t) return;
-  const img=row.querySelector('.cover img'); if(img) img.src=getResolvedThumb(t);
-});}
-function rerenderVisibleRowsBadges(){ document.querySelectorAll('.row').forEach(row=>{
-  const id=Number(row.getAttribute('data-id')); const t=state.tracks.find(x=>x.id===id); if(!t) return;
-  const badge=row.querySelector('.badge'); if(badge) badge.outerHTML=badgeHTML(t);
-});}
+function rerenderVisibleRowsThumbs(){
+  els.list.querySelectorAll('.row').forEach(row=>{
+    const id=Number(row.getAttribute('data-id')); const t=state.tracks.find(x=>x.id===id); if(!t) return;
+    const img=row.querySelector('.cover img'); if(img) img.src=getResolvedThumb(t);
+  });
+}
+function rerenderVisibleRowsBadges(){
+  document.querySelectorAll('.row').forEach(row=>{
+    const id=Number(row.getAttribute('data-id')); const t=state.tracks.find(x=>x.id===id); if(!t) return;
+    const badge=row.querySelector('.badge'); if(badge) badge.outerHTML=badgeHTML(t);
+  });
+}
 function refreshTitles(){
   document.querySelectorAll('.row').forEach(row=>{
     const id=Number(row.getAttribute('data-id')); const t=state.tracks.find(x=>x.id===id); if(!t) return;
@@ -426,13 +432,13 @@ function refreshTitles(){
   applyFilterSort(false,true);
 }
 
-/* ---------- Infinite scroll ---------- */
+/* ---- Infinite scroll ---- */
 let sentinelObserver;
 function setupInfiniteScroll(){
   const s=$('#sentinel'); if(!s) return;
-  if(sentinelObserver) sentinelObserver.disconnect();
-  if('IntersectionObserver' in window){
-    sentinelObserver=new IntersectionObserver((ents)=>{ for(const e of ents){ if(e.isIntersecting) appendChunk(); } },{root:null,rootMargin:'1200px 0px',threshold:0});
+  if (sentinelObserver) sentinelObserver.disconnect();
+  if ('IntersectionObserver' in window){
+    sentinelObserver=new IntersectionObserver((ents)=>{for(const e of ents){if(e.isIntersecting) appendChunk();}}, {root:null,rootMargin:'1200px 0px',threshold:0});
     sentinelObserver.observe(s);
   }
   window.addEventListener('scroll', onScrollMaybeLoad, { passive:true });
@@ -443,7 +449,7 @@ function appendChunk(){
   const prev=state.renderCount; state.renderCount=Math.min(state.filtered.length, state.renderCount+state.pageSize);
   const sentinel=$('#sentinel'); if(!sentinel) return;
   const frag=document.createDocumentFragment();
-  for(let i=prev;i<state.renderCount;i++){
+  for (let i=prev;i<state.renderCount;i++){
     const t=state.filtered[i]; const div=document.createElement('div'); div.innerHTML=rowHTML(t,(state.i>=0 && state.filtered[state.i]?.id===t.id)); frag.appendChild(div.firstChild);
   }
   els.list.insertBefore(frag, sentinel);
@@ -456,14 +462,28 @@ function fillViewport(){
   }
 }
 
-/* ---------- Selection / Player ---------- */
+/* ---- Selection / Player ---- */
 function select(indexInFiltered){
-  state.i=indexInFiltered; const t=state.filtered[indexInFiltered]; if(!t) return;
-  els.audio.src=t.src; updateNowbar(); state.playing=false; updateToggle();
+  state.i=indexInFiltered;
+  const t=state.filtered[indexInFiltered]; if(!t) return;
+  els.audio.src=t.src;
+  updateNowbar();
+  state.playing=false;
+  updateToggle();
+
   els.list.querySelectorAll('.row').forEach(row=>{
-    const id=Number(row.getAttribute('data-id')); const isActive=(state.filtered[state.i]?.id===id);
-    const titleEl=row.querySelector('.title'); if(titleEl){ const target=state.tracks.find(x=>x.id===id)||t; titleEl.innerHTML=(isActive?'▶︎ ':'') + escapeHTML(displayName(target)); }
-    const favBtn=row.querySelector('.star[data-fav]'); if(favBtn){ const key=favBtn.getAttribute('data-fav'); favBtn.classList.toggle('on', state.favorites.has(key)); }
+    const id=Number(row.getAttribute('data-id'));
+    const isActive=(state.filtered[state.i]?.id===id);
+    const titleEl=row.querySelector('.title');
+    if (titleEl){
+      const target=state.tracks.find(x=>x.id===id)||t;
+      titleEl.innerHTML=(isActive?'▶︎ ':'') + escapeHTML(displayName(target));
+    }
+    const favBtn=row.querySelector('.star[data-fav]');
+    if (favBtn){
+      const key=favBtn.getAttribute('data-fav');
+      favBtn.classList.toggle('on', state.favorites.has(key));
+    }
   });
 }
 function updateNowbar(){
@@ -472,7 +492,7 @@ function updateNowbar(){
   const bpmTxt=bpmLabel(t);
   els.nowSub.textContent=uniqJoin([ state.showTitles? '' : (t.title||''), bpmTxt, t.length?fmtDur(t.length):'', t.details||'', t.notes||'' ]);
   const url=getResolvedThumb(t);
-  els.cover.innerHTML=`<img src="${url.replace(/"/g,'&quot;')}" alt="" style="width:56px;height:56px;object-fit:cover;border-radius:8px" onerror="if(this.dataset.fbk!=='1'){this.dataset.fbk='1';this.onerror=null;this.src='${DEFAULT_THUMB}';}">`;
+  els.cover.innerHTML=`<img src="${url.replace(/"/g,'&quot;')}" alt="" style="width:56px;height:56px;border-radius:8px;object-fit:cover;" onerror="if(this.dataset.fbk!=='1'){this.dataset.fbk='1';this.onerror=null;this.src='${DEFAULT_THUMB}';}">`;
 }
 async function play(){
   try{
@@ -492,34 +512,7 @@ function pause(){ els.audio.pause(); state.playing=false; updateToggle(); }
 function updateToggle(){ const btn=$('#toggle'); if(btn) btn.textContent = state.playing ? '⏸️' : '▶️'; }
 function jump(dir){ if(!state.filtered.length) return; let i=state.i+dir; if(i<0) i=state.filtered.length-1; if(i>=state.filtered.length) i=0; select(i); play(); }
 
-/* ---------- Clock bar ---------- */
-let clockTimer=null;
-function buildClockBar(){
-  const wrap=document.querySelector('.player .wrap'); if(!wrap) return;
-  if (!$('#clockbar')){
-    const div=document.createElement('div'); div.id='clockbar'; div.textContent='';
-    const nowRow=document.querySelector('.player .wrap .now');
-    wrap.insertBefore(div, nowRow);
-  }
-}
-function formatClock(d=new Date()){
-  const dd=d.toLocaleDateString(undefined,{weekday:'short', year:'numeric', month:'short', day:'2-digit'});
-  const tt=d.toLocaleTimeString(undefined,{hour:'2-digit', minute:'2-digit', second:'2-digit'});
-  return `${dd} · ${tt}`;
-}
-function toggleClockBar(on){
-  const bar=$('#clockbar'); if(!bar) return;
-  bar.style.display = on ? 'block' : 'none';
-  if (on){
-    bar.textContent=formatClock();
-    if (clockTimer) clearInterval(clockTimer);
-    clockTimer=setInterval(()=>{ bar.textContent=formatClock(); }, 1000);
-  } else {
-    if (clockTimer){ clearInterval(clockTimer); clockTimer=null; }
-  }
-}
-
-/* ---------- WebAudio Enhance ---------- */
+/* ---- WebAudio Enhance (optional) ---- */
 let audioCtx=null, sourceNode=null, hpf=null, presence=null, comp=null, connected=false;
 function ensureAudioGraph(){
   if (audioCtx) return;
@@ -530,65 +523,40 @@ function ensureAudioGraph(){
   comp = audioCtx.createDynamicsCompressor(); comp.threshold.value=-18; comp.knee.value=24; comp.ratio.value=3; comp.attack.value=0.01; comp.release.value=0.2;
 }
 function connectEnhance(){ if (connected) return; ensureAudioGraph(); sourceNode.connect(hpf).connect(presence).connect(comp).connect(audioCtx.destination); connected=true; }
-function disconnectEnhance(){
-  if (!connected || !audioCtx) return;
-  try{ sourceNode.disconnect(); hpf.disconnect(); presence.disconnect(); comp.disconnect(); sourceNode.connect(audioCtx.destination); }catch(_){}
-  connected=false;
-}
+function disconnectEnhance(){ if (!connected || !audioCtx) return; try{ sourceNode.disconnect(); hpf.disconnect(); presence.disconnect(); comp.disconnect(); sourceNode.connect(audioCtx.destination); }catch(_){} connected=false; }
 
-/* ---------- Menu / UI ---------- */
+/* ---- Menu / UI ---- */
 function buildMenuUI(){
-  const tb=els.toolbar; if(!tb) return; tb.innerHTML='';
-  const row=document.createElement('div'); row.style.display='flex'; row.style.gap='8px'; row.style.flexWrap='wrap'; row.style.alignItems='center'; tb.appendChild(row);
+  const tb = els.toolbar; if (!tb) return;
+  tb.innerHTML = '';
+  const row = $mk('div'); row.className='row-flex'; tb.appendChild(row);
 
-  // 📜 About + watermark
-  const btnAbout=document.createElement('button'); btnAbout.className='btn'; btnAbout.id='btnAbout'; btnAbout.title='About'; btnAbout.textContent='📜'; row.appendChild(btnAbout);
-  const wm=document.createElement('span'); wm.className='wm'; wm.textContent='© vvipmedia 2025'; row.appendChild(wm);
-  btnAbout.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); alert("VVIP25 — Vancouver Music and Videography Project 2025"); keepMenuOpen(e); });
+  // Level 1: About, Playlist, Utilities, Links, Shop, Sort, Search
+  const btnAbout = $mk('button',{className:'btn',id:'btnAbout',title:'About',textContent:'📜'});
+  const btnFavList = $mk('button',{className:'btn',id:'btnFavList',title:'My playlist (favorites)',textContent:'🎵'});
+  const btnUtils = $mk('button',{className:'btn',id:'btnUtils',title:'Utilities',textContent:'🛠️'});
+  const btnLinks = $mk('button',{className:'btn',id:'btnLinks',title:'Links',textContent:'🔗'});
+  const aShop = $mk('a',{className:'btn',id:'btnShop',title:'Shop',textContent:'🛍️',href:'/shop',target:'_blank',rel:'noopener'});
+  const sortSel = $mk('select',{id:'sort',title:'Sort'});
+  sortSel.innerHTML = `<option value="date_desc">Newest</option><option value="date_asc">Oldest</option><option value="bpm_desc">BPM ↓</option><option value="bpm_asc">BPM ↑</option><option value="len_desc">Longest</option><option value="len_asc">Shortest</option>`;
+  const btnSearch = $mk('button',{className:'btn',id:'btnSearch',title:'Search',textContent:'🔍'});
 
-  // 🎵 Playlist (favorites view)
-  const btnFavList=document.createElement('button'); btnFavList.className='btn'; btnFavList.id='btnFavList'; btnFavList.title='My favorites playlist'; btnFavList.textContent='🎵'; row.appendChild(btnFavList);
-  btnFavList.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); state.searchQuery='#favorites'; applyFilterSort(false); keepMenuOpen(e); });
+  row.append(btnAbout, btnFavList, btnUtils, btnLinks, aShop, sortSel, btnSearch);
 
-  // 🛠️ Utilities
-  const btnUtils=document.createElement('button'); btnUtils.className='btn'; btnUtils.id='btnUtils'; btnUtils.title='Utilities'; btnUtils.textContent='🛠️'; row.appendChild(btnUtils);
-
-  // 🔗 Links submenu
-  const btnLinks=document.createElement('button'); btnLinks.className='btn'; btnLinks.id='btnLinks'; btnLinks.title='Links'; btnLinks.textContent='🔗'; row.appendChild(btnLinks);
-
-  // 🛍️ Shop
-  const aShop=document.createElement('a'); aShop.className='btn'; aShop.id='btnShop'; aShop.title='Shop'; aShop.textContent='🛍️'; aShop.href='/shop'; aShop.target='_blank'; aShop.rel='noopener'; row.appendChild(aShop);
-
-  // ⬇️ Download All (current playlist)
-  const btnDlAll=document.createElement('button'); btnDlAll.className='btn'; btnDlAll.id='btnDlAll'; btnDlAll.title='Download all MP3s in current view'; btnDlAll.textContent='⬇️'; row.appendChild(btnDlAll);
-
-  // Sort select
-  const sortSel=document.createElement('select'); sortSel.id='sort'; sortSel.title='Sort';
-  sortSel.innerHTML=`<option value="date_desc">Newest</option><option value="date_asc">Oldest</option><option value="bpm_desc">BPM ↓</option><option value="bpm_asc">BPM ↑</option><option value="len_desc">Longest</option><option value="len_asc">Shortest</option>`;
-  row.appendChild(sortSel); els.sort=sortSel;
-
-  // 🔍 Search
-  const btnSearch=document.createElement('button'); btnSearch.className='btn'; btnSearch.id='btnSearch'; btnSearch.title='Search'; btnSearch.textContent='🔍'; row.appendChild(btnSearch);
-  const searchWrap=document.createElement('div'); searchWrap.className='search-wrap'; searchWrap.innerHTML=`<input id="searchInput" placeholder="Search… use #tags (e.g. #mbv)" inputmode="search" />`; tb.appendChild(searchWrap);
-  const searchInput=searchWrap.querySelector('#searchInput');
-  btnSearch.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); searchWrap.style.display=(searchWrap.style.display==='none'||!searchWrap.style.display)?'flex':'none'; if(searchWrap.style.display==='flex'){ searchInput.value=state.searchQuery; searchInput.focus(); } keepMenuOpen(e); });
-  searchInput.addEventListener('input', debounce(()=>{ state.searchQuery=searchInput.value||''; applyFilterSort(false,true); },150));
-
-  // Utilities panel
-  const util=document.createElement('div'); util.className='util-panel';
-  util.innerHTML = `<div class="util-row">
+  // Level 2: Utilities panel (toggles)
+  const util = $mk('div'); util.className='panel'; util.id='utilPanel';
+  util.innerHTML = `<div class="row-flex">
     <button class="tog" id="togTitles" title="Song Titles (on/off)">📝</button>
     <button class="tog" id="togWav" title="Show WAV buttons">🎚️</button>
     <button class="tog" id="togMov" title="Show MOV buttons">🎬</button>
     <button class="tog" id="togLight" title="Light mode">🌞</button>
-    <button class="tog" id="togClock" title="Clock">🕒</button>
     <button class="tog" id="togEnh" title="Enhance (iPhone-friendly EQ)">🎚️+</button>
   </div>`;
   tb.appendChild(util);
 
-  // Links panel (includes Instagram)
-  const links=document.createElement('div'); links.className='links-panel';
-  links.innerHTML = `<div class="links-row">
+  // Level 2: Links panel
+  const links = $mk('div'); links.className='panel'; links.id='linksPanel';
+  links.innerHTML = `<div class="row-flex">
     <a class="btn" href="https://www.youtube.com/@VVVVIIPP25" target="_blank" rel="noopener" title="YouTube">📺</a>
     <a class="btn" href="https://virtualvip.bandcamp.com/" target="_blank" rel="noopener" title="Bandcamp">🎧</a>
     <a class="btn" href="https://substack.com/home/post/p-170664918?source=queue" target="_blank" rel="noopener" title="Newsletter">📰</a>
@@ -596,15 +564,30 @@ function buildMenuUI(){
   </div>`;
   tb.appendChild(links);
 
-  btnUtils.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); util.style.display=(util.style.display==='none'||!util.style.display)?'block':'none'; keepMenuOpen(e); });
-  btnLinks.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); links.style.display=(links.style.display==='none'||!links.style.display)?'block':'none'; keepMenuOpen(e); });
+  // Search field
+  const searchWrap = $mk('div'); searchWrap.className='search-wrap'; searchWrap.innerHTML = `<input id="searchInput" placeholder="Search… use #tags (e.g. #mbv)" inputmode="search" />`;
+  tb.appendChild(searchWrap);
+  const searchInput = searchWrap.querySelector('#searchInput');
 
-  // Wire toggles
+  // Wire L1
+  btnAbout.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); alert("VVIP25 — Vancouver Music and Videography Project 2025"); keepMenuOpen(e); });
+  btnFavList.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); state.searchQuery='#favorites'; applyFilterSort(false); keepMenuOpen(e); });
+  btnUtils.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); util.style.display = util.style.display==='block' ? 'none' : 'block'; links.style.display='none'; keepMenuOpen(e); });
+  btnLinks.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); links.style.display = links.style.display==='block' ? 'none' : 'block'; util.style.display='none'; keepMenuOpen(e); });
+  sortSel.addEventListener('change',(e)=>{ applyFilterSort(false,true); keepMenuOpen(e); });
+
+  btnSearch.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation();
+    searchWrap.style.display = (searchWrap.style.display==='flex') ? 'none' : 'flex';
+    if (searchWrap.style.display==='flex'){ searchInput.value = state.searchQuery; searchInput.focus(); }
+    keepMenuOpen(e);
+  });
+  searchInput.addEventListener('input', debounce(()=>{ state.searchQuery = searchInput.value || ''; applyFilterSort(false,true); }, 150));
+
+  // Wire Utilities toggles
   const btnTitles=util.querySelector('#togTitles');
   const btnWav=util.querySelector('#togWav');
   const btnMov=util.querySelector('#togMov');
   const btnLight=util.querySelector('#togLight');
-  const btnClock=util.querySelector('#togClock');
   const btnEnh=util.querySelector('#togEnh');
 
   function syncToggles(){
@@ -612,7 +595,6 @@ function buildMenuUI(){
     btnWav.classList.toggle('on',state.showWavButtons);
     btnMov.classList.toggle('on',state.showMovButtons);
     btnLight.classList.toggle('on',state.lightMode);
-    btnClock.classList.toggle('on',state.showClock);
     btnEnh.classList.toggle('on',connected);
   }
   syncToggles();
@@ -621,45 +603,17 @@ function buildMenuUI(){
   btnWav.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); state.showWavButtons=!state.showWavButtons; syncToggles(); rerenderVisibleRowsBadges(); if(state.i>=0) updateNowbar(); keepMenuOpen(e); });
   btnMov.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); state.showMovButtons=!state.showMovButtons; syncToggles(); rerenderVisibleRowsBadges(); if(state.i>=0) updateNowbar(); keepMenuOpen(e); });
   btnLight.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); state.lightMode=!state.lightMode; document.body.classList.toggle('light',state.lightMode); localStorage.setItem('vvip25:light', state.lightMode?'1':'0'); syncToggles(); keepMenuOpen(e); });
-  btnClock.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); state.showClock=!state.showClock; localStorage.setItem('vvip25:clock', state.showClock?'1':'0'); toggleClockBar(state.showClock); syncToggles(); keepMenuOpen(e); });
   btnEnh.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); if(!connected) connectEnhance(); else disconnectEnhance(); syncToggles(); keepMenuOpen(e); });
 
-  // Download-all handler (M3U + optional sequential downloads)
-  btnDlAll.addEventListener('click', async (e)=>{
-    e.preventDefault(); e.stopPropagation();
-    const list = state.filtered.map(t=>t.src);
-    if (!list.length){ alert('Nothing to download.'); return; }
-
-    // 1) M3U export (fast)
-    const m3u = '#EXTM3U\n' + list.join('\n');
-    const blob = new Blob([m3u], {type:'audio/x-mpegurl'});
-    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='vvip25-playlist.m3u';
-    document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href), 1200);
-
-    // 2) Optional batch download (browser may prompt to allow multiple downloads)
-    if (confirm(`Start downloading ${list.length} MP3s now?`)){
-      for (let i=0;i<list.length;i++){
-        const url=list[i];
-        try{
-          const resp=await fetch(url,{mode:'cors'}); if(!resp.ok) throw new Error('HTTP '+resp.status);
-          const b=await resp.blob();
-          const fname=decodeURIComponent(url.split('/').pop()||`track-${i+1}.mp3`);
-          const link=document.createElement('a'); link.href=URL.createObjectURL(b); link.download=fname;
-          document.body.appendChild(link); link.click(); link.remove(); setTimeout(()=>URL.revokeObjectURL(link.href), 2000);
-        }catch(err){ console.warn('Skip download:', url, err); }
-      }
-    }
-    keepMenuOpen(e);
-  });
-
+  // Keep overlay open only when interacting with it
   tb.addEventListener('click', keepMenuOpen);
 }
 
-function keepMenuOpen(e){ const menu=els.menu; if(!menu) return; if (e){ e.preventDefault?.(); e.stopPropagation?.(); } menu.open=true; }
+function keepMenuOpen(e){ const m=els.menu; if(!m) return; if(e){e.preventDefault?.(); e.stopPropagation?.();} m.open=true; }
 
-/* ---------- Events ---------- */
+/* ---- Events (row click, favorites, player) ---- */
 document.addEventListener('click',(e)=>{
-  // Favorites toggle
+  // Favorites toggle (lights on/off)
   const favBtn=e.target.closest?.('.star');
   if (favBtn && favBtn.hasAttribute('data-fav')){
     const key=favBtn.getAttribute('data-fav'); const was=state.favorites.has(key);
@@ -670,7 +624,7 @@ document.addEventListener('click',(e)=>{
     favBtn.classList.toggle('on', !was);
     e.preventDefault(); e.stopPropagation(); return;
   }
-  // Row select
+  // Row select (do NOT open menu)
   const row=e.target.closest?.('.row');
   if(row && !e.target.closest('a')){
     const id=Number(row.getAttribute('data-id')); const idx=state.filtered.findIndex(t=>t.id===id);
@@ -678,17 +632,19 @@ document.addEventListener('click',(e)=>{
   }
 },{ passive:false });
 
-document.addEventListener('change',(e)=>{ if (e.target && e.target.id==='sort'){ applyFilterSort(false,true); keepMenuOpen(e); } }, { passive:true });
-
 $('#toggle')?.addEventListener('click', ()=>{ if (state.i<0 && state.filtered.length) select(0); state.playing?pause():play(); }, { passive:true });
 els.prev?.addEventListener('click', ()=> jump(-1), { passive:true });
 els.next?.addEventListener('click', ()=> jump(1), { passive:true });
 
-els.audio.addEventListener('timeupdate', ()=>{ const a=els.audio; if(!isFinite(a.duration)) return; els.seek.max=Math.floor(a.duration); els.seek.value=Math.floor(a.currentTime); $('#tcur').textContent=fmtDur(a.currentTime); $('#tdur').textContent=isFinite(a.duration)?fmtDur(a.duration):'0:00'; });
+els.audio.addEventListener('timeupdate', ()=>{
+  const a=els.audio; if(!isFinite(a.duration)) return;
+  els.seek.max=Math.floor(a.duration); els.seek.value=Math.floor(a.currentTime);
+  $('#tcur').textContent = fmtDur(a.currentTime);
+  $('#tdur').textContent = isFinite(a.duration) ? fmtDur(a.duration) : '0:00';
+});
 els.seek.addEventListener('input', ()=>{ els.audio.currentTime=Number(els.seek.value); });
 els.vol.addEventListener('input', ()=>{ els.audio.volume=parseFloat(els.vol.value); localStorage.setItem('vvip25:vol', els.vol.value); });
 els.audio.addEventListener('ended', ()=> jump(1));
 </script>
-
 </body>
 </html>
