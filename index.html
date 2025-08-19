@@ -128,9 +128,9 @@
   <audio id="audio" preload="metadata"></audio>
 
 <script>
-/* ========= VVIP25 — Clock, Download-All, iPhone-friendly Enhance mode ========= */
+/* ========= VVIP25 — Robust manifest loader + bespoke SVG controls ========= */
 
-  const ASSET_VERSION = 10; // bump to beat caches on JSON fetches
+  const ASSET_VERSION = 11; // bump to beat caches on JSON fetches
 
   /* ---------- Config ---------- */
   const BASE_MP3   = 'https://media.vvipmedia.net/ACCESS/';
@@ -139,17 +139,10 @@
   const BASE_VIDEO = 'https://media.vvipmedia.net/VIDEOS/';
   const DEFAULT_THUMB = BASE_THUMB + 'default_thumb.jpg';
 
-  /* ---------- Small cache hint ---------- */
   (function injectNoStoreMeta(){
-    try{
-      const m=document.createElement('meta');
-      m.httpEquiv='Cache-Control';
-      m.content='no-store, max-age=0, must-revalidate';
-      document.head.appendChild(m);
-    }catch(_){}
+    try{ const m=document.createElement('meta'); m.httpEquiv='Cache-Control'; m.content='no-store, max-age=0, must-revalidate'; document.head.appendChild(m); }catch(_){}
   })();
 
-  /* ---------- CSS patches (layout, clockbar, utilities) ---------- */
   (function injectCSS(){
     const css = `
     .controls{flex-wrap:wrap;gap:10px}
@@ -165,6 +158,13 @@
     .tog{opacity:.7;transition:opacity .15s, box-shadow .15s}
     .tog.on{opacity:1;box-shadow:0 0 0 2px var(--accent) inset}
 
+    /* SVG player buttons */
+    .icon-btn{display:inline-grid;place-items:center;border:1px solid var(--border);background:var(--card);border-radius:10px;width:40px;height:40px;cursor:pointer}
+    .icon-btn svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2;vector-effect:non-scaling-stroke}
+    .icon-btn:focus{outline:2px solid var(--accent);outline-offset:2px}
+    .icon-btn:hover{filter:brightness(1.1)}
+    .icon-btn:active{transform:translateY(1px)}
+
     .util-panel,.links-panel{display:none;margin-top:8px;border:1px solid var(--border);border-radius:10px;padding:8px}
     .util-row,.links-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 
@@ -176,33 +176,17 @@
     .star{cursor:pointer}
     .star.on{filter:drop-shadow(0 0 2px var(--accent)) brightness(1.2)}
 
-    /* About watermark */
     .wm{font-style:italic;font-size:12px;opacity:.6;margin-left:6px;user-select:none}
 
-    /* Light mode */
     body.light{--bg:#f7f7f8;--fg:#111;--muted:#4b5563;--card:#ffffff;--border:#d1d5db;--accent:#2563eb}
     body.light .player{background:linear-gradient(180deg,rgba(255,255,255,.96),rgba(255,255,255,.92))}
     body.light #site-title{-webkit-text-stroke:2px #111}
     body.light .row.has-title .title{padding-left:8px}
 
-    /* Clock bar in sticky banner */
-    #clockbar{
-      display:none; /* controlled by toggle */
-      color:var(--muted);
-      font-size:12px;
-      padding:4px 0;
-      text-align:right;
-    }
-
-    @media (max-width:560px){
-      .controls{gap:6px}
-      .controls button{flex:0 0 44px}
-      .range span{min-width:34px;text-align:center}
-      #clockbar{text-align:left}
-    }`;
-    const style=document.createElement('style');
-    style.textContent=css;
-    document.head.appendChild(style);
+    #clockbar{display:none;color:var(--muted);font-size:12px;padding:4px 0;text-align:right}
+    @media (max-width:560px){ #clockbar{text-align:left} .controls{gap:6px} .controls button{flex:0 0 44px} .range span{min-width:34px;text-align:center} }
+    `;
+    const style=document.createElement('style'); style.textContent=css; document.head.appendChild(style);
   })();
 
   /* ---------- Helpers ---------- */
@@ -271,11 +255,13 @@
   init();
   async function init(){
     buildMenuUI();
-    buildClockBar(); // create hidden clockbar region in the banner
+    buildClockBar();
 
-    const mres = await fetch(`./manifest.json?v=${ASSET_VERSION}`, { cache:'no-store' });
-    if(!mres.ok){ els.list.innerHTML = `<div class="row"><div></div><div>manifest.json missing</div></div>`; return; }
-    const data = await mres.json();
+    const data = await robustFetchManifest();
+    if (!data){
+      els.list.innerHTML = `<div class="row"><div></div><div>manifest.json missing or malformed</div></div>`;
+      return;
+    }
 
     state.tracks = data.map((t,idx)=>{
       const name = t.name || t.file || t.src?.split('/').pop() || `track-${idx}.mp3`;
@@ -304,6 +290,49 @@
     if (lm === '1'){ state.lightMode=true; document.body.classList.add('light'); }
     const clk = localStorage.getItem('vvip25:clock');
     if (clk === '1'){ state.showClock=true; toggleClockBar(true); }
+  }
+
+  /* ---------- Robust manifest fetch/normalize ---------- */
+  async function robustFetchManifest(){
+    const urls = [
+      `./manifest.json?v=${ASSET_VERSION}`,
+      `/manifest.json?v=${ASSET_VERSION}`,
+      `./manifest.json`,
+      `/manifest.json`
+    ];
+    let lastErr;
+    for (const u of urls){
+      try{
+        const r = await fetch(u, { cache:'no-store' });
+        if (!r.ok) { lastErr = `HTTP ${r.status} @ ${u}`; continue; }
+        const raw = await r.json();
+        const arr = normalizeManifest(raw);
+        if (Array.isArray(arr) && arr.length){ console.info('[manifest] loaded via', u, 'items:', arr.length); return arr; }
+        lastErr = `Parsed but empty/non-array @ ${u}`;
+      }catch(err){ lastErr = err.message || String(err); }
+    }
+    console.error('[manifest] failed:', lastErr);
+    return null;
+  }
+  function normalizeManifest(raw){
+    // Accept: Array | {tracks:[...]} | {items:[...]} | Object keyed by filename
+    if (Array.isArray(raw)) return raw;
+    if (raw && Array.isArray(raw.tracks)) return raw.tracks;
+    if (raw && Array.isArray(raw.items)) return raw.items;
+    if (raw && typeof raw==='object'){
+      // Convert object map → array of { name, ...value }
+      const out=[];
+      for (const [k,v] of Object.entries(raw)){
+        if (v && typeof v==='object'){
+          out.push({ name:k, ...v });
+        } else if (typeof v==='string'){
+          // string value (src) — treat k as name and v as src
+          out.push({ name:k, src:v });
+        }
+      }
+      return out;
+    }
+    return [];
   }
 
   /* ---------- Titles (primary only) ---------- */
@@ -337,7 +366,7 @@
         if (finalTitle!==t.title){ t.title=finalTitle; changed=true; }
       }
       if (changed){ applyFilterSort(false,true); refreshTitles(); }
-    }catch(_){}
+    }catch(err){ console.warn('titles.json load error', err); }
   }
 
   /* ---------- Thumbs ---------- */
@@ -350,7 +379,7 @@
       if(Array.isArray(data)) data.forEach(b=>set.add(String(b).toLowerCase()));
       else if(data && typeof data==='object') Object.keys(data).forEach(b=>{ if(data[b]) set.add(b.toLowerCase()); });
       state.thumbBases=set; computeThumbCascade(); rerenderVisibleRowsThumbs(); if(state.i>=0) updateNowbar();
-    }catch(_){}
+    }catch(err){ console.warn('thumbs.json load error', err); }
   }
   function computeThumbCascade(){
     const asc=[...state.tracks].sort((a,b)=>{ const da=a.date?.getTime()||0, db=b.date?.getTime()||0;
@@ -435,6 +464,8 @@
     if(!state.filtered.length){ els.list.innerHTML='<div class="row"><div></div><div>No results.</div></div>'; return; }
     const slice=state.filtered.slice(0,state.renderCount);
     els.list.innerHTML = slice.map(t=>rowHTML(t,(state.i>=0 && state.filtered[state.i]?.id===t.id))).join('') + `<div id="sentinel" style="height:1px"></div>`;
+    // ensure SVG player controls present (in case first render happened before)
+    ensurePlayerIcons();
   }
   function rerenderVisibleRowsThumbs(){ const rows=els.list.querySelectorAll('.row');
     rows.forEach(row=>{ const id=Number(row.getAttribute('data-id')); const t=state.tracks.find(x=>x.id===id); if(!t) return;
@@ -528,7 +559,19 @@
     }catch(_){}
   }
   function pause(){ els.audio.pause(); state.playing=false; updateToggle(); }
-  function updateToggle(){ const btn=$('#toggle'); if(btn) btn.textContent = state.playing ? '⏸️' : '▶️'; }
+  function updateToggle(){
+    const btn=$('#toggle');
+    if(!btn) return;
+    // swap icon path for play/pause SVG
+    if (btn.firstElementChild && btn.firstElementChild.tagName==='svg'){
+      const isPlaying = state.playing;
+      const g = btn.querySelector('[data-part="glyph"]');
+      if (g){ g.setAttribute('d', isPlaying ? 'M6 4h4v16H6zM14 4h4v16h-4z' : 'M7 4l14 8-14 8V4z'); }
+      btn.setAttribute('aria-label', isPlaying? 'Pause':'Play');
+    } else {
+      btn.textContent = state.playing ? '⏸️' : '▶️'; // fallback
+    }
+  }
   function jump(dir){ if(!state.filtered.length) return; let i=state.i+dir; if(i<0) i=state.filtered.length-1; if(i>=state.filtered.length) i=0; select(i); play(); }
 
   /* ---------- Clock bar ---------- */
@@ -538,11 +581,10 @@
     if (!$('#clockbar')){
       const div=document.createElement('div'); div.id='clockbar'; div.textContent='';
       const nowRow=document.querySelector('.player .wrap .now');
-      wrap.insertBefore(div, nowRow); // just above the player row
+      wrap.insertBefore(div, nowRow);
     }
   }
   function formatClock(d=new Date()){
-    // Example: Mon 2025‑08‑18 · 21:07:04
     const dd=d.toLocaleDateString(undefined,{weekday:'short', year:'numeric', month:'short', day:'2-digit'});
     const tt=d.toLocaleTimeString(undefined,{hour:'2-digit', minute:'2-digit', second:'2-digit'});
     return `${dd} · ${tt}`;
@@ -589,40 +631,30 @@
     const tb=els.toolbar; if(!tb) return; tb.innerHTML='';
     const row=document.createElement('div'); row.style.display='flex'; row.style.gap='8px'; row.style.flexWrap='wrap'; row.style.alignItems='center'; tb.appendChild(row);
 
-    // 📜 About + watermark
     const btnAbout=document.createElement('button'); btnAbout.className='btn'; btnAbout.id='btnAbout'; btnAbout.title='About'; btnAbout.textContent='📜'; row.appendChild(btnAbout);
     const wm=document.createElement('span'); wm.className='wm'; wm.textContent='© vvipmedia 2025'; row.appendChild(wm);
     btnAbout.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); alert("VVIP25 — Vancouver Music and Videography Project 2025"); keepMenuOpen(e); });
 
-    // 🎵 Playlist (favorites view)
     const btnFavList=document.createElement('button'); btnFavList.className='btn'; btnFavList.id='btnFavList'; btnFavList.title='My favorites playlist'; btnFavList.textContent='🎵'; row.appendChild(btnFavList);
     btnFavList.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); state.searchQuery='#favorites'; applyFilterSort(false); keepMenuOpen(e); });
 
-    // 🛠️ Utilities
     const btnUtils=document.createElement('button'); btnUtils.className='btn'; btnUtils.id='btnUtils'; btnUtils.title='Utilities'; btnUtils.textContent='🛠️'; row.appendChild(btnUtils);
-
-    // 🔗 Links submenu
     const btnLinks=document.createElement('button'); btnLinks.className='btn'; btnLinks.id='btnLinks'; btnLinks.title='Links'; btnLinks.textContent='🔗'; row.appendChild(btnLinks);
 
-    // 🛍️ Shop
     const aShop=document.createElement('a'); aShop.className='btn'; aShop.id='btnShop'; aShop.title='Shop'; aShop.textContent='🛍️'; aShop.href='/shop'; aShop.target='_blank'; aShop.rel='noopener'; row.appendChild(aShop);
 
-    // ⬇️ Download All (current playlist)
     const btnDlAll=document.createElement('button'); btnDlAll.className='btn'; btnDlAll.id='btnDlAll'; btnDlAll.title='Download all MP3s in current view'; btnDlAll.textContent='⬇️'; row.appendChild(btnDlAll);
 
-    // Sort select
     const sortSel=document.createElement('select'); sortSel.id='sort'; sortSel.title='Sort';
     sortSel.innerHTML=`<option value="date_desc">Newest</option><option value="date_asc">Oldest</option><option value="bpm_desc">BPM ↓</option><option value="bpm_asc">BPM ↑</option><option value="len_desc">Longest</option><option value="len_asc">Shortest</option>`;
     row.appendChild(sortSel); els.sort=sortSel;
 
-    // 🔍 Search
     const btnSearch=document.createElement('button'); btnSearch.className='btn'; btnSearch.id='btnSearch'; btnSearch.title='Search'; btnSearch.textContent='🔍'; row.appendChild(btnSearch);
     const searchWrap=document.createElement('div'); searchWrap.className='search-wrap'; searchWrap.innerHTML=`<input id="searchInput" placeholder="Search… use #tags (e.g. #mbv)" inputmode="search" />`; tb.appendChild(searchWrap);
     const searchInput=searchWrap.querySelector('#searchInput');
     btnSearch.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); searchWrap.style.display=(searchWrap.style.display==='none'||!searchWrap.style.display)?'flex':'none'; if(searchWrap.style.display==='flex'){ searchInput.value=state.searchQuery; searchInput.focus(); } keepMenuOpen(e); });
     searchInput.addEventListener('input', debounce(()=>{ state.searchQuery=searchInput.value||''; applyFilterSort(false,true); },150));
 
-    // Utilities panel
     const util=document.createElement('div'); util.className='util-panel';
     util.innerHTML = `<div class="util-row">
       <button class="tog" id="togTitles" title="Song Titles (on/off)">📝</button>
@@ -630,11 +662,10 @@
       <button class="tog" id="togMov" title="Show MOV buttons">🎬</button>
       <button class="tog" id="togLight" title="Light mode">🌞</button>
       <button class="tog" id="togClock" title="Clock">🕒</button>
-      <button class="tog" id="togEnh" title="Enhance (iPhone‑friendly EQ)">🎚️+</button>
+      <button class="tog" id="togEnh" title="Enhance (iPhone-friendly EQ)">🎚️+</button>
     </div>`;
     tb.appendChild(util);
 
-    // Links panel
     const links=document.createElement('div'); links.className='links-panel';
     links.innerHTML = `<div class="links-row">
       <a class="btn" href="https://www.youtube.com/@VVVVIIPP25" target="_blank" rel="noopener" title="YouTube">📺</a>
@@ -643,14 +674,9 @@
     </div>`;
     tb.appendChild(links);
 
-    btnUtils.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation();
-      util.style.display=(util.style.display==='none'||!util.style.display)?'block':'none'; keepMenuOpen(e);
-    });
-    btnLinks.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation();
-      links.style.display=(links.style.display==='none'||!links.style.display)?'block':'none'; keepMenuOpen(e);
-    });
+    btnUtils.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); util.style.display=(util.style.display==='none'||!util.style.display)?'block':'none'; keepMenuOpen(e); });
+    btnLinks.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); links.style.display=(links.style.display==='none'||!links.style.display)?'block':'none'; keepMenuOpen(e); });
 
-    // Wire toggles
     const btnTitles=util.querySelector('#togTitles');
     const btnWav=util.querySelector('#togWav');
     const btnMov=util.querySelector('#togMov');
@@ -673,24 +699,18 @@
     btnMov.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); state.showMovButtons=!state.showMovButtons; syncToggles(); rerenderVisibleRowsBadges(); if(state.i>=0) updateNowbar(); keepMenuOpen(e); });
     btnLight.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); state.lightMode=!state.lightMode; document.body.classList.toggle('light',state.lightMode); localStorage.setItem('vvip25:light', state.lightMode?'1':'0'); syncToggles(); keepMenuOpen(e); });
     btnClock.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); state.showClock=!state.showClock; localStorage.setItem('vvip25:clock', state.showClock?'1':'0'); toggleClockBar(state.showClock); syncToggles(); keepMenuOpen(e); });
-    btnEnh.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation();
-      if(!connected) connectEnhance(); else disconnectEnhance(); syncToggles(); keepMenuOpen(e);
-    });
+    btnEnh.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); if(!connected) connectEnhance(); else disconnectEnhance(); syncToggles(); keepMenuOpen(e); });
 
     // Download-all handler
     btnDlAll.addEventListener('click', async (e)=>{
       e.preventDefault(); e.stopPropagation();
       const list = state.filtered.map(t=>t.src);
       if (!list.length){ alert('Nothing to download.'); return; }
-
-      // 1) Offer M3U export (fast, bandwidth-friendly)
       const m3u = '#EXTM3U\n' + list.map(u=>u).join('\n');
       const blob = new Blob([m3u], {type:'audio/x-mpegurl'});
       const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
       a.download='vvip25-playlist.m3u'; document.body.appendChild(a); a.click(); a.remove();
       setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
-
-      // 2) Optional batch downloader (sequential; may prompt per file)
       if (confirm(`Start downloading ${list.length} MP3s now? (Your browser may ask to allow multiple downloads.)`)){
         for (let i=0;i<list.length;i++){
           const url=list[i];
@@ -701,18 +721,46 @@
             const link=document.createElement('a');
             link.href=URL.createObjectURL(b); link.download=fname; document.body.appendChild(link); link.click(); link.remove();
             setTimeout(()=>URL.revokeObjectURL(link.href), 2000);
-          }catch(err){
-            console.warn('Skip download:', url, err);
-          }
+          }catch(err){ console.warn('Skip download:', url, err); }
         }
       }
       keepMenuOpen(e);
     });
 
     tb.addEventListener('click', keepMenuOpen);
+
+    // Swap the text transport controls for SVGs
+    ensurePlayerIcons();
   }
 
   function keepMenuOpen(e){ const menu=els.menu; if(!menu) return; if (e){ e.preventDefault?.(); e.stopPropagation?.(); } menu.open=true; }
+
+  /* ---------- SVG Transport Controls ---------- */
+  function ensurePlayerIcons(){
+    // Prev
+    replaceWithSVG(els.prev, prevSVG(), 'Previous');
+    // Play/Pause (dynamic path)
+    replaceWithSVG(els.toggle, playSVG(), 'Play/Pause');
+    // Next
+    replaceWithSVG(els.next, nextSVG(), 'Next');
+  }
+  function replaceWithSVG(btn, svgStr, label){
+    if (!btn) return;
+    btn.classList.add('icon-btn');
+    btn.innerHTML = svgStr;
+    btn.setAttribute('aria-label', label);
+  }
+  function prevSVG(){
+    return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4v16" /><path d="M19 5l-10 7 10 7V5z" /></svg>`;
+  }
+  function nextSVG(){
+    return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 4v16" /><path d="M5 5l10 7-10 7V5z" /></svg>`;
+  }
+  function playSVG(){
+    // The path with data-part="glyph" is swapped between play and pause in updateToggle()
+    const d = state.playing ? 'M6 4h4v16H6zM14 4h4v16h-4z' : 'M7 4l14 8-14 8V4z';
+    return `<svg viewBox="0 0 24 24" aria-hidden="true"><path data-part="glyph" d="${d}" fill="currentColor" stroke="none"/></svg>`;
+  }
 
   /* ---------- Events ---------- */
   document.addEventListener('click',(e)=>{
@@ -735,6 +783,7 @@
 
   document.addEventListener('change',(e)=>{ if (e.target && e.target.id==='sort'){ applyFilterSort(false,true); keepMenuOpen(e); } }, { passive:true });
 
+  // Transport handlers (SVG buttons still use same IDs)
   $('#toggle')?.addEventListener('click', ()=>{ if (state.i<0 && state.filtered.length) select(0); state.playing?pause():play(); }, { passive:true });
   els.prev?.addEventListener('click', ()=> jump(-1), { passive:true });
   els.next?.addEventListener('click', ()=> jump(1), { passive:true });
