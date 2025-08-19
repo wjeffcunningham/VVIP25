@@ -128,24 +128,17 @@
   <audio id="audio" preload="metadata"></audio>
 
 <script>
-/* ========================== VVIP25 — Phase 3 cleanup ==========================
+/* ========================== VVIP25 — Phase 3 cleanup (menu + favorites UX) ==========================
 
-Implements:
-1) Cache-busting best practices on fetches, plus an optional HTML no-store style.
-2) Fix: pressing Play no longer opens the menu (menu stays closed unless you touch it).
-3) Mobile controls: better wrapping, spacing, range growth (injects tiny CSS patch).
-4) Searchable Notes/tags: add `notes` (string or array) per track in manifest.json, e.g.
-      { "name":"2025-08-10-track.mp3", "notes":"#mbv #shoegaze cool bridge" }
-   or  { "name":"...", "notes":["#mbv","#shoegaze","cool bridge"] }
-   Search via the 🔍 icon; supports plain text and #hashtags.
-5) Adds 🔍 search UI in the menu; live-filters list and Now bar.
-6) Titles default OFF; when ON, only the primary title is shown (splits "A//B" → "A").
-   Subline never repeats the title when titles are ON.
-7) Puts toggles inside a Settings sub-menu (gear ⚙️) under the menu overlay.
-8) Per-track ★ favorites (localStorage). Menu gets a 🎵 “Playlist” button to show only favorites.
-9) Robust titles.json lookup; respects primary title before “//”.
+Adds:
+• Favorites ★ visibly “on” (filled star, accent color, aria-pressed) and instant toggle.
+• Favorites are stored with a selection ORDER; Playlist (🎵) view shows them in that order.
+• Menu rebuilt per spec:
+    Level 1: About (🎴), Playlist (🎵), Utilities (🛠️), Shop (🛍️)
+    Level 2 (Utilities): toggles + search live here.
+• Keeps prior fixes: cache-busting, mobile spacing, titles default OFF, hide “titleless” when titles ON, notes/tags search.
 
-=============================================================================== */
+====================================================================================================== */
 
   // ====== CONFIG ======
   const BASE_MP3   = 'https://media.vvipmedia.net/ACCESS/';
@@ -155,7 +148,7 @@ Implements:
   const DEFAULT_THUMB = BASE_THUMB + 'default_thumb.jpg';
 
   // Bump to beat caches after any JSON/script change
-  const ASSET_VERSION = 7;
+  const ASSET_VERSION = 9;
 
   // ---- Light HTML no-store hint (browser-side only) ----
   (function injectNoStoreMeta(){
@@ -167,7 +160,7 @@ Implements:
     }catch(_){}
   })();
 
-  // ---- Mobile CSS & small layout fixes (injected so no HTML edits required) ----
+  // ---- Mobile CSS & small layout fixes ----
   (function injectCSS(){
     const css = `
     .controls{flex-wrap:wrap;gap:10px}
@@ -179,7 +172,11 @@ Implements:
       .controls button{flex:0 0 44px}
       .range span{min-width:34px;text-align:center}
     }
-    /* Submenu styling */
+    /* Toolbar & submenu */
+    .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .toolbar .btn,.toolbar .tog, .toolbar select{
+      height:36px;min-width:36px;padding:0 10px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--fg)
+    }
     details.submenu>summary{
       cursor:pointer;list-style:none;background:var(--card);
       border:1px solid var(--border);padding:8px 12px;border-radius:10px;user-select:none
@@ -187,15 +184,17 @@ Implements:
     details.submenu[open]>summary{border-bottom-left-radius:10px;border-bottom-right-radius:10px}
     details.submenu[open] .sheet-inner{display:block}
     .sheet-inner{display:none;padding:8px 0}
-    /* Search input */
     .search-wrap{display:flex;gap:8px;align-items:center;margin-top:8px}
     .search-wrap input{
-      flex:1;min-width:120px;background:var(--card);color:var(--fg);
+      flex:1;min-width:160px;background:var(--card);color:var(--fg);
       border:1px solid var(--border);border-radius:10px;padding:8px 10px
     }
     .pill{border:1px solid var(--border);border-radius:999px;padding:4px 10px;font-size:12px}
-    .star{cursor:pointer}
-    .star.on{filter:drop-shadow(0 0 2px var(--accent))}
+    .star{
+      cursor:pointer;min-width:36px;height:28px;padding:0 8px;border:1px solid var(--border);
+      border-radius:8px;background:var(--card);line-height:26px
+    }
+    .star.on{color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent) inset}
     `;
     const style = document.createElement('style');
     style.textContent = css;
@@ -236,8 +235,20 @@ Implements:
     const b = stripExt(rawFile(name)).replace(/^[\d._-]+/,'').replace(/[_-]+/g,' ').trim();
     return b || stripExt(rawFile(name));
   }
-  // primary part of "A//B//C"
-  const primaryOnly = (t) => String(t||'').split('//')[0].trim();
+  const primaryOnly = (t) => String(t||'').split('//')[0].trim(); // primary of "A//B"
+
+  // --- "Nameless" title detection (title equals date/filename-ish) ---
+  function isTitleless(t){
+    const title = String(t.title||'').trim();
+    if (!title) return true;
+    const rxYYYY = /^\s*\d{4}[.\-_]\d{2}[.\-_]\d{2}(?:\b|$)/;
+    const rxYY   = /^\s*\d{2}[.\-_]\d{2}[.\-_]\d{2}(?:\b|$)/;
+    if (rxYYYY.test(title) || rxYY.test(title)) return true;
+    const bareFile = stripExt(rawFile(t.name)).toLowerCase();
+    if (title.toLowerCase() === bareFile) return true;
+    if (title === deriveTitleFromFilename(t.name)) return true;
+    return false;
+  }
 
   // -------- Filename/date parsing (YYYY or YY + optional index) --------
   const DATE_RX_YYYY   = /^\s*(\d{4})[.\-_](\d{2})[.\-_](\d{2})(?=\D|$)/;
@@ -300,11 +311,14 @@ Implements:
     titlesLookup: new Map(),
     thumbBases: new Set(),
     resolvedThumb: new Map(),
-    showTitles: false,          // (6) default OFF
+    showTitles: false,          // default OFF
     showWavButtons: false,
     showMovButtons: false,
+    // Favorites: both a Set for membership checks and an Array for selection ORDER
     favorites: new Set(JSON.parse(localStorage.getItem('vvip25:favs')||'[]')),
-    searchQuery: ''             // (4)(5) search text / tags
+    favOrder: JSON.parse(localStorage.getItem('vvip25:favs_order')||'[]'), // array of names in selection order
+    searchQuery: '',
+    view: 'all' // 'all' | 'favorites'
   };
 
   // Persisted volume
@@ -314,10 +328,10 @@ Implements:
   // Boot
   init();
   async function init(){
-    // 0) Build Settings sub-menu + Search + Playlist UI
+    // Build Menu UI first (so refs exist)
     buildMenuUI();
 
-    // 1) Fetch manifest and build tracks
+    // Fetch manifest
     const murl = `./manifest.json?v=${ASSET_VERSION}`;
     const mres = await fetch(murl, { cache: 'no-store' });
     if(!mres.ok){
@@ -339,7 +353,6 @@ Implements:
 
       const thumbCandidate = BASE_THUMB + encodeURIComponent(baseLower + 'thumb.jpg');
 
-      // (4) notes/tags from manifest: string or array
       let notes = '';
       if (Array.isArray(t.notes)) notes = t.notes.join(' ');
       else if (typeof t.notes === 'string') notes = t.notes;
@@ -369,12 +382,9 @@ Implements:
     fillViewport();
     if (state.filtered.length && state.i === -1) { select(0); }
 
-    // 2) Fetch titles + thumbs lazily (with cache-busting)
+    // Lazy extras
     (requestIdleCallback?.(fetchTitles, {timeout: 600}) || setTimeout(fetchTitles, 0));
     (requestIdleCallback?.(fetchThumbs, {timeout: 900}) || setTimeout(fetchThumbs, 50));
-
-    // IMPORTANT: only keep menu open when clicking *inside* the menus
-    // (2) Fix accidental open when pressing main controls: do NOT call keepMenuOpen there.
   }
 
   // --- Titles (with primaryOnly split) ---
@@ -382,7 +392,7 @@ Implements:
     const map = new Map();
     const add = (k, titleRaw) => {
       if (!k || !titleRaw) return;
-      const title = primaryOnly(titleRaw); // (8) keep only primary part before "//"
+      const title = primaryOnly(titleRaw);
       const rawLower = String(k).toLowerCase();
       const justFile = rawFile(rawLower);
       const noExt = stripExt(justFile);
@@ -484,40 +494,57 @@ Implements:
   function matchesSearch(t){
     const q = state.searchQuery.trim().toLowerCase();
     if (!q) return true;
-    // Support #tags and plain text. If query contains any #tag, require all tags present.
     const tokens = q.split(/\s+/).filter(Boolean);
     const hayName  = (t.name||'').toLowerCase();
     const hayTitle = (t.title||'').toLowerCase();
     const hayNotes = (t.notes||'').toLowerCase();
-    // AND-match all tokens
     return tokens.every(tok=>{
-      if (tok.startsWith('#')){
-        return hayNotes.includes(tok); // tags should be written as #tag in notes
-      }
+      if (tok.startsWith('#')) return hayNotes.includes(tok);
       return hayName.includes(tok) || hayTitle.includes(tok) || hayNotes.includes(tok);
     });
   }
 
-  function applyFilterSort(firstPaint=false, keepIndex=false){
-    let out = [...state.tracks].filter(matchesSearch);
+  function applyFavoritesOrdering(list){
+    // Keep only favorites, in the order the user selected them (favOrder)
+    const order = state.favOrder;
+    const byName = new Map(list.map(t => [t.name, t]));
+    const out = [];
+    for (const name of order){
+      if (state.favorites.has(name) && byName.has(name)) out.push(byName.get(name));
+    }
+    return out;
+  }
 
-    switch(els.sort?.value||'date_desc'){
-      case 'date_desc':
-        out.sort((a,b)=>{
-          const da=a.date?.getTime()||0, db=b.date?.getTime()||0;
-          if (db !== da) return db - da;
-          return withinDayIndexFromName(b.name) - withinDayIndexFromName(a.name) || b.name.localeCompare(a.name);
-        }); break;
-      case 'date_asc':
-        out.sort((a,b)=>{
-          const da=a.date?.getTime()||0, db=b.date?.getTime()||0;
-          if (da !== db) return da - db;
-          return withinDayIndexFromName(a.name) - withinDayIndexFromName(b.name) || a.name.localeCompare(b.name);
-        }); break;
-      case 'bpm_desc':  out.sort((a,b)=> bpmSortValue(b) - bpmSortValue(a)); break;
-      case 'bpm_asc':   out.sort((a,b)=> bpmSortValue(a) - bpmSortValue(b)); break;
-      case 'len_desc':  out.sort((a,b)=> (b.length||0)-(a.length||0)); break;
-      case 'len_asc':   out.sort((a,b)=> (a.length||0)-(b.length||0)); break;
+  function applyFilterSort(firstPaint=false, keepIndex=false){
+    let out = [...state.tracks].filter(t => {
+      if (!matchesSearch(t)) return false;
+      if (state.showTitles && isTitleless(t)) return false; // hide “titleless” when titles ON
+      return true;
+    });
+
+    if (state.view === 'favorites'){
+      // Reduce to favorites and order by selection sequence
+      out = applyFavoritesOrdering(out);
+    } else {
+      // Normal sort only when not in favorites view
+      switch(els.sort?.value||'date_desc'){
+        case 'date_desc':
+          out.sort((a,b)=>{
+            const da=a.date?.getTime()||0, db=b.date?.getTime()||0;
+            if (db !== da) return db - da;
+            return withinDayIndexFromName(b.name) - withinDayIndexFromName(a.name) || b.name.localeCompare(a.name);
+          }); break;
+        case 'date_asc':
+          out.sort((a,b)=>{
+            const da=a.date?.getTime()||0, db=b.date?.getTime()||0;
+            if (da !== db) return da - db;
+            return withinDayIndexFromName(a.name) - withinDayIndexFromName(b.name) || a.name.localeCompare(b.name);
+          }); break;
+        case 'bpm_desc':  out.sort((a,b)=> bpmSortValue(b) - bpmSortValue(a)); break;
+        case 'bpm_asc':   out.sort((a,b)=> bpmSortValue(a) - bpmSortValue(b)); break;
+        case 'len_desc':  out.sort((a,b)=> (b.length||0)-(a.length||0)); break;
+        case 'len_asc':   out.sort((a,b)=> (a.length||0)-(b.length||0)); break;
+      }
     }
 
     state.filtered = out;
@@ -540,9 +567,11 @@ Implements:
   }
 
   function favHTML(t){
-    const on = state.favorites.has(t.name) ? 'on' : '';
-    const title = state.favorites.has(t.name) ? 'Unfavourite' : 'Favourite';
-    return `<button class="star ${on}" data-fav="${escapeHTML(t.name)}" title="${title}">★</button>`;
+    const isOn = state.favorites.has(t.name);
+    const glyph = isOn ? '★' : '☆';
+    const title = isOn ? 'Unfavourite' : 'Favourite';
+    const pressed = isOn ? 'true' : 'false';
+    return `<button class="star ${isOn?'on':''}" aria-pressed="${pressed}" data-fav="${escapeHTML(t.name)}" title="${title}">${glyph}</button>`;
   }
 
   function badgeHTML(t){
@@ -562,16 +591,13 @@ Implements:
   function rowHTML(t, active){
     const bpmTxt = bpmLabel(t);
     const thumbURL = getResolvedThumb(t);
-
-    // (6) When titles are ON, do NOT echo title in subline (avoid “dropshadow” dupe).
     const subline = uniqJoin([
-      state.showTitles ? '' : (t.title || ''),   // suppress duplicate title when ON
+      state.showTitles ? '' : (t.title || ''),
       bpmTxt,
       t.length ? fmtDur(t.length) : '',
       t.details || '',
-      t.notes ? t.notes : ''                     // show tags softly in subline
+      t.notes ? t.notes : ''
     ]);
-
     return `<div class="row" role="listitem" data-id="${t.id}">
       <div class="cover" aria-hidden="true">${imgHTML(thumbURL)}</div>
       <div>
@@ -722,7 +748,7 @@ Implements:
     ]);
     const url = getResolvedThumb(t);
     els.cover.innerHTML = `<img src="${url.replace(/"/g,'&quot;')}" alt=""
-      style="width:56px;height:56px;border-radius:8px;object-fit:cover;"
+      style="width:56px;height:56px;object-fit:cover;border-radius:8px"
       onerror="if(this.dataset.fbk!=='1'){this.dataset.fbk='1';this.onerror=null;this.src='${DEFAULT_THUMB}';}">`;
   }
 
@@ -755,10 +781,10 @@ Implements:
     const tb = els.toolbar;
     if (!tb) return;
 
-    // Wipe toolbar (we’ll rebuild inside a Settings submenu)
+    // Clear toolbar; rebuild Level 1 (About, Playlist, Utilities, Shop) + Sort
     tb.innerHTML = '';
 
-    // Sort select stays visible
+    // Sort on the left (kept)
     const sortSel = document.createElement('select');
     sortSel.id = 'sort'; sortSel.title = 'Sort';
     sortSel.innerHTML = `
@@ -771,93 +797,74 @@ Implements:
     tb.appendChild(sortSel);
     els.sort = sortSel;
 
-    // 🔍 Search button + input
-    const btnSearch = document.createElement('button');
-    btnSearch.className = 'btn'; btnSearch.id = 'btnSearch'; btnSearch.title = 'Search';
-    btnSearch.textContent = '🔍';
-    tb.appendChild(btnSearch);
+    // Level 1 buttons
+    const btnAbout = document.createElement('button');
+    btnAbout.className = 'btn'; btnAbout.id='btnAbout'; btnAbout.title='About'; btnAbout.textContent='🎴';
+    const btnPlaylist = document.createElement('button');
+    btnPlaylist.className = 'btn'; btnPlaylist.id='btnPlaylist'; btnPlaylist.title='Playlist (favorites)'; btnPlaylist.textContent='🎵';
+    const utilities = document.createElement('details');
+    utilities.className = 'submenu';
+    utilities.innerHTML = `<summary>🛠️ Utilities</summary><div class="sheet-inner" id="utilInner"></div>`;
+    const btnShop = document.createElement('a');
+    btnShop.className='btn'; btnShop.id='btnShop'; btnShop.href='/shop'; btnShop.target='_blank'; btnShop.rel='noopener'; btnShop.title='Shop'; btnShop.textContent='🛍️';
 
-    const searchWrap = document.createElement('div');
-    searchWrap.className = 'search-wrap'; searchWrap.style.display = 'none';
-    searchWrap.innerHTML = `<input id="searchInput" placeholder="Search… use #tags (e.g. #mbv)" inputmode="search" />`;
-    tb.appendChild(searchWrap);
-    const searchInput = searchWrap.querySelector('#searchInput');
+    tb.appendChild(btnAbout);
+    tb.appendChild(btnPlaylist);
+    tb.appendChild(utilities);
+    tb.appendChild(btnShop);
 
-    btnSearch.addEventListener('click', (e)=>{
+    // Utilities content (toggles + search)
+    const inner = utilities.querySelector('#utilInner');
+    inner.innerHTML = `
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <button class="tog" id="togTitles" title="Song Titles (on/off)">📝</button>
+        <button class="tog" id="togWav" title="Show WAV buttons">🎚️</button>
+        <button class="tog" id="togMov" title="Show MOV buttons">🎬</button>
+      </div>
+      <div class="search-wrap">
+        <input id="searchInput" placeholder="Search… use #tags (e.g. #mbv)" inputmode="search" />
+      </div>
+    `;
+
+    const btnTitles = inner.querySelector('#togTitles');
+    const btnWav    = inner.querySelector('#togWav');
+    const btnMov    = inner.querySelector('#togMov');
+    const searchInput = inner.querySelector('#searchInput');
+
+    // Initial toggle states
+    const setTog = (el,on)=> el.classList.toggle('on', !!on);
+    setTog(btnTitles, state.showTitles);
+    setTog(btnWav, state.showWavButtons);
+    setTog(btnMov, state.showMovButtons);
+
+    // Wire: About
+    btnAbout.addEventListener('click', (e)=>{
       e.preventDefault(); e.stopPropagation();
-      const show = searchWrap.style.display === 'none';
-      searchWrap.style.display = show ? 'flex' : 'none';
-      if (show) { searchInput.value = state.searchQuery; searchInput.focus(); }
+      alert("VVIP25 — Vancouver Music and Videography Project 2025");
       keepMenuOpen(e);
     });
 
-    searchInput.addEventListener('input', debounce(()=>{
-      state.searchQuery = searchInput.value || '';
-      applyFilterSort(false, /*keepIndex=*/true);
-    }, 150));
-
-    // 🎵 Favorites playlist filter
-    const btnFavList = document.createElement('button');
-    btnFavList.className = 'btn'; btnFavList.id = 'btnFavList'; btnFavList.title = 'My playlist (favorites)';
-    btnFavList.textContent = '🎵';
-    tb.appendChild(btnFavList);
-
-    btnFavList.addEventListener('click', (e)=>{
+    // Wire: Playlist (favorites view w/ selection order)
+    btnPlaylist.addEventListener('click', (e)=>{
       e.preventDefault(); e.stopPropagation();
-      // Toggle favorites-only view. We’ll implement it as a search preset: "#fav:" token
-      if (state.searchQuery.trim() === '#favorites'){
-        state.searchQuery = '';
-      } else {
-        state.searchQuery = '#favorites';
-      }
-      // Hook into matchesSearch: treat #favorites specially
-      applyFilterSort(false);
-      updateSearchUIReflect();
+      state.view = (state.view === 'favorites') ? 'all' : 'favorites';
+      applyFilterSort(false /*firstPaint*/, true /*keepIndex*/);
       keepMenuOpen(e);
     });
 
-    function updateSearchUIReflect(){
-      if (searchWrap.style.display !== 'none') searchInput.value = state.searchQuery;
-    }
-
-    // ⚙️ Settings submenu with toggles
-    const settings = document.createElement('details');
-    settings.className = 'submenu';
-    settings.innerHTML = `
-      <summary>⚙️ Settings</summary>
-      <div class="sheet-inner">
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-          <button class="tog" id="togTitles" title="Song Titles (on/off)">📝</button>
-          <button class="tog" id="togWav" title="Show WAV buttons">🎚️</button>
-          <button class="tog" id="togMov" title="Show MOV buttons">🎬</button>
-          <button class="btn" id="btnAbout" title="About">ℹ️</button>
-          <a class="btn" id="btnShop" href="/shop" target="_blank" rel="noopener" title="Shop">🛍️</a>
-        </div>
-      </div>`;
-    tb.appendChild(settings);
-
-    // Wire toggles (default OFF for titles)
-    const btnTitles = settings.querySelector('#togTitles');
-    const btnWav    = settings.querySelector('#togWav');
-    const btnMov    = settings.querySelector('#togMov');
-    const btnAbout  = settings.querySelector('#btnAbout');
-
-    function toggleBtn(el, on){ el.classList.toggle('on', !!on); }
-    toggleBtn(btnTitles, state.showTitles);
-    toggleBtn(btnWav, state.showWavButtons);
-    toggleBtn(btnMov, state.showMovButtons);
-
+    // Wire: Toggles
     btnTitles.addEventListener('click', (e)=>{
       e.preventDefault(); e.stopPropagation();
       state.showTitles = !state.showTitles;
-      toggleBtn(btnTitles, state.showTitles);
+      setTog(btnTitles, state.showTitles);
+      applyFilterSort(false /*firstPaint*/, true /*keepIndex*/);
       refreshTitles();
       keepMenuOpen(e);
     });
     btnWav.addEventListener('click', (e)=>{
       e.preventDefault(); e.stopPropagation();
       state.showWavButtons = !state.showWavButtons;
-      toggleBtn(btnWav, state.showWavButtons);
+      setTog(btnWav, state.showWavButtons);
       rerenderVisibleRowsBadges();
       if (state.i>=0) updateNowbar();
       keepMenuOpen(e);
@@ -865,18 +872,20 @@ Implements:
     btnMov.addEventListener('click', (e)=>{
       e.preventDefault(); e.stopPropagation();
       state.showMovButtons = !state.showMovButtons;
-      toggleBtn(btnMov, state.showMovButtons);
+      setTog(btnMov, state.showMovButtons);
       rerenderVisibleRowsBadges();
       if (state.i>=0) updateNowbar();
       keepMenuOpen(e);
     });
-    btnAbout.addEventListener('click', (e)=>{
-      e.preventDefault(); e.stopPropagation();
-      alert("VVIP25 — Vancouver Music and Videography Project 2025");
-      keepMenuOpen(e);
-    });
 
-    // Keep the menu open only when actually interacting with the overlay content
+    // Wire: Search (lives inside Utilities)
+    searchInput.value = state.searchQuery;
+    searchInput.addEventListener('input', debounce(()=>{
+      state.searchQuery = searchInput.value || '';
+      applyFilterSort(false, /*keepIndex=*/true);
+    }, 150));
+
+    // Keep overlay open while interacting inside it
     tb.addEventListener('click', keepMenuOpen);
   }
 
@@ -889,21 +898,39 @@ Implements:
   }
 
   // ---------------- Events ----------------
-
-  // Row click: select + play (do NOT force menu open)
+  // Row click: select + play; favorites toggling with visible star update
   document.addEventListener('click', (e)=>{
-    const row = e.target.closest?.('.row');
-    // Handle favorites toggle
     const favBtn = e.target.closest?.('.star');
     if (favBtn && favBtn.hasAttribute('data-fav')){
-      const key = favBtn.getAttribute('data-fav');
-      if (state.favorites.has(key)) state.favorites.delete(key);
-      else state.favorites.add(key);
+      const name = favBtn.getAttribute('data-fav');
+      const isOn = state.favorites.has(name);
+      if (isOn){
+        // remove from Set and ordered array
+        state.favorites.delete(name);
+        state.favOrder = state.favOrder.filter(n => n !== name);
+      } else {
+        state.favorites.add(name);
+        if (!state.favOrder.includes(name)) state.favOrder.push(name);
+      }
+      // persist
       localStorage.setItem('vvip25:favs', JSON.stringify(Array.from(state.favorites)));
-      favBtn.classList.toggle('on', state.favorites.has(key));
+      localStorage.setItem('vvip25:favs_order', JSON.stringify(state.favOrder));
+      // live update glyph + style
+      const nowOn = state.favorites.has(name);
+      favBtn.classList.toggle('on', nowOn);
+      favBtn.textContent = nowOn ? '★' : '☆';
+      favBtn.setAttribute('aria-pressed', nowOn ? 'true' : 'false');
+      favBtn.title = nowOn ? 'Unfavourite' : 'Favourite';
+
+      // If currently in playlist view, re-filter to reflect removal/addition
+      if (state.view === 'favorites'){
+        applyFilterSort(false, true);
+      }
       e.preventDefault(); e.stopPropagation();
       return;
     }
+
+    const row = e.target.closest?.('.row');
     if(row && !e.target.closest('a')){
       const id = Number(row.getAttribute('data-id'));
       const idx = state.filtered.findIndex(t=>t.id===id);
@@ -911,16 +938,18 @@ Implements:
     }
   }, { passive: false });
 
-  // Sort change
+  // Sort change (ignored in favorites view)
   document.addEventListener('change', (e)=>{
     if (e.target && e.target.id === 'sort'){
-      applyFilterSort(false, /*keepIndex=*/true);
+      if (state.view !== 'favorites'){
+        applyFilterSort(false, /*keepIndex=*/true);
+      }
       keepMenuOpen(e);
     }
   }, { passive: true });
 
-  // Player controls — IMPORTANT: never call keepMenuOpen here (fixes (2))
-  $('#toggle')?.addEventListener('click', (e)=>{ if (state.i < 0 && state.filtered.length) select(0); state.playing ? pause() : play(); }, { passive: true });
+  // Player controls — never open menu here
+  $('#toggle')?.addEventListener('click', ()=>{ if (state.i < 0 && state.filtered.length) select(0); state.playing ? pause() : play(); }, { passive: true });
   els.prev?.addEventListener('click', ()=> jump(-1), { passive: true });
   els.next?.addEventListener('click', ()=> jump(1), { passive: true });
 
@@ -935,34 +964,9 @@ Implements:
   els.vol.addEventListener('input', ()=>{ els.audio.volume = parseFloat(els.vol.value); localStorage.setItem('vvip25:vol', els.vol.value); });
   els.audio.addEventListener('ended', ()=> jump(1));
 
-  // ---------- Favorites-aware search ----------
-  const oldMatchesSearch = matchesSearch;
-  function matchesSearch(t){
-    // favorites preset
-    if (state.searchQuery.trim() === '#favorites'){
-      return state.favorites.has(t.name);
-    }
-    // default behavior
-    const q = state.searchQuery.trim().toLowerCase();
-    if (!q) return true;
-    const tokens = q.split(/\s+/).filter(Boolean);
-    const hayName  = (t.name||'').toLowerCase();
-    const hayTitle = (t.title||'').toLowerCase();
-    const hayNotes = (t.notes||'').toLowerCase();
-    return tokens.every(tok=>{
-      if (tok.startsWith('#')){
-        return hayNotes.includes(tok);
-      }
-      return hayName.includes(tok) || hayTitle.includes(tok) || hayNotes.includes(tok);
-    });
-  }
-
-  // ---------------- Best-practice cache notes (for you) ----------------
-  // – We already add ?v= and {cache:'no-store'} on JSON fetches.
-  // – For the *document HTML*, set Cloudflare Cache Rules: do NOT cache text/html
-  //   (Cache Level: Bypass) and cache static assets only (*.css, *.js, *.png, *.mp3, *.wav, *.mov).
-  // – If you add/rename JSON, bump ASSET_VERSION above.
-
+  // ---------------- Cache notes (for you) ----------------
+  // – We add ?v= and {cache:'no-store'} on JSON fetches.
+  // – In Cloudflare, BYPASS caching for (path "/" OR extension "html"); leave media cached.
 </script>
 </body>
 </html>
