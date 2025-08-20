@@ -68,6 +68,57 @@
       .range input[type="range"]{width:120px}
       .row{grid-template-columns:1fr auto}
     }
+
+/* --- Phase 6 mobile polish --- */
+html, body { overflow-x: hidden; }                    /* no sideways creep */
+* { -webkit-tap-highlight-color: transparent; }       /* cleaner taps on iOS */
+
+.wrap {                                               
+  max-width: 920px; 
+  margin: 0 auto; 
+  padding: 12px clamp(12px, 4vw, 20px);               /* safe-ish edge padding */
+}
+
+.player { top: env(safe-area-inset-top, 0); }         /* iOS notch-safe */
+
+#site-title {
+  font-size: clamp(28px, 9vw, 56px);                  /* scales down on phones */
+}
+
+/* Make overlay sheet truly edge-safe on mobile */
+@media (max-width: 560px){
+  header { align-items: flex-start; }
+  details.menu > .sheet {
+    left: 12px; right: 12px; width: auto;             /* no overflow */
+  }
+
+  /* Buttons/selects behave in tight spaces */
+  .toolbar { width: 100%; }
+  .toolbar .btn, .toolbar .tog, .toolbar select {
+    flex: 1 1 38%;
+    min-width: 0;
+  }
+
+  .controls { flex-wrap: wrap; gap: 6px; }
+  .range input[type="range"] { width: 100px; }
+  button { padding: 8px 10px; }                       /* slightly tighter */
+}
+
+/* Optional: make rows feel “snapped” and consistent on touch */
+.row { touch-action: manipulation; }
+
+/* Day mode: subtle painterly blue streak under the sticky bar */
+body.light .player::after{
+  content:"";
+  position: absolute;
+  left: 0; right: 0; bottom: -2px; height: 12px;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(37,99,235,0) 0%, rgba(37,99,235,.55) 25%, rgba(37,99,235,.15) 60%, rgba(37,99,235,0) 100%),
+    radial-gradient(60% 60% at 12% 70%, rgba(37,99,235,.25) 0%, rgba(37,99,235,0) 70%);
+  filter: blur(4px) saturate(120%);
+}
+
   </style>
 </head>
 <body>
@@ -128,7 +179,7 @@
   <audio id="audio" preload="metadata"></audio>
 
 <script>
-/* ========= VVIP25 — Controls color = logo + silent M3U footer ========= */
+/* ========= VVIP25 — Phase 6 tidy + day-mode secondary-title logic ========= */
 
   const ASSET_VERSION = 14; // bump to beat caches on JSON fetches
 
@@ -149,7 +200,7 @@
     }catch(_){}
   })();
 
-  /* ---------- CSS patches (logo-colored icons + footer icon-only) ---------- */
+  /* ---------- CSS patches (logo-colored icons + footer icon-only + light vars) ---------- */
   (function injectCSS(){
     const css = `
     :root{--logo:#fdf6d0}
@@ -397,11 +448,33 @@
     renderList(); setupInfiniteScroll(); fillViewport();
   }
 
-  const displayName=t=>(state.showTitles && t.title) ? t.title : t.name;
+  /* ---------- Visibility rules for main/sub labels ---------- */
+  const fileLabel = (t) => stripExt(t.name); // “filename row” (secondary label)
+
+  function visibleMainLabel(t) {
+    const inLight = document.body.classList.contains('light');
+    // Day mode: if second title exists, show it exclusively.
+    if (inLight && t.title) return t.title;
+
+    // Otherwise, defer to the title toggle inversion:
+    // showTitles ON -> main = Titles JSON; OFF -> main = filename
+    return (state.showTitles && t.title) ? t.title : fileLabel(t);
+  }
+
+  function visibleSubLabel(t) {
+    const inLight = document.body.classList.contains('light');
+    if (inLight) return ''; // exclusive in day mode
+
+    // Opposite of main, per spec:
+    // showTitles ON -> sub=filename; OFF -> sub=title
+    return state.showTitles ? fileLabel(t) : (t.title || '');
+  }
+
+  const displayName = (t) => visibleMainLabel(t); // backwards-compat shim
 
   /* ---------- Renderers ---------- */
   function imgHTML(src){ const esc=s=>s.replace(/"/g,'&quot;');
-    return `<img src="${esc(src)}" alt="" loading="lazy" style="width:56px;height:56px;border-radius:8px;object-fit:cover;" onerror="if(this.dataset.fbk!=='1'){this.dataset.fbk='1';this.onerror=null;this.src='${DEFAULT_THUMB}';}">`;
+    return `<img src="${esc(src)}" alt="" loading="lazy" style="width:56px;height:56px;object-fit:cover;border-radius:8px" onerror="if(this.dataset.fbk!=='1'){this.dataset.fbk='1';this.onerror=null;this.src='${DEFAULT_THUMB}';}">`;
   }
   function favHTML(t){ const on=state.favorites.has(t.name)?'on':''; const title=state.favorites.has(t.name)?'Remove from favorites':'Add to favorites';
     return `<button class="star ${on}" data-fav="${escapeHTML(t.name)}" title="${title}">★</button>`;
@@ -413,17 +486,25 @@
     if (state.showMovButtons && !t.video) parts.push('<span class="pill muted">MOV</span>');
     return `<div class="badge">${parts.join('\n')}</div>`;
   }
+
+  function sublineText(t){
+    const parts = [
+      visibleSubLabel(t),
+      bpmLabel(t),
+      t.length ? fmtDur(t.length) : '',
+      t.labelDate || ''
+    ].filter(Boolean);
+    return parts.join(' · ');
+  }
+
   function rowHTML(t,active){
-    const bpmTxt=bpmLabel(t), thumbURL=getResolvedThumb(t);
-    // do NOT include t.details (hidden tags) in the subline
-    const subline=[ (state.showTitles? '' : (t.title||'')), bpmTxt, t.length?fmtDur(t.length):'', t.labelDate||'' ]
-      .filter(Boolean).join(' · ');
+    const thumbURL=getResolvedThumb(t);
     const hasTitleClass=(t.title && !isNameless(t)) ? 'has-title':'';
     return `<div class="row ${hasTitleClass}" role="listitem" data-id="${t.id}">
       <div class="cover" aria-hidden="true">${imgHTML(thumbURL)}</div>
       <div>
-        <div class="title">${active?'▶︎ ':''}${escapeHTML(displayName(t))}</div>
-        <div class="sub">${escapeHTML(subline)}</div>
+        <div class="title">${active?'▶︎ ':''}${escapeHTML(visibleMainLabel(t))}</div>
+        <div class="sub">${escapeHTML(sublineText(t))}</div>
       </div>
       ${badgeHTML(t)}
     </div>`;
@@ -447,14 +528,14 @@
     const rows=document.querySelectorAll('.row');
     rows.forEach(row=>{
       const id=Number(row.getAttribute('data-id')); const t=state.tracks.find(x=>x.id===id); if(!t) return;
-      const titleEl=row.querySelector('.title'); const subEl=row.querySelector('.sub');
-      if (titleEl){ const isActive=(state.i>=0 && state.filtered[state.i]?.id===id); titleEl.innerHTML=(isActive?'▶︎ ':'') + escapeHTML(displayName(t)); }
-      if (subEl){
-        const bpmTxt=bpmLabel(t);
-        const subline=[ (state.showTitles? '' : (t.title||'')), bpmTxt, t.length?fmtDur(t.length):'', t.labelDate||'' ]
-          .filter(Boolean).join(' · ');
-        subEl.textContent=subline;
-      }
+      const isActive=(state.i>=0 && state.filtered[state.i]?.id===id);
+
+      const titleEl=row.querySelector('.title');
+      if (titleEl){ titleEl.innerHTML=(isActive?'▶︎ ':'') + escapeHTML(visibleMainLabel(t)); }
+
+      const subEl=row.querySelector('.sub');
+      if (subEl){ subEl.textContent = sublineText(t); }
+
       row.classList.toggle('has-title', (t.title && !isNameless(t)));
     });
     if (state.i>=0) updateNowbar();
@@ -499,16 +580,14 @@
     const rendered=els.list.querySelectorAll('.row');
     rendered.forEach(row=>{
       const id=Number(row.getAttribute('data-id')); const isActive=(state.filtered[state.i]?.id===id);
-      const titleEl=row.querySelector('.title'); if(titleEl){ const target=state.tracks.find(x=>x.id===id)||t; titleEl.innerHTML=(isActive?'▶︎ ':'') + escapeHTML(displayName(target)); }
+      const titleEl=row.querySelector('.title'); if(titleEl){ const target=state.tracks.find(x=>x.id===id)||t; titleEl.innerHTML=(isActive?'▶︎ ':'') + escapeHTML(visibleMainLabel(target)); }
       const favBtn=row.querySelector('.star[data-fav]'); if(favBtn){ const key=favBtn.getAttribute('data-fav'); favBtn.classList.toggle('on', state.favorites.has(key)); }
     });
   }
   function updateNowbar(){
     const t=state.filtered[state.i]; if(!t) return;
-    els.nowTitle.textContent=displayName(t);
-    const bpmTxt=bpmLabel(t);
-    els.nowSub.textContent=[ (state.showTitles? '' : (t.title||'')), bpmTxt, t.length?fmtDur(t.length):'', t.labelDate||'' ]
-      .filter(Boolean).join(' · ');
+    els.nowTitle.textContent=visibleMainLabel(t);
+    els.nowSub.textContent=sublineText(t);
     const url=getResolvedThumb(t);
     els.cover.innerHTML=`<img src="${url.replace(/"/g,'&quot;')}" alt="" style="width:56px;height:56px;object-fit:cover;border-radius:8px" onerror="if(this.dataset.fbk!=='1'){this.dataset.fbk='1';this.onerror=null;this.src='${DEFAULT_THUMB}';}">`;
   }
@@ -518,7 +597,7 @@
       state.playing=true; updateToggle(); setControlIcons();
       if('mediaSession' in navigator){
         const t=state.filtered[state.i];
-        navigator.mediaSession.metadata=new MediaMetadata({ title:displayName(t) });
+        navigator.mediaSession.metadata=new MediaMetadata({ title:visibleMainLabel(t) });
         navigator.mediaSession.setActionHandler('previoustrack', ()=>jump(-1));
         navigator.mediaSession.setActionHandler('nexttrack', ()=>jump(1));
         navigator.mediaSession.setActionHandler('seekbackward', ()=> els.audio.currentTime=Math.max(0,els.audio.currentTime-10));
@@ -607,14 +686,7 @@
     btnTitles.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); state.showTitles=!state.showTitles; syncToggles(); refreshTitles(); keepMenuOpen(e); });
     btnWav.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); state.showWavButtons=!state.showWavButtons; syncToggles(); rerenderVisibleRowsBadges(); if(state.i>=0) updateNowbar(); keepMenuOpen(e); });
     btnMov.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); state.showMovButtons=!state.showMovButtons; syncToggles(); rerenderVisibleRowsBadges(); if(state.i>=0) updateNowbar(); keepMenuOpen(e); });
-    btnLight.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); document.body.classList.toggle('light'); syncToggles(); keepMenuOpen(e); });
-
-    btnUtils.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation();
-      util.style.display=(util.style.display==='none'||!util.style.display)?'block':'none'; keepMenuOpen(e);
-    });
-    btnLinks.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation();
-      links.style.display=(links.style.display==='none'||!links.style.display)?'block':'none'; keepMenuOpen(e);
-    });
+    btnLight.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); document.body.classList.toggle('light'); syncToggles(); refreshTitles(); keepMenuOpen(e); });
 
     tb.addEventListener('click', keepMenuOpen);
   }
