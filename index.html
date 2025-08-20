@@ -128,65 +128,57 @@
   <audio id="audio" preload="metadata"></audio>
 
 <script>
-/* ========= VVIP25 — Controls color = logo + silent M3U footer ========= */
+/* ========= VVIP25 — Phase 6: Titles locked ON, clean menu, Links+IJPAUC, Safari-friendly JSON cache ========= */
 
-  const ASSET_VERSION = 14; // bump to beat caches on JSON fetches
+  const ASSET_VERSION = 12; // bump when you change JSON or this script
 
   /* ---------- Config ---------- */
   const BASE_MP3   = 'https://media.vvipmedia.net/ACCESS/';
-  const BASE_WAV   = 'https://media.vvipmedia.net/WAV/';
+  const BASE_WAV   = 'https://media.vvipmedia.net/WAV/';        // (kept for future; not shown in UI)
   const BASE_THUMB = 'https://media.vvipmedia.net/ACCESS/';
-  const BASE_VIDEO = 'https://media.vvipmedia.net/VIDEOS/';
+  const BASE_VIDEO = 'https://media.vvipmedia.net/VIDEOS/';      // (kept for future; not shown in UI)
   const DEFAULT_THUMB = BASE_THUMB + 'default_thumb.jpg';
 
-  /* ---------- Small cache hint ---------- */
+  /* ---------- Small cache hints for Safari ---------- */
   (function injectNoStoreMeta(){
     try{
-      const m=document.createElement('meta');
-      m.httpEquiv='Cache-Control';
-      m.content='no-store, max-age=0, must-revalidate';
-      document.head.appendChild(m);
+      const m1=document.createElement('meta');
+      m1.httpEquiv='Cache-Control';
+      m1.content='no-store, max-age=0, must-revalidate';
+      const m2=document.createElement('meta');
+      m2.httpEquiv='Pragma';
+      m2.content='no-cache';
+      const m3=document.createElement('meta');
+      m3.httpEquiv='Expires';
+      m3.content='0';
+      document.head.appendChild(m1); document.head.appendChild(m2); document.head.appendChild(m3);
     }catch(_){}
   })();
 
-  /* ---------- CSS patches (logo-colored icons + footer icon-only) ---------- */
+  /* ---------- CSS micro-patches (layout + panels) ---------- */
   (function injectCSS(){
     const css = `
-    :root{--logo:#fdf6d0}
+    .controls{flex-wrap:wrap;gap:10px}
+    .controls .range{min-width:140px;flex:1}
+    .controls .range input[type="range"]{width:100%}
+    .controls button{min-width:44px}
 
-    .btn,.tog{
+    .btn{
       display:inline-flex;align-items:center;justify-content:center;
       height:36px;min-width:36px;padding:0 12px;border-radius:10px;border:1px solid var(--border);
       background:var(--card);color:var(--fg);text-decoration:none;line-height:1;cursor:pointer
     }
-    .tog{opacity:.75;transition:opacity .15s, box-shadow .15s}
-    .tog.on{opacity:1;box-shadow:0 0 0 2px var(--accent) inset}
+    .panel{display:none;margin-top:8px;border:1px solid var(--border);border-radius:10px;padding:8px}
+    .row-links{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    .btn.icon-only{padding:0;width:36px}
 
-    .util-panel,.links-panel{display:none;margin-top:8px;border:1px solid var(--border);border-radius:10px;padding:8px}
-    .util-row,.links-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    /* Active toggle look for Playlist button */
+    .btn.is-on{box-shadow:0 0 0 2px var(--accent) inset}
 
-    .search-wrap{display:none;gap:8px;align-items:center;margin-top:8px}
-    .search-wrap input{flex:1;min-width:140px;background:var(--card);color:var(--fg);
-      border:1px solid var(--border);border-radius:10px;padding:8px 10px}
+    /* Subline always shows filename now */
+    .row .sub{opacity:.8}
 
-    .pill{border:1px solid var(--border);border-radius:999px;padding:4px 10px;font-size:12px;text-decoration:none;color:var(--fg)}
-    .star{cursor:pointer}
-    .star.on{filter:drop-shadow(0 0 2px var(--accent)) brightness(1.2)}
-
-    /* Player control icons inherit the logo color */
-    .controls button svg{width:18px;height:18px;fill:var(--logo)}
-    /* keep button look; just recolor the icon */
-    .controls button{display:inline-flex;align-items:center;justify-content:center}
-
-    /* Footer download bar — icon only */
-    #dlbar{display:flex;justify-content:flex-end;margin:12px 0 40px}
-    #dlbar .btn{min-width:36px;padding:0 10px}
-    #dlbar .btn svg{width:18px;height:18px;fill:var(--fg)}
-
-    /* Light mode minimal support */
-    body.light{--bg:#f7f7f8;--fg:#111;--muted:#4b5563;--card:#ffffff;--border:#d1d5db;--accent:#2563eb}
-    body.light .player{background:linear-gradient(180deg,rgba(255,255,255,.96),rgba(255,255,255,.92))}
-    body.light #site-title{-webkit-text-stroke:2px #111}
+    /* Minimal tooltip-ish titles (native title attr used) */
     `;
     const style=document.createElement('style');
     style.textContent=css;
@@ -201,9 +193,14 @@
   const rawFile=s=>(String(s).split('/').pop()||'');
   const stripExt=s=>String(s).replace(/\.[a-z0-9]+$/i,'');
   const softNorm=s=>stripExt(s).toLowerCase().replace(/[ _]+/g,'-').replace(/-+/g,'-');
-  function deriveTitleFromFilename(name){ const b=stripExt(rawFile(name)).replace(/^[\d._-]+/,'').replace(/[_-]+/g,' ').trim(); return b || stripExt(rawFile(name)); }
+
+  function deriveTitleFromFilename(name){ // used to detect “nameless”
+    const b=stripExt(rawFile(name)).replace(/^[\d._-]+/,'').replace(/[_-]+/g,' ').trim();
+    return b || stripExt(rawFile(name));
+  }
   const primaryOnly = t => String(t||'').split('//')[0].trim();
 
+  // Date extraction from filename
   const DATE_RX_YYYY=/^\s*(\d{4})[.\-_](\d{2})[.\-_](\d{2})(?=\D|$)/;
   const DATE_RX_YY=/^\s*(\d{2})[.\-_](\d{2})[.\-_](\d{2})(?=\D|$)/;
   const WITHIN_DAY_RX=/^\s*(?:\d{4}|\d{2})[.\-_]\d{2}[.\-_]\d{2}(?:[.\-_](\d+))?/;
@@ -229,11 +226,11 @@
 
   /* ---------- Elements & State ---------- */
   const els = {
-    audio:$('#audio'), list:$('#list'), sort:$('#sort'),
+    audio:$('#audio'), list:$('#list'),
     toggle:$('#toggle'), prev:$('#prev'), next:$('#next'),
     seek:$('#seek'), vol:$('#vol'),
-    nowTitle:$('#now-title'), nowSub:$('#now-sub'),
-    tcur:$('#tcur'), tdur:$('#tdur'), cover:$('#cover'),
+    nowTitle:$('#now-title'), nowSub:$('#now-sub'), cover:$('#cover'),
+    tcur:$('#tcur'), tdur:$('#tdur'),
     menu:$('#menu'), toolbar:$('#toolbar')
   };
 
@@ -241,11 +238,14 @@
     tracks:[], filtered:[], i:-1, playing:false,
     pageSize:60, renderCount:0,
     titlesLookup:new Map(), thumbBases:new Set(), resolvedThumb:new Map(),
-    showTitles:false, showWavButtons:false, showMovButtons:false,
+    searchQuery:'',
     favorites:new Set(JSON.parse(localStorage.getItem('vvip25:favs')||'[]')),
     favOrder: JSON.parse(localStorage.getItem('vvip25:favOrder')||'[]'),
-    searchQuery:''
+    playlistMode:false // false=All, true=Favorites view
   };
+
+  // Titles mode is permanently ON
+  const TITLES_ON = true;
 
   // Persisted volume
   els.vol.value = localStorage.getItem('vvip25:vol') ?? '0.9';
@@ -255,8 +255,6 @@
   init();
   async function init(){
     buildMenuUI();
-    buildDownloadFooter();  // icon-only, bottom of playlist
-    setControlIcons();      // bespoke SVG icons (logo-colored)
 
     const mres = await fetch(`./manifest.json?v=${ASSET_VERSION}`, { cache:'no-store' });
     if(!mres.ok){ els.list.innerHTML = `<div class="row"><div></div><div>manifest.json missing</div></div>`; return; }
@@ -272,13 +270,10 @@
       const mov = t.has_mov ? (BASE_VIDEO + encodeURIComponent(base + '.mov')) : null;
       const thumbCandidate = BASE_THUMB + encodeURIComponent(baseLower + 'thumb.jpg');
 
-      // SEARCH TAGS: put #hashtags in "details" in manifest; indexed but NOT shown.
+      // Search pulls from: filename, title, and details only (notes are NOT shown in UI)
       const details = t.details || '';
 
-      return { id:idx, name, base, baseLower, title: t.title?String(t.title):'',
-        bpm:t.bpm??null, bpm_min:t.bpm_min??null, bpm_max:t.bpm_max??null,
-        details, length:t.length||0,
-        date:dateObj||null, labelDate, src:mp3, wav, video:mov, thumbCandidate };
+      return { id:idx, name, base, baseLower, title: t.title?String(t.title):'', bpm:t.bpm??null, bpm_min:t.bpm_min??null, bpm_max:t.bpm_max??null, details, length:t.length||0, date:dateObj||null, labelDate, src:mp3, wav, video:mov, thumbCandidate };
     });
 
     applyFilterSort(true);
@@ -314,13 +309,14 @@
       if(!tres.ok) return;
       const json=await tres.json();
       const lookup=buildTitleLookup(json);
+      state.titlesLookup=lookup;
       let changed=false;
       for(const t of state.tracks){
         const fromTitles=bestTitleForTrack(t,lookup);
         const finalTitle=fromTitles || t.title || deriveTitleFromFilename(t.name);
         if (finalTitle!==t.title){ t.title=finalTitle; changed=true; }
       }
-      if (changed){ applyFilterSort(false,true); refreshTitles(); }
+      if (changed){ applyFilterSort(false,true); refreshTitlesOnly(); }
     }catch(_){}
   }
 
@@ -346,39 +342,37 @@
   }
   const getResolvedThumb=t=>state.resolvedThumb.get(t.id)||DEFAULT_THUMB;
 
-  /* ---------- Filtering / sorting ---------- */
-  function isNameless(t){ const derived=deriveTitleFromFilename(t.name); return !t.title || t.title===derived; }
+  /* ---------- Filtering / sorting (Titles ON permanently) ---------- */
+  function isNameless(t){
+    // “Nameless” = title missing OR equals simple filename-derived label
+    const derived=deriveTitleFromFilename(t.name);
+    return !t.title || t.title===derived;
+  }
+  function matchesSearchTokens(t,tokens){
+    if(!tokens.length) return true;
+    const hayName=(t.name||'').toLowerCase();
+    const hayTitle=(t.title||'').toLowerCase();
+    const hayDetails=(t.details||'').toLowerCase();
+    return tokens.every(tok=>{
+      if (tok.startsWith('#')) return hayDetails.includes(tok); // hashtags live in details
+      return hayName.includes(tok) || hayTitle.includes(tok) || hayDetails.includes(tok);
+    });
+  }
 
   function applyFilterSort(firstPaint=false, keepIndex=false){
     const q=state.searchQuery.trim().toLowerCase();
     const tokens=q? q.split(/\s+/).filter(Boolean):[];
     let out=[...state.tracks];
 
-    // favorites preset
-    let favoritesOnly=false;
-    if (tokens.includes('#favorites')){ favoritesOnly=true; out=out.filter(t=>state.favorites.has(t.name)); }
-
-    // when titles ON, hide “nameless”
-    if (state.showTitles){ out=out.filter(t=>!isNameless(t)); }
-
-    // search on name/title/details (details includes #tags). We DO NOT show details in UI.
-    out = out.filter(t=>{
-      const hayName  =(t.name||'').toLowerCase();
-      const hayTitle =(t.title||'').toLowerCase();
-      const hayTags  =(t.details||'').toLowerCase(); // hidden field
-      return tokens.every(tok=>{
-        if (tok==='#favorites') return true;
-        if (tok.startsWith('#')) return hayTags.includes(tok);
-        return hayName.includes(tok) || hayTitle.includes(tok) || hayTags.includes(tok);
-      });
-    });
-
-    // sorting
-    if (favoritesOnly){
+    // Playlist (favorites) view toggle
+    if (state.playlistMode){
+      out = out.filter(t=>state.favorites.has(t.name));
+      // Preserve explicit favorite order
       const orderIndex=new Map(state.favOrder.map((name,idx)=>[name,idx]));
       out.sort((a,b)=>(orderIndex.get(a.name)??1e9)-(orderIndex.get(b.name)??1e9));
     } else {
-      switch(els.sort?.value||'date_desc'){
+      // Normal sorts
+      switch($('#sort')?.value||'date_desc'){
         case 'date_desc': out.sort((a,b)=>{ const da=a.date?.getTime()||0, db=b.date?.getTime()||0;
           if (db!==da) return db-da; return withinDayIndexFromName(b.name)-withinDayIndexFromName(a.name) || b.name.localeCompare(a.name); }); break;
         case 'date_asc':  out.sort((a,b)=>{ const da=a.date?.getTime()||0, db=b.date?.getTime()||0;
@@ -390,6 +384,12 @@
       }
     }
 
+    // Always Titles ON behavior: hide nameless/date-only entries
+    out = out.filter(t=>!isNameless(t));
+
+    // Apply search tokens last
+    out = out.filter(t=>matchesSearchTokens(t,tokens));
+
     state.filtered=out;
     const initialChunk=firstPaint ? Math.max(60,state.pageSize) : state.pageSize;
     state.renderCount=Math.min(state.filtered.length, initialChunk);
@@ -397,35 +397,33 @@
     renderList(); setupInfiniteScroll(); fillViewport();
   }
 
-  const displayName=t=>(state.showTitles && t.title) ? t.title : t.name;
+  const displayName=t=> (t.title || t.name); // title preferred
 
   /* ---------- Renderers ---------- */
   function imgHTML(src){ const esc=s=>s.replace(/"/g,'&quot;');
     return `<img src="${esc(src)}" alt="" loading="lazy" style="width:56px;height:56px;border-radius:8px;object-fit:cover;" onerror="if(this.dataset.fbk!=='1'){this.dataset.fbk='1';this.onerror=null;this.src='${DEFAULT_THUMB}';}">`;
   }
-  function favHTML(t){ const on=state.favorites.has(t.name)?'on':''; const title=state.favorites.has(t.name)?'Remove from favorites':'Add to favorites';
-    return `<button class="star ${on}" data-fav="${escapeHTML(t.name)}" title="${title}">★</button>`;
-  }
-  function badgeHTML(t){
-    const parts=[favHTML(t), `<a class="pill" href="${t.src}" download title="Download MP3">MP3</a>`];
-    if (state.showWavButtons) parts.push(`<a class="pill" href="${BASE_WAV+encodeURIComponent(t.base+'.wav')}" download title="Download Lossless">WAV</a>`);
-    if (state.showMovButtons && t.video) parts.push(`<a class="pill" href="${t.video}" target="_blank" rel="noopener" title="Open Video">MOV</a>`);
-    if (state.showMovButtons && !t.video) parts.push('<span class="pill muted">MOV</span>');
-    return `<div class="badge">${parts.join('\n')}</div>`;
+  function favHTML(t){
+    const on=state.favorites.has(t.name)?'is-on':'';
+    const title=state.favorites.has(t.name)?'Remove from favorites':'Add to favorites';
+    return `<button class="btn icon-only ${on}" data-fav="${escapeHTML(t.name)}" title="${title}">★</button>`;
   }
   function rowHTML(t,active){
     const bpmTxt=bpmLabel(t), thumbURL=getResolvedThumb(t);
-    // do NOT include t.details (hidden tags) in the subline
-    const subline=[ (state.showTitles? '' : (t.title||'')), bpmTxt, t.length?fmtDur(t.length):'', t.labelDate||'' ]
-      .filter(Boolean).join(' · ');
-    const hasTitleClass=(t.title && !isNameless(t)) ? 'has-title':'';
-    return `<div class="row ${hasTitleClass}" role="listitem" data-id="${t.id}">
+    // Subline now ALWAYS shows the *filename* (plus a few small facts if present)
+    const subBits=[ t.name ];
+    if (bpmTxt) subBits.push(bpmTxt);
+    if (t.length) subBits.push(fmtDur(t.length));
+    if (t.details && /#[^\s]/.test(t.details)===false) subBits.push(t.details); // do not echo hashtags
+    const subline=subBits.join(' · ');
+
+    return `<div class="row" role="listitem" data-id="${t.id}">
       <div class="cover" aria-hidden="true">${imgHTML(thumbURL)}</div>
       <div>
         <div class="title">${active?'▶︎ ':''}${escapeHTML(displayName(t))}</div>
         <div class="sub">${escapeHTML(subline)}</div>
       </div>
-      ${badgeHTML(t)}
+      <div class="badge" style="display:flex;gap:10px;align-items:center">${favHTML(t)}</div>
     </div>`;
   }
   function renderList(){
@@ -438,27 +436,21 @@
       const img=row.querySelector('.cover img'); if(img) img.src=getResolvedThumb(t);
     });
   }
-  function rerenderVisibleRowsBadges(){ const rows=document.querySelectorAll('.row');
-    rows.forEach(row=>{ const id=Number(row.getAttribute('data-id')); const t=state.tracks.find(x=>x.id===id); if(!t) return;
-      const badge=row.querySelector('.badge'); if(badge) badge.outerHTML=badgeHTML(t);
-    });
-  }
-  function refreshTitles(){
+  function refreshTitlesOnly(){
     const rows=document.querySelectorAll('.row');
     rows.forEach(row=>{
       const id=Number(row.getAttribute('data-id')); const t=state.tracks.find(x=>x.id===id); if(!t) return;
-      const titleEl=row.querySelector('.title'); const subEl=row.querySelector('.sub');
+      const titleEl=row.querySelector('.title');
+      const subEl=row.querySelector('.sub');
       if (titleEl){ const isActive=(state.i>=0 && state.filtered[state.i]?.id===id); titleEl.innerHTML=(isActive?'▶︎ ':'') + escapeHTML(displayName(t)); }
       if (subEl){
-        const bpmTxt=bpmLabel(t);
-        const subline=[ (state.showTitles? '' : (t.title||'')), bpmTxt, t.length?fmtDur(t.length):'', t.labelDate||'' ]
-          .filter(Boolean).join(' · ');
-        subEl.textContent=subline;
+        const subBits=[ t.name ];
+        const bpmTxt=bpmLabel(t); if (bpmTxt) subBits.push(bpmTxt);
+        if (t.length) subBits.push(fmtDur(t.length));
+        if (t.details && /#[^\s]/.test(t.details)===false) subBits.push(t.details);
+        subEl.textContent=subBits.join(' · ');
       }
-      row.classList.toggle('has-title', (t.title && !isNameless(t)));
     });
-    if (state.i>=0) updateNowbar();
-    applyFilterSort(false,true);
   }
 
   /* ---------- Infinite scroll ---------- */
@@ -495,176 +487,100 @@
   function select(indexInFiltered){
     state.i=indexInFiltered;
     const t=state.filtered[indexInFiltered]; if(!t) return;
-    els.audio.src=t.src; updateNowbar(); state.playing=false; updateToggle(); setControlIcons();
+    els.audio.src=t.src;
+    updateNowbar();
+    state.playing=false; updateToggle();
+    // update play triangles + favorite button lights
     const rendered=els.list.querySelectorAll('.row');
     rendered.forEach(row=>{
       const id=Number(row.getAttribute('data-id')); const isActive=(state.filtered[state.i]?.id===id);
       const titleEl=row.querySelector('.title'); if(titleEl){ const target=state.tracks.find(x=>x.id===id)||t; titleEl.innerHTML=(isActive?'▶︎ ':'') + escapeHTML(displayName(target)); }
-      const favBtn=row.querySelector('.star[data-fav]'); if(favBtn){ const key=favBtn.getAttribute('data-fav'); favBtn.classList.toggle('on', state.favorites.has(key)); }
+      const favBtn=row.querySelector('.btn[data-fav]'); if(favBtn){ const key=favBtn.getAttribute('data-fav'); favBtn.classList.toggle('is-on', state.favorites.has(key)); }
     });
   }
   function updateNowbar(){
     const t=state.filtered[state.i]; if(!t) return;
     els.nowTitle.textContent=displayName(t);
-    const bpmTxt=bpmLabel(t);
-    els.nowSub.textContent=[ (state.showTitles? '' : (t.title||'')), bpmTxt, t.length?fmtDur(t.length):'', t.labelDate||'' ]
-      .filter(Boolean).join(' · ');
+    const subBits=[ t.name ];
+    const bpmTxt=bpmLabel(t); if (bpmTxt) subBits.push(bpmTxt);
+    if (t.length) subBits.push(fmtDur(t.length));
+    if (t.details && /#[^\s]/.test(t.details)===false) subBits.push(t.details);
+    els.nowSub.textContent=subBits.join(' · ');
     const url=getResolvedThumb(t);
     els.cover.innerHTML=`<img src="${url.replace(/"/g,'&quot;')}" alt="" style="width:56px;height:56px;object-fit:cover;border-radius:8px" onerror="if(this.dataset.fbk!=='1'){this.dataset.fbk='1';this.onerror=null;this.src='${DEFAULT_THUMB}';}">`;
   }
-  async function play(){
-    try{
-      await els.audio.play();
-      state.playing=true; updateToggle(); setControlIcons();
-      if('mediaSession' in navigator){
-        const t=state.filtered[state.i];
-        navigator.mediaSession.metadata=new MediaMetadata({ title:displayName(t) });
-        navigator.mediaSession.setActionHandler('previoustrack', ()=>jump(-1));
-        navigator.mediaSession.setActionHandler('nexttrack', ()=>jump(1));
-        navigator.mediaSession.setActionHandler('seekbackward', ()=> els.audio.currentTime=Math.max(0,els.audio.currentTime-10));
-        navigator.mediaSession.setActionHandler('seekforward',  ()=> els.audio.currentTime=Math.min(els.audio.duration||0,els.audio.currentTime+10));
-      }
-    }catch(_){}
-  }
-  function pause(){ els.audio.pause(); state.playing=false; updateToggle(); setControlIcons(); }
-  function updateToggle(){ const btn=$('#toggle'); if(btn) btn.setAttribute('data-state', state.playing ? 'pause' : 'play'); }
+  async function play(){ try{ await els.audio.play(); state.playing=true; updateToggle(); }catch(_){ } }
+  function pause(){ els.audio.pause(); state.playing=false; updateToggle(); }
+  function updateToggle(){ const btn=$('#toggle'); if(btn) btn.textContent = state.playing ? '⏸️' : '▶️'; }
   function jump(dir){ if(!state.filtered.length) return; let i=state.i+dir; if(i<0) i=state.filtered.length-1; if(i>=state.filtered.length) i=0; select(i); play(); }
 
-  /* ---------- Bespoke SVG icons (logo color via CSS) ---------- */
-  function setControlIcons(){
-    const svgPrev = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h2v14H6zM20 6v12L9 12z"/></svg>';
-    const svgNext = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 5h2v14h-2zM4 6v12l11-6z"/></svg>';
-    const svgPlay = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
-    const svgPause= '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg>';
-
-    if (els.prev)   els.prev.innerHTML = svgPrev;
-    if (els.next)   els.next.innerHTML = svgNext;
-    if (els.toggle) els.toggle.innerHTML = (state.playing ? svgPause : svgPlay);
-  }
-
-  /* ---------- Menu / UI ---------- */
+  /* ---------- Menu / UI (simple) ---------- */
   function buildMenuUI(){
     const tb=els.toolbar; if(!tb) return; tb.innerHTML='';
     const row=document.createElement('div'); row.style.display='flex'; row.style.gap='8px'; row.style.flexWrap='wrap'; row.style.alignItems='center'; tb.appendChild(row);
 
-    // 📜 About
+    // 📜 About (simple modal)
     const btnAbout=document.createElement('button'); btnAbout.className='btn'; btnAbout.id='btnAbout'; btnAbout.title='About'; btnAbout.textContent='📜'; row.appendChild(btnAbout);
     btnAbout.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); alert("VVIP25 — Vancouver Music and Videography Project 2025"); keepMenuOpen(e); });
 
-    // 🎵 Playlist (favorites view)
-    const btnFavList=document.createElement('button'); btnFavList.className='btn'; btnFavList.id='btnFavList'; btnFavList.title='My favorites playlist'; btnFavList.textContent='🎵'; row.appendChild(btnFavList);
-    btnFavList.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); state.searchQuery='#favorites'; applyFilterSort(false); keepMenuOpen(e); });
+    // 🎵 Playlist toggle (favorites <-> all)
+    const btnFavList=document.createElement('button'); btnFavList.className='btn'; btnFavList.id='btnFavList'; btnFavList.title='Favorites playlist'; btnFavList.textContent='🎵'; row.appendChild(btnFavList);
+    const syncPlaylistBtn=()=> btnFavList.classList.toggle('is-on', state.playlistMode);
+    btnFavList.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); state.playlistMode = !state.playlistMode; syncPlaylistBtn(); applyFilterSort(false); keepMenuOpen(e); });
+    syncPlaylistBtn();
 
-    // 🛠️ Utilities (titles/wav/mov/light)
-    const btnUtils=document.createElement('button'); btnUtils.className='btn'; btnUtils.id='btnUtils'; btnUtils.title='Utilities'; btnUtils.textContent='🛠️'; row.appendChild(btnUtils);
-    const util=document.createElement('div'); util.className='util-panel';
-    util.innerHTML = `<div class="util-row">
-      <button class="tog" id="togTitles" title="Song Titles (on/off)">📝</button>
-      <button class="tog" id="togWav" title="Show WAV buttons">🎚️</button>
-      <button class="tog" id="togMov" title="Show MOV buttons">🎬</button>
-      <button class="tog" id="togLight" title="Light mode">🌞</button>
-    </div>`;
-    tb.appendChild(util);
-
-    // 🔗 Links submenu
+    // 🔗 Links submenu panel (icon-only buttons)
     const btnLinks=document.createElement('button'); btnLinks.className='btn'; btnLinks.id='btnLinks'; btnLinks.title='Links'; btnLinks.textContent='🔗'; row.appendChild(btnLinks);
-    const links=document.createElement('div'); links.className='links-panel';
-    links.innerHTML = `<div class="links-row">
-      <a class="btn" href="https://www.youtube.com/@VVVVIIPP25" target="_blank" rel="noopener" title="YouTube">📺</a>
-      <a class="btn" href="https://virtualvip.bandcamp.com/" target="_blank" rel="noopener" title="Bandcamp">🎧</a>
-      <a class="btn" href="https://substack.com/home/post/p-170664918?source=queue" target="_blank" rel="noopener" title="Newsletter">📰</a>
-      <a class="btn" href="https://www.instagram.com/virtualvip24/" target="_blank" rel="noopener" title="Instagram">📸</a>
-    </div>`;
+    const links=document.createElement('div'); links.className='panel'; links.innerHTML = `
+      <div class="row-links">
+        <a class="btn icon-only" href="https://www.youtube.com/@VVVVIIPP25" target="_blank" rel="noopener" title="YouTube">📺</a>
+        <a class="btn icon-only" href="https://virtualvip.bandcamp.com/" target="_blank" rel="noopener" title="Bandcamp">🎧</a>
+        <a class="btn icon-only" href="https://www.instagram.com/virtualvip24/" target="_blank" rel="noopener" title="Instagram">📷</a>
+        <a class="btn icon-only" href="https://substack.com/home/post/p-170664918?source=queue" target="_blank" rel="noopener" title="Newsletter">📰</a>
+        <a class="btn icon-only" href="https://ijpauc.net" target="_blank" rel="noopener" title="IJPAUC">
+          <img src="/IJPAUC.ico" alt="IJPAUC" style="width:18px;height:18px;border-radius:4px">
+        </a>
+      </div>`;
     tb.appendChild(links);
+    btnLinks.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); links.style.display=(links.style.display==='none'||!links.style.display)?'block':'none'; keepMenuOpen(e); });
 
-    // 🛍️ Shop → /shoppe
-    const aShop=document.createElement('a'); aShop.className='btn'; aShop.id='btnShop'; aShop.title='Shoppe'; aShop.textContent='🛍️'; aShop.href='/shoppe'; aShop.target='_self'; row.appendChild(aShop);
+    // 🛍️ Shoppe (ensure /shoppe/index.html exists)
+    const aShop=document.createElement('a'); aShop.className='btn'; aShop.id='btnShop'; aShop.title='Shoppe'; aShop.textContent='🛍️';
+    aShop.href='/shoppe/'; aShop.target='_self'; aShop.rel=''; row.appendChild(aShop);
 
     // Sort select
     const sortSel=document.createElement('select'); sortSel.id='sort'; sortSel.title='Sort';
     sortSel.innerHTML=`<option value="date_desc">Newest</option><option value="date_asc">Oldest</option><option value="bpm_desc">BPM ↓</option><option value="bpm_asc">BPM ↑</option><option value="len_desc">Longest</option><option value="len_asc">Shortest</option>`;
-    row.appendChild(sortSel); els.sort=sortSel;
+    row.appendChild(sortSel);
 
     // 🔍 Search
     const btnSearch=document.createElement('button'); btnSearch.className='btn'; btnSearch.id='btnSearch'; btnSearch.title='Search'; btnSearch.textContent='🔍'; row.appendChild(btnSearch);
-    const searchWrap=document.createElement('div'); searchWrap.className='search-wrap'; searchWrap.innerHTML=`<input id="searchInput" placeholder="Search… use #tags (e.g. #mbv)" inputmode="search" />`; tb.appendChild(searchWrap);
+    const searchWrap=document.createElement('div'); searchWrap.className='panel'; searchWrap.innerHTML=`<div class="row-links" style="width:100%"><input id="searchInput" placeholder="Search… use #tags in details (e.g. #mbv)" inputmode="search" style="flex:1;min-width:160px;background:var(--card);color:var(--fg);border:1px solid var(--border);border-radius:10px;padding:8px 10px"></div>`;
+    tb.appendChild(searchWrap);
     const searchInput=searchWrap.querySelector('#searchInput');
-    btnSearch.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); searchWrap.style.display=(searchWrap.style.display==='none'||!searchWrap.style.display)?'flex':'none'; if(searchWrap.style.display==='flex'){ searchInput.value=state.searchQuery; searchInput.focus(); } keepMenuOpen(e); });
+    btnSearch.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); searchWrap.style.display=(searchWrap.style.display==='none'||!searchWrap.style.display)?'block':'none'; if(searchWrap.style.display==='block'){ searchInput.value=state.searchQuery; searchInput.focus(); } keepMenuOpen(e); });
     searchInput.addEventListener('input', debounce(()=>{ state.searchQuery=searchInput.value||''; applyFilterSort(false,true); },150));
 
-    // Toggle wiring
-    const btnTitles=util.querySelector('#togTitles');
-    const btnWav=util.querySelector('#togWav');
-    const btnMov=util.querySelector('#togMov');
-    const btnLight=util.querySelector('#togLight');
-    function syncToggles(){
-      btnTitles.classList.toggle('on',state.showTitles);
-      btnWav.classList.toggle('on',state.showWavButtons);
-      btnMov.classList.toggle('on',state.showMovButtons);
-      btnLight.classList.toggle('on',document.body.classList.contains('light'));
-    }
-    syncToggles();
-    btnTitles.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); state.showTitles=!state.showTitles; syncToggles(); refreshTitles(); keepMenuOpen(e); });
-    btnWav.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); state.showWavButtons=!state.showWavButtons; syncToggles(); rerenderVisibleRowsBadges(); if(state.i>=0) updateNowbar(); keepMenuOpen(e); });
-    btnMov.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); state.showMovButtons=!state.showMovButtons; syncToggles(); rerenderVisibleRowsBadges(); if(state.i>=0) updateNowbar(); keepMenuOpen(e); });
-    btnLight.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); document.body.classList.toggle('light'); syncToggles(); keepMenuOpen(e); });
-
-    btnUtils.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation();
-      util.style.display=(util.style.display==='none'||!util.style.display)?'block':'none'; keepMenuOpen(e);
-    });
-    btnLinks.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation();
-      links.style.display=(links.style.display==='none'||!links.style.display)?'block':'none'; keepMenuOpen(e);
-    });
-
+    // keep menu open while interacting inside the overlay
     tb.addEventListener('click', keepMenuOpen);
   }
-  function keepMenuOpen(e){
-    if (!els.menu) return;
-    if (e && e.target && e.target.closest && e.target.closest('a')) return; // allow real links
-    if (e){ e.preventDefault?.(); e.stopPropagation?.(); }
-    els.menu.open=true;
-  }
 
-  /* ---------- Footer Download (icon-only, silent .m3u) ---------- */
-  function buildDownloadFooter(){
-    const listEl = $('#list');
-    if (!listEl) return;
-
-    const bar = document.createElement('div');
-    bar.id = 'dlbar';
-    const svgDownload = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20h14v-2H5v2zm7-18v10.17l3.59-3.58L17 10l-5 5-5-5 1.41-1.41L11 12.17V2h1z"/></svg>';
-    bar.innerHTML = `<button class="btn" id="btnDl" title="Download playlist (.m3u)">${svgDownload}</button>`;
-
-    // place *after* the list so it sits at the bottom of the page
-    listEl.insertAdjacentElement('afterend', bar);
-
-    $('#btnDl').addEventListener('click', (e)=>{
-      e.preventDefault(); e.stopPropagation();
-      const view = state.filtered.slice();
-      if (!view.length) return;
-
-      const m3u = ['#EXTM3U', ...view.map(t => t.src)].join('\n');
-      const blob = new Blob([m3u], {type:'audio/x-mpegurl'});
-      const a=document.createElement('a');
-      a.href=URL.createObjectURL(blob);
-      a.download='vvip25-playlist.m3u';
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
-    });
-  }
+  function keepMenuOpen(e){ const menu=els.menu; if(!menu) return; if (e){ e.preventDefault?.(); e.stopPropagation?.(); } menu.open=true; }
 
   /* ---------- Events ---------- */
   document.addEventListener('click',(e)=>{
-    const favBtn=e.target.closest?.('.star');
-    if (favBtn && favBtn.hasAttribute('data-fav')){
+    // Favorites toggle
+    const favBtn=e.target.closest?.('.btn[data-fav]');
+    if (favBtn){
       const key=favBtn.getAttribute('data-fav'); const wasFav=state.favorites.has(key);
       if (wasFav){ state.favorites.delete(key); state.favOrder=state.favOrder.filter(n=>n!==key); }
       else { state.favorites.add(key); if(!state.favOrder.includes(key)) state.favOrder.push(key); }
       localStorage.setItem('vvip25:favs', JSON.stringify(Array.from(state.favorites)));
       localStorage.setItem('vvip25:favOrder', JSON.stringify(state.favOrder));
-      favBtn.classList.toggle('on', !wasFav);
+      favBtn.classList.toggle('is-on', !wasFav);
       e.preventDefault(); e.stopPropagation(); return;
     }
+    // Row select
     const row=e.target.closest?.('.row');
     if(row && !e.target.closest('a')){
       const id=Number(row.getAttribute('data-id')); const idx=state.filtered.findIndex(t=>t.id===id);
