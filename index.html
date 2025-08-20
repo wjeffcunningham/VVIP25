@@ -128,9 +128,9 @@
   <audio id="audio" preload="metadata"></audio>
 
 <script>
-/* ========= VVIP25 — Phase 5 (icons + limited downloads + stability) ========= */
+/* ========= VVIP25 — Controls color = logo + silent M3U footer ========= */
 
-  const ASSET_VERSION = 13; // bump to beat caches on JSON fetches
+  const ASSET_VERSION = 14; // bump to beat caches on JSON fetches
 
   /* ---------- Config ---------- */
   const BASE_MP3   = 'https://media.vvipmedia.net/ACCESS/';
@@ -149,9 +149,11 @@
     }catch(_){}
   })();
 
-  /* ---------- CSS patches (footer download bar + subtle tweaks) ---------- */
+  /* ---------- CSS patches (logo-colored icons + footer icon-only) ---------- */
   (function injectCSS(){
     const css = `
+    :root{--logo:#fdf6d0}
+
     .btn,.tog{
       display:inline-flex;align-items:center;justify-content:center;
       height:36px;min-width:36px;padding:0 12px;border-radius:10px;border:1px solid var(--border);
@@ -171,12 +173,17 @@
     .star{cursor:pointer}
     .star.on{filter:drop-shadow(0 0 2px var(--accent)) brightness(1.2)}
 
-    /* Footer download bar */
-    #dlbar{display:flex;justify-content:flex-end;margin:12px 0 40px}
-    #dlbar .btn{gap:8px}
-    #dlbar small{opacity:.7}
+    /* Player control icons inherit the logo color */
+    .controls button svg{width:18px;height:18px;fill:var(--logo)}
+    /* keep button look; just recolor the icon */
+    .controls button{display:inline-flex;align-items:center;justify-content:center}
 
-    /* Light mode minimal support (if you already had it) */
+    /* Footer download bar — icon only */
+    #dlbar{display:flex;justify-content:flex-end;margin:12px 0 40px}
+    #dlbar .btn{min-width:36px;padding:0 10px}
+    #dlbar .btn svg{width:18px;height:18px;fill:var(--fg)}
+
+    /* Light mode minimal support */
     body.light{--bg:#f7f7f8;--fg:#111;--muted:#4b5563;--card:#ffffff;--border:#d1d5db;--accent:#2563eb}
     body.light .player{background:linear-gradient(180deg,rgba(255,255,255,.96),rgba(255,255,255,.92))}
     body.light #site-title{-webkit-text-stroke:2px #111}
@@ -248,8 +255,8 @@
   init();
   async function init(){
     buildMenuUI();
-    buildDownloadFooter();  // footer download button
-    setControlIcons();      // bespoke SVG icons on player controls
+    buildDownloadFooter();  // icon-only, bottom of playlist
+    setControlIcons();      // bespoke SVG icons (logo-colored)
 
     const mres = await fetch(`./manifest.json?v=${ASSET_VERSION}`, { cache:'no-store' });
     if(!mres.ok){ els.list.innerHTML = `<div class="row"><div></div><div>manifest.json missing</div></div>`; return; }
@@ -265,7 +272,7 @@
       const mov = t.has_mov ? (BASE_VIDEO + encodeURIComponent(base + '.mov')) : null;
       const thumbCandidate = BASE_THUMB + encodeURIComponent(baseLower + 'thumb.jpg');
 
-      // SEARCH TAGS: put #hashtags in "details" in manifest; we will index them but NOT show in the UI subline.
+      // SEARCH TAGS: put #hashtags in "details" in manifest; indexed but NOT shown.
       const details = t.details || '';
 
       return { id:idx, name, base, baseLower, title: t.title?String(t.title):'',
@@ -351,7 +358,7 @@
     let favoritesOnly=false;
     if (tokens.includes('#favorites')){ favoritesOnly=true; out=out.filter(t=>state.favorites.has(t.name)); }
 
-    // when titles ON, hide “nameless” (those where title==derived filename)
+    // when titles ON, hide “nameless”
     if (state.showTitles){ out=out.filter(t=>!isNameless(t)); }
 
     // search on name/title/details (details includes #tags). We DO NOT show details in UI.
@@ -408,7 +415,7 @@
   }
   function rowHTML(t,active){
     const bpmTxt=bpmLabel(t), thumbURL=getResolvedThumb(t);
-    // IMPORTANT: do NOT include t.details (hidden tags) in the subline
+    // do NOT include t.details (hidden tags) in the subline
     const subline=[ (state.showTitles? '' : (t.title||'')), bpmTxt, t.length?fmtDur(t.length):'', t.labelDate||'' ]
       .filter(Boolean).join(' · ');
     const hasTitleClass=(t.title && !isNameless(t)) ? 'has-title':'';
@@ -488,7 +495,7 @@
   function select(indexInFiltered){
     state.i=indexInFiltered;
     const t=state.filtered[indexInFiltered]; if(!t) return;
-    els.audio.src=t.src; updateNowbar(); state.playing=false; updateToggle(); setControlIcons(); // ensure correct icon
+    els.audio.src=t.src; updateNowbar(); state.playing=false; updateToggle(); setControlIcons();
     const rendered=els.list.querySelectorAll('.row');
     rendered.forEach(row=>{
       const id=Number(row.getAttribute('data-id')); const isActive=(state.filtered[state.i]?.id===id);
@@ -523,12 +530,12 @@
   function updateToggle(){ const btn=$('#toggle'); if(btn) btn.setAttribute('data-state', state.playing ? 'pause' : 'play'); }
   function jump(dir){ if(!state.filtered.length) return; let i=state.i+dir; if(i<0) i=state.filtered.length-1; if(i>=state.filtered.length) i=0; select(i); play(); }
 
-  /* ---------- Bespoke SVG icons ---------- */
+  /* ---------- Bespoke SVG icons (logo color via CSS) ---------- */
   function setControlIcons(){
-    const svgPrev = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h2v14H6zM20 6v12L9 12z"/></svg>';
-    const svgNext = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 5h2v14h-2zM4 6v12l11-6z"/></svg>';
-    const svgPlay = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
-    const svgPause= '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg>';
+    const svgPrev = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h2v14H6zM20 6v12L9 12z"/></svg>';
+    const svgNext = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 5h2v14h-2zM4 6v12l11-6z"/></svg>';
+    const svgPlay = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
+    const svgPause= '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg>';
 
     if (els.prev)   els.prev.innerHTML = svgPrev;
     if (els.next)   els.next.innerHTML = svgNext;
@@ -609,56 +616,40 @@
       links.style.display=(links.style.display==='none'||!links.style.display)?'block':'none'; keepMenuOpen(e);
     });
 
-    // Keep menu open unless clicking a real link
     tb.addEventListener('click', keepMenuOpen);
   }
   function keepMenuOpen(e){
     if (!els.menu) return;
-    // if it's an anchor, let it navigate
-    if (e && e.target && e.target.closest && e.target.closest('a')) return;
+    if (e && e.target && e.target.closest && e.target.closest('a')) return; // allow real links
     if (e){ e.preventDefault?.(); e.stopPropagation?.(); }
     els.menu.open=true;
   }
 
-  /* ---------- Footer Download (M3U + up to 10 MP3s) ---------- */
+  /* ---------- Footer Download (icon-only, silent .m3u) ---------- */
   function buildDownloadFooter(){
-    const wrap = document.querySelector('.wrap:last-of-type'); // the second wrap with the list
-    if (!wrap) return;
-    let bar = document.createElement('div');
+    const listEl = $('#list');
+    if (!listEl) return;
+
+    const bar = document.createElement('div');
     bar.id = 'dlbar';
-    bar.innerHTML = `<button class="btn" id="btnDl"><span>⬇️</span> Download playlist <small>(.m3u + up to 10 MP3s)</small></button>`;
-    wrap.appendChild(bar);
+    const svgDownload = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20h14v-2H5v2zm7-18v10.17l3.59-3.58L17 10l-5 5-5-5 1.41-1.41L11 12.17V2h1z"/></svg>';
+    bar.innerHTML = `<button class="btn" id="btnDl" title="Download playlist (.m3u)">${svgDownload}</button>`;
 
-    $('#btnDl').addEventListener('click', async (e)=>{
+    // place *after* the list so it sits at the bottom of the page
+    listEl.insertAdjacentElement('afterend', bar);
+
+    $('#btnDl').addEventListener('click', (e)=>{
       e.preventDefault(); e.stopPropagation();
-      const view = state.filtered.slice(); // current view
-      if (!view.length){ alert('Nothing to download.'); return; }
+      const view = state.filtered.slice();
+      if (!view.length) return;
 
-      // 1) Always export M3U (full current view)
-      const m3uLines = ['#EXTM3U', ...view.map(t => t.src)];
-      const m3u = m3uLines.join('\n');
+      const m3u = ['#EXTM3U', ...view.map(t => t.src)].join('\n');
       const blob = new Blob([m3u], {type:'audio/x-mpegurl'});
-      const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
-      a.download='vvip25-playlist.m3u'; document.body.appendChild(a); a.click(); a.remove();
+      const a=document.createElement('a');
+      a.href=URL.createObjectURL(blob);
+      a.download='vvip25-playlist.m3u';
+      document.body.appendChild(a); a.click(); a.remove();
       setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
-
-      // 2) Offer to fetch up to 10 MP3s (in playlist order)
-      const limit = Math.min(10, view.length);
-      if (confirm(`Also download up to ${limit} MP3s now? (Your browser may request permission for multiple downloads.)`)){
-        for (let i=0;i<limit;i++){
-          const t=view[i], url=t.src;
-          try{
-            const resp=await fetch(url,{mode:'cors'}); if(!resp.ok) throw new Error('HTTP '+resp.status);
-            const b=await resp.blob();
-            const fname=decodeURIComponent(url.split('/').pop()||`track-${i+1}.mp3`);
-            const link=document.createElement('a');
-            link.href=URL.createObjectURL(b); link.download=fname; document.body.appendChild(link); link.click(); link.remove();
-            setTimeout(()=>URL.revokeObjectURL(link.href), 2000);
-          }catch(err){
-            console.warn('Skip download:', url, err);
-          }
-        }
-      }
     });
   }
 
