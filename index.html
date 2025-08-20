@@ -128,9 +128,9 @@
   <audio id="audio" preload="metadata"></audio>
 
 <script>
-/* ========= VVIP25 — slim menu + favorites + hashtag search (details) ========= */
+/* ========= VVIP25 — Phase 5 (icons + limited downloads + stability) ========= */
 
-  const ASSET_VERSION = 12; // bump if you change JS or JSON structure
+  const ASSET_VERSION = 13; // bump to beat caches on JSON fetches
 
   /* ---------- Config ---------- */
   const BASE_MP3   = 'https://media.vvipmedia.net/ACCESS/';
@@ -139,7 +139,7 @@
   const BASE_VIDEO = 'https://media.vvipmedia.net/VIDEOS/';
   const DEFAULT_THUMB = BASE_THUMB + 'default_thumb.jpg';
 
-  /* ---------- Small cache hint (browser-side only) ---------- */
+  /* ---------- Small cache hint ---------- */
   (function injectNoStoreMeta(){
     try{
       const m=document.createElement('meta');
@@ -149,20 +149,15 @@
     }catch(_){}
   })();
 
-  /* ---------- CSS patches (layout + utilities + links) ---------- */
+  /* ---------- CSS patches (footer download bar + subtle tweaks) ---------- */
   (function injectCSS(){
     const css = `
-    .controls{flex-wrap:wrap;gap:10px}
-    .controls .range{min-width:140px;flex:1}
-    .controls .range input[type="range"]{width:100%}
-    .controls button{min-width:44px}
-
     .btn,.tog{
       display:inline-flex;align-items:center;justify-content:center;
       height:36px;min-width:36px;padding:0 12px;border-radius:10px;border:1px solid var(--border);
       background:var(--card);color:var(--fg);text-decoration:none;line-height:1;cursor:pointer
     }
-    .tog{opacity:.7;transition:opacity .15s, box-shadow .15s}
+    .tog{opacity:.75;transition:opacity .15s, box-shadow .15s}
     .tog.on{opacity:1;box-shadow:0 0 0 2px var(--accent) inset}
 
     .util-panel,.links-panel{display:none;margin-top:8px;border:1px solid var(--border);border-radius:10px;padding:8px}
@@ -176,16 +171,16 @@
     .star{cursor:pointer}
     .star.on{filter:drop-shadow(0 0 2px var(--accent)) brightness(1.2)}
 
-    /* Light mode */
+    /* Footer download bar */
+    #dlbar{display:flex;justify-content:flex-end;margin:12px 0 40px}
+    #dlbar .btn{gap:8px}
+    #dlbar small{opacity:.7}
+
+    /* Light mode minimal support (if you already had it) */
     body.light{--bg:#f7f7f8;--fg:#111;--muted:#4b5563;--card:#ffffff;--border:#d1d5db;--accent:#2563eb}
     body.light .player{background:linear-gradient(180deg,rgba(255,255,255,.96),rgba(255,255,255,.92))}
     body.light #site-title{-webkit-text-stroke:2px #111}
-
-    @media (max-width:560px){
-      .controls{gap:6px}
-      .controls button{flex:0 0 44px}
-      .range span{min-width:34px;text-align:center}
-    }`;
+    `;
     const style=document.createElement('style');
     style.textContent=css;
     document.head.appendChild(style);
@@ -196,16 +191,12 @@
   function fmtDur(sec){ sec=Number(sec||0); const m=Math.floor(sec/60), s=Math.floor(sec%60); return `${m}:${String(s).padStart(2,'0')}`; }
   function debounce(fn,ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); } }
   function escapeHTML(s){ return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-  function removeBpm(str){ return !str?str:String(str).replace(/\b\d+(?:\.\d+)?(?:\s*[–—-]\s*\d+(?:\.\d+)?)?\s*BPM\b/gi,'').replace(/\s{2,}/g,' ').trim(); }
-  function cleanToken(s){ if(!s) return ''; s=String(s).trim().replace(/^[·•,;:\-]+|[·•,;:\-]+$/g,'').replace(/\s*[.,;:]\s*$/,''); return s.trim(); }
-  function uniqJoin(parts){ const seen=new Set(), out=[]; for (let raw of parts){ if(raw==null) continue; raw=cleanToken(removeBpm(raw)); if(!raw) continue; const key=raw.toLowerCase(); if(seen.has(key)) continue; seen.add(key); out.push(raw);} return out.join(' · '); }
   const rawFile=s=>(String(s).split('/').pop()||'');
   const stripExt=s=>String(s).replace(/\.[a-z0-9]+$/i,'');
   const softNorm=s=>stripExt(s).toLowerCase().replace(/[ _]+/g,'-').replace(/-+/g,'-');
   function deriveTitleFromFilename(name){ const b=stripExt(rawFile(name)).replace(/^[\d._-]+/,'').replace(/[_-]+/g,' ').trim(); return b || stripExt(rawFile(name)); }
   const primaryOnly = t => String(t||'').split('//')[0].trim();
 
-  // Dates from filename
   const DATE_RX_YYYY=/^\s*(\d{4})[.\-_](\d{2})[.\-_](\d{2})(?=\D|$)/;
   const DATE_RX_YY=/^\s*(\d{2})[.\-_](\d{2})[.\-_](\d{2})(?=\D|$)/;
   const WITHIN_DAY_RX=/^\s*(?:\d{4}|\d{2})[.\-_]\d{2}[.\-_]\d{2}(?:[.\-_](\d+))?/;
@@ -229,15 +220,6 @@
   function bpmSortValue(t){ if(t.bpm!=null) return t.bpm; if(t.bpm_min!=null&&t.bpm_max!=null) return (t.bpm_min+t.bpm_max)/2; return 0; }
   function bpmLabel(t){ if(t.bpm!=null) return `${t.bpm} BPM`; if(t.bpm_min!=null&&t.bpm_max!=null) return `${t.bpm_min}–${t.bpm_max} BPM`; return ''; }
 
-  // Hashtag helpers (search in details, hide in UI)
-  const TAG_RX = /(^|\s)#([\p{L}\p{N}_-]+)/gu;
-  function stripHashTags(s){
-    return String(s || '')
-      .replace(TAG_RX, ' ')
-      .replace(/\s{2,}/g, ' ')
-      .trim();
-  }
-
   /* ---------- Elements & State ---------- */
   const els = {
     audio:$('#audio'), list:$('#list'), sort:$('#sort'),
@@ -252,11 +234,10 @@
     tracks:[], filtered:[], i:-1, playing:false,
     pageSize:60, renderCount:0,
     titlesLookup:new Map(), thumbBases:new Set(), resolvedThumb:new Map(),
-    showTitles:false, showWavButtons:false, showMovButtons:false, lightMode:false,
+    showTitles:false, showWavButtons:false, showMovButtons:false,
     favorites:new Set(JSON.parse(localStorage.getItem('vvip25:favs')||'[]')),
     favOrder: JSON.parse(localStorage.getItem('vvip25:favOrder')||'[]'),
-    searchQuery:'',
-    favoritesView:false // controls Playlist toggle state
+    searchQuery:''
   };
 
   // Persisted volume
@@ -267,6 +248,8 @@
   init();
   async function init(){
     buildMenuUI();
+    buildDownloadFooter();  // footer download button
+    setControlIcons();      // bespoke SVG icons on player controls
 
     const mres = await fetch(`./manifest.json?v=${ASSET_VERSION}`, { cache:'no-store' });
     if(!mres.ok){ els.list.innerHTML = `<div class="row"><div></div><div>manifest.json missing</div></div>`; return; }
@@ -281,13 +264,14 @@
       const wav = BASE_WAV + encodeURIComponent(base + '.wav');
       const mov = t.has_mov ? (BASE_VIDEO + encodeURIComponent(base + '.mov')) : null;
       const thumbCandidate = BASE_THUMB + encodeURIComponent(baseLower + 'thumb.jpg');
-      // Keep your current schema; put #tags inside "details"
+
+      // SEARCH TAGS: put #hashtags in "details" in manifest; we will index them but NOT show in the UI subline.
       const details = t.details || '';
 
       return { id:idx, name, base, baseLower, title: t.title?String(t.title):'',
         bpm:t.bpm??null, bpm_min:t.bpm_min??null, bpm_max:t.bpm_max??null,
-        details, length:t.length||0, date:dateObj||null, labelDate,
-        src:mp3, wav, video:mov, thumbCandidate };
+        details, length:t.length||0,
+        date:dateObj||null, labelDate, src:mp3, wav, video:mov, thumbCandidate };
     });
 
     applyFilterSort(true);
@@ -298,10 +282,6 @@
 
     (requestIdleCallback?.(fetchTitles,{timeout:600})||setTimeout(fetchTitles,0));
     (requestIdleCallback?.(fetchThumbs,{timeout:900})||setTimeout(fetchThumbs,50));
-
-    // Restore light mode
-    const lm = localStorage.getItem('vvip25:light');
-    if (lm === '1'){ state.lightMode=true; document.body.classList.add('light'); }
   }
 
   /* ---------- Titles (primary only) ---------- */
@@ -360,36 +340,37 @@
   const getResolvedThumb=t=>state.resolvedThumb.get(t.id)||DEFAULT_THUMB;
 
   /* ---------- Filtering / sorting ---------- */
-  function matchesSearch(t){
-    const q = state.searchQuery.trim().toLowerCase();
-    if (!q) return true;
-
-    const tokens = q.split(/\s+/).filter(Boolean);
-    const hayName    = (t.name    || '').toLowerCase();
-    const hayTitle   = (t.title   || '').toLowerCase();
-    const hayDetails = (t.details || '').toLowerCase(); // #tags live here
-
-    return tokens.every(tok => {
-      if (tok.startsWith('#')) {
-        // hashtags: only need to appear in details
-        return hayDetails.includes(tok);
-      }
-      // plain token: match name, title, or details text
-      return hayName.includes(tok) || hayTitle.includes(tok) || hayDetails.includes(tok);
-    });
-  }
+  function isNameless(t){ const derived=deriveTitleFromFilename(t.name); return !t.title || t.title===derived; }
 
   function applyFilterSort(firstPaint=false, keepIndex=false){
+    const q=state.searchQuery.trim().toLowerCase();
+    const tokens=q? q.split(/\s+/).filter(Boolean):[];
     let out=[...state.tracks];
 
-    // Playlist (favorites) view?
-    if (state.favoritesView){
-      out = out.filter(t=>state.favorites.has(t.name));
-      // preserve order of selection in favorites mode
+    // favorites preset
+    let favoritesOnly=false;
+    if (tokens.includes('#favorites')){ favoritesOnly=true; out=out.filter(t=>state.favorites.has(t.name)); }
+
+    // when titles ON, hide “nameless” (those where title==derived filename)
+    if (state.showTitles){ out=out.filter(t=>!isNameless(t)); }
+
+    // search on name/title/details (details includes #tags). We DO NOT show details in UI.
+    out = out.filter(t=>{
+      const hayName  =(t.name||'').toLowerCase();
+      const hayTitle =(t.title||'').toLowerCase();
+      const hayTags  =(t.details||'').toLowerCase(); // hidden field
+      return tokens.every(tok=>{
+        if (tok==='#favorites') return true;
+        if (tok.startsWith('#')) return hayTags.includes(tok);
+        return hayName.includes(tok) || hayTitle.includes(tok) || hayTags.includes(tok);
+      });
+    });
+
+    // sorting
+    if (favoritesOnly){
       const orderIndex=new Map(state.favOrder.map((name,idx)=>[name,idx]));
       out.sort((a,b)=>(orderIndex.get(a.name)??1e9)-(orderIndex.get(b.name)??1e9));
     } else {
-      // Normal sort
       switch(els.sort?.value||'date_desc'){
         case 'date_desc': out.sort((a,b)=>{ const da=a.date?.getTime()||0, db=b.date?.getTime()||0;
           if (db!==da) return db-da; return withinDayIndexFromName(b.name)-withinDayIndexFromName(a.name) || b.name.localeCompare(a.name); }); break;
@@ -402,9 +383,6 @@
       }
     }
 
-    // Apply search filter last
-    out = out.filter(matchesSearch);
-
     state.filtered=out;
     const initialChunk=firstPaint ? Math.max(60,state.pageSize) : state.pageSize;
     state.renderCount=Math.min(state.filtered.length, initialChunk);
@@ -413,7 +391,6 @@
   }
 
   const displayName=t=>(state.showTitles && t.title) ? t.title : t.name;
-  function isNameless(t){ const derived=deriveTitleFromFilename(t.name); return !t.title || t.title===derived; }
 
   /* ---------- Renderers ---------- */
   function imgHTML(src){ const esc=s=>s.replace(/"/g,'&quot;');
@@ -431,13 +408,11 @@
   }
   function rowHTML(t,active){
     const bpmTxt=bpmLabel(t), thumbURL=getResolvedThumb(t);
-    const subline=uniqJoin([
-      state.showTitles ? '' : (t.title || ''),
-      bpmTxt,
-      t.length ? fmtDur(t.length) : '',
-      stripHashTags(t.details || '') // hide #tags in UI
-    ]);
-    return `<div class="row" role="listitem" data-id="${t.id}">
+    // IMPORTANT: do NOT include t.details (hidden tags) in the subline
+    const subline=[ (state.showTitles? '' : (t.title||'')), bpmTxt, t.length?fmtDur(t.length):'', t.labelDate||'' ]
+      .filter(Boolean).join(' · ');
+    const hasTitleClass=(t.title && !isNameless(t)) ? 'has-title':'';
+    return `<div class="row ${hasTitleClass}" role="listitem" data-id="${t.id}">
       <div class="cover" aria-hidden="true">${imgHTML(thumbURL)}</div>
       <div>
         <div class="title">${active?'▶︎ ':''}${escapeHTML(displayName(t))}</div>
@@ -469,14 +444,11 @@
       if (titleEl){ const isActive=(state.i>=0 && state.filtered[state.i]?.id===id); titleEl.innerHTML=(isActive?'▶︎ ':'') + escapeHTML(displayName(t)); }
       if (subEl){
         const bpmTxt=bpmLabel(t);
-        const subline=uniqJoin([
-          state.showTitles ? '' : (t.title || ''),
-          bpmTxt,
-          t.length ? fmtDur(t.length) : '',
-          stripHashTags(t.details || '')
-        ]);
+        const subline=[ (state.showTitles? '' : (t.title||'')), bpmTxt, t.length?fmtDur(t.length):'', t.labelDate||'' ]
+          .filter(Boolean).join(' · ');
         subEl.textContent=subline;
       }
+      row.classList.toggle('has-title', (t.title && !isNameless(t)));
     });
     if (state.i>=0) updateNowbar();
     applyFilterSort(false,true);
@@ -516,7 +488,7 @@
   function select(indexInFiltered){
     state.i=indexInFiltered;
     const t=state.filtered[indexInFiltered]; if(!t) return;
-    els.audio.src=t.src; updateNowbar(); state.playing=false; updateToggle();
+    els.audio.src=t.src; updateNowbar(); state.playing=false; updateToggle(); setControlIcons(); // ensure correct icon
     const rendered=els.list.querySelectorAll('.row');
     rendered.forEach(row=>{
       const id=Number(row.getAttribute('data-id')); const isActive=(state.filtered[state.i]?.id===id);
@@ -528,19 +500,40 @@
     const t=state.filtered[state.i]; if(!t) return;
     els.nowTitle.textContent=displayName(t);
     const bpmTxt=bpmLabel(t);
-    els.nowSub.textContent=uniqJoin([
-      state.showTitles ? '' : (t.title || ''),
-      bpmTxt,
-      t.length ? fmtDur(t.length) : '',
-      stripHashTags(t.details || '')
-    ]);
+    els.nowSub.textContent=[ (state.showTitles? '' : (t.title||'')), bpmTxt, t.length?fmtDur(t.length):'', t.labelDate||'' ]
+      .filter(Boolean).join(' · ');
     const url=getResolvedThumb(t);
-    els.cover.innerHTML=`<img src="${url.replace(/"/g,'&quot;')}" alt="" style="width:56px;height:56px;border-radius:8px;object-fit:cover;" onerror="if(this.dataset.fbk!=='1'){this.dataset.fbk='1';this.onerror=null;this.src='${DEFAULT_THUMB}';}">`;
+    els.cover.innerHTML=`<img src="${url.replace(/"/g,'&quot;')}" alt="" style="width:56px;height:56px;object-fit:cover;border-radius:8px" onerror="if(this.dataset.fbk!=='1'){this.dataset.fbk='1';this.onerror=null;this.src='${DEFAULT_THUMB}';}">`;
   }
-  async function play(){ try{ await els.audio.play(); state.playing=true; updateToggle(); }catch(_){/* autoplay may be blocked */} }
-  function pause(){ els.audio.pause(); state.playing=false; updateToggle(); }
-  function updateToggle(){ const btn=$('#toggle'); if(btn) btn.textContent = state.playing ? '⏸️' : '▶️'; }
+  async function play(){
+    try{
+      await els.audio.play();
+      state.playing=true; updateToggle(); setControlIcons();
+      if('mediaSession' in navigator){
+        const t=state.filtered[state.i];
+        navigator.mediaSession.metadata=new MediaMetadata({ title:displayName(t) });
+        navigator.mediaSession.setActionHandler('previoustrack', ()=>jump(-1));
+        navigator.mediaSession.setActionHandler('nexttrack', ()=>jump(1));
+        navigator.mediaSession.setActionHandler('seekbackward', ()=> els.audio.currentTime=Math.max(0,els.audio.currentTime-10));
+        navigator.mediaSession.setActionHandler('seekforward',  ()=> els.audio.currentTime=Math.min(els.audio.duration||0,els.audio.currentTime+10));
+      }
+    }catch(_){}
+  }
+  function pause(){ els.audio.pause(); state.playing=false; updateToggle(); setControlIcons(); }
+  function updateToggle(){ const btn=$('#toggle'); if(btn) btn.setAttribute('data-state', state.playing ? 'pause' : 'play'); }
   function jump(dir){ if(!state.filtered.length) return; let i=state.i+dir; if(i<0) i=state.filtered.length-1; if(i>=state.filtered.length) i=0; select(i); play(); }
+
+  /* ---------- Bespoke SVG icons ---------- */
+  function setControlIcons(){
+    const svgPrev = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h2v14H6zM20 6v12L9 12z"/></svg>';
+    const svgNext = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 5h2v14h-2zM4 6v12l11-6z"/></svg>';
+    const svgPlay = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
+    const svgPause= '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg>';
+
+    if (els.prev)   els.prev.innerHTML = svgPrev;
+    if (els.next)   els.next.innerHTML = svgNext;
+    if (els.toggle) els.toggle.innerHTML = (state.playing ? svgPause : svgPlay);
+  }
 
   /* ---------- Menu / UI ---------- */
   function buildMenuUI(){
@@ -551,36 +544,12 @@
     const btnAbout=document.createElement('button'); btnAbout.className='btn'; btnAbout.id='btnAbout'; btnAbout.title='About'; btnAbout.textContent='📜'; row.appendChild(btnAbout);
     btnAbout.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); alert("VVIP25 — Vancouver Music and Videography Project 2025"); keepMenuOpen(e); });
 
-    // 🎵 Playlist (favorites toggle)
-    const btnFavList=document.createElement('button'); btnFavList.className='btn'; btnFavList.id='btnFavList'; btnFavList.title='My favorites playlist (toggle)'; btnFavList.textContent='🎵'; row.appendChild(btnFavList);
-    function reflectPlaylistBtn(){ btnFavList.classList.toggle('tog', true); btnFavList.classList.toggle('on', state.favoritesView); }
-    reflectPlaylistBtn();
-    btnFavList.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation();
-      state.favoritesView = !state.favoritesView; reflectPlaylistBtn(); applyFilterSort(false); keepMenuOpen(e);
-    });
+    // 🎵 Playlist (favorites view)
+    const btnFavList=document.createElement('button'); btnFavList.className='btn'; btnFavList.id='btnFavList'; btnFavList.title='My favorites playlist'; btnFavList.textContent='🎵'; row.appendChild(btnFavList);
+    btnFavList.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); state.searchQuery='#favorites'; applyFilterSort(false); keepMenuOpen(e); });
 
-    // 🛠️ Utilities (toggles live here)
+    // 🛠️ Utilities (titles/wav/mov/light)
     const btnUtils=document.createElement('button'); btnUtils.className='btn'; btnUtils.id='btnUtils'; btnUtils.title='Utilities'; btnUtils.textContent='🛠️'; row.appendChild(btnUtils);
-
-    // 🔗 Links submenu
-    const btnLinks=document.createElement('button'); btnLinks.className='btn'; btnLinks.id='btnLinks'; btnLinks.title='Links'; btnLinks.textContent='🔗'; row.appendChild(btnLinks);
-
-    // 🛍️ Shop
-    const aShop=document.createElement('a'); aShop.className='btn'; aShop.id='btnShop'; aShop.title='Shop'; aShop.textContent='🛍️'; aShop.href='/shop'; aShop.target='_blank'; aShop.rel='noopener'; row.appendChild(aShop);
-
-    // Sort select
-    const sortSel=document.createElement('select'); sortSel.id='sort'; sortSel.title='Sort';
-    sortSel.innerHTML=`<option value="date_desc">Newest</option><option value="date_asc">Oldest</option><option value="bpm_desc">BPM ↓</option><option value="bpm_asc">BPM ↑</option><option value="len_desc">Longest</option><option value="len_asc">Shortest</option>`;
-    row.appendChild(sortSel); els.sort=sortSel;
-
-    // 🔍 Search
-    const btnSearch=document.createElement('button'); btnSearch.className='btn'; btnSearch.id='btnSearch'; btnSearch.title='Search'; btnSearch.textContent='🔍'; row.appendChild(btnSearch);
-    const searchWrap=document.createElement('div'); searchWrap.className='search-wrap'; searchWrap.innerHTML=`<input id="searchInput" placeholder="Search… use #tags in details (e.g. #mbv)" inputmode="search" />`; tb.appendChild(searchWrap);
-    const searchInput=searchWrap.querySelector('#searchInput');
-    btnSearch.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); searchWrap.style.display=(searchWrap.style.display==='none'||!searchWrap.style.display)?'flex':'none'; if(searchWrap.style.display==='flex'){ searchInput.value=state.searchQuery; searchInput.focus(); } keepMenuOpen(e); });
-    searchInput.addEventListener('input', debounce(()=>{ state.searchQuery=searchInput.value||''; applyFilterSort(false,true); },150));
-
-    // Utilities panel (Titles / WAV / MOV / Light)
     const util=document.createElement('div'); util.className='util-panel';
     util.innerHTML = `<div class="util-row">
       <button class="tog" id="togTitles" title="Song Titles (on/off)">📝</button>
@@ -590,15 +559,48 @@
     </div>`;
     tb.appendChild(util);
 
-    // Links panel
+    // 🔗 Links submenu
+    const btnLinks=document.createElement('button'); btnLinks.className='btn'; btnLinks.id='btnLinks'; btnLinks.title='Links'; btnLinks.textContent='🔗'; row.appendChild(btnLinks);
     const links=document.createElement('div'); links.className='links-panel';
     links.innerHTML = `<div class="links-row">
       <a class="btn" href="https://www.youtube.com/@VVVVIIPP25" target="_blank" rel="noopener" title="YouTube">📺</a>
       <a class="btn" href="https://virtualvip.bandcamp.com/" target="_blank" rel="noopener" title="Bandcamp">🎧</a>
       <a class="btn" href="https://substack.com/home/post/p-170664918?source=queue" target="_blank" rel="noopener" title="Newsletter">📰</a>
-      <a class="btn" href="https://www.instagram.com/virtualvip24/" target="_blank" rel="noopener" title="Instagram">📷</a>
+      <a class="btn" href="https://www.instagram.com/virtualvip24/" target="_blank" rel="noopener" title="Instagram">📸</a>
     </div>`;
     tb.appendChild(links);
+
+    // 🛍️ Shop → /shoppe
+    const aShop=document.createElement('a'); aShop.className='btn'; aShop.id='btnShop'; aShop.title='Shoppe'; aShop.textContent='🛍️'; aShop.href='/shoppe'; aShop.target='_self'; row.appendChild(aShop);
+
+    // Sort select
+    const sortSel=document.createElement('select'); sortSel.id='sort'; sortSel.title='Sort';
+    sortSel.innerHTML=`<option value="date_desc">Newest</option><option value="date_asc">Oldest</option><option value="bpm_desc">BPM ↓</option><option value="bpm_asc">BPM ↑</option><option value="len_desc">Longest</option><option value="len_asc">Shortest</option>`;
+    row.appendChild(sortSel); els.sort=sortSel;
+
+    // 🔍 Search
+    const btnSearch=document.createElement('button'); btnSearch.className='btn'; btnSearch.id='btnSearch'; btnSearch.title='Search'; btnSearch.textContent='🔍'; row.appendChild(btnSearch);
+    const searchWrap=document.createElement('div'); searchWrap.className='search-wrap'; searchWrap.innerHTML=`<input id="searchInput" placeholder="Search… use #tags (e.g. #mbv)" inputmode="search" />`; tb.appendChild(searchWrap);
+    const searchInput=searchWrap.querySelector('#searchInput');
+    btnSearch.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); searchWrap.style.display=(searchWrap.style.display==='none'||!searchWrap.style.display)?'flex':'none'; if(searchWrap.style.display==='flex'){ searchInput.value=state.searchQuery; searchInput.focus(); } keepMenuOpen(e); });
+    searchInput.addEventListener('input', debounce(()=>{ state.searchQuery=searchInput.value||''; applyFilterSort(false,true); },150));
+
+    // Toggle wiring
+    const btnTitles=util.querySelector('#togTitles');
+    const btnWav=util.querySelector('#togWav');
+    const btnMov=util.querySelector('#togMov');
+    const btnLight=util.querySelector('#togLight');
+    function syncToggles(){
+      btnTitles.classList.toggle('on',state.showTitles);
+      btnWav.classList.toggle('on',state.showWavButtons);
+      btnMov.classList.toggle('on',state.showMovButtons);
+      btnLight.classList.toggle('on',document.body.classList.contains('light'));
+    }
+    syncToggles();
+    btnTitles.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); state.showTitles=!state.showTitles; syncToggles(); refreshTitles(); keepMenuOpen(e); });
+    btnWav.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); state.showWavButtons=!state.showWavButtons; syncToggles(); rerenderVisibleRowsBadges(); if(state.i>=0) updateNowbar(); keepMenuOpen(e); });
+    btnMov.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); state.showMovButtons=!state.showMovButtons; syncToggles(); rerenderVisibleRowsBadges(); if(state.i>=0) updateNowbar(); keepMenuOpen(e); });
+    btnLight.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); document.body.classList.toggle('light'); syncToggles(); keepMenuOpen(e); });
 
     btnUtils.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation();
       util.style.display=(util.style.display==='none'||!util.style.display)?'block':'none'; keepMenuOpen(e);
@@ -607,29 +609,58 @@
       links.style.display=(links.style.display==='none'||!links.style.display)?'block':'none'; keepMenuOpen(e);
     });
 
-    // Wire toggles
-    const btnTitles=util.querySelector('#togTitles');
-    const btnWav=util.querySelector('#togWav');
-    const btnMov=util.querySelector('#togMov');
-    const btnLight=util.querySelector('#togLight');
-
-    function syncToggles(){
-      btnTitles.classList.toggle('on',state.showTitles);
-      btnWav.classList.toggle('on',state.showWavButtons);
-      btnMov.classList.toggle('on',state.showMovButtons);
-      btnLight.classList.toggle('on',state.lightMode);
-    }
-    syncToggles();
-
-    btnTitles.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); state.showTitles=!state.showTitles; syncToggles(); refreshTitles(); keepMenuOpen(e); });
-    btnWav.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); state.showWavButtons=!state.showWavButtons; syncToggles(); rerenderVisibleRowsBadges(); if(state.i>=0) updateNowbar(); keepMenuOpen(e); });
-    btnMov.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); state.showMovButtons=!state.showMovButtons; syncToggles(); rerenderVisibleRowsBadges(); if(state.i>=0) updateNowbar(); keepMenuOpen(e); });
-    btnLight.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); state.lightMode=!state.lightMode; document.body.classList.toggle('light',state.lightMode); localStorage.setItem('vvip25:light', state.lightMode?'1':'0'); syncToggles(); keepMenuOpen(e); });
-
+    // Keep menu open unless clicking a real link
     tb.addEventListener('click', keepMenuOpen);
   }
+  function keepMenuOpen(e){
+    if (!els.menu) return;
+    // if it's an anchor, let it navigate
+    if (e && e.target && e.target.closest && e.target.closest('a')) return;
+    if (e){ e.preventDefault?.(); e.stopPropagation?.(); }
+    els.menu.open=true;
+  }
 
-  function keepMenuOpen(e){ const menu=els.menu; if(!menu) return; if (e){ e.preventDefault?.(); e.stopPropagation?.(); } menu.open=true; }
+  /* ---------- Footer Download (M3U + up to 10 MP3s) ---------- */
+  function buildDownloadFooter(){
+    const wrap = document.querySelector('.wrap:last-of-type'); // the second wrap with the list
+    if (!wrap) return;
+    let bar = document.createElement('div');
+    bar.id = 'dlbar';
+    bar.innerHTML = `<button class="btn" id="btnDl"><span>⬇️</span> Download playlist <small>(.m3u + up to 10 MP3s)</small></button>`;
+    wrap.appendChild(bar);
+
+    $('#btnDl').addEventListener('click', async (e)=>{
+      e.preventDefault(); e.stopPropagation();
+      const view = state.filtered.slice(); // current view
+      if (!view.length){ alert('Nothing to download.'); return; }
+
+      // 1) Always export M3U (full current view)
+      const m3uLines = ['#EXTM3U', ...view.map(t => t.src)];
+      const m3u = m3uLines.join('\n');
+      const blob = new Blob([m3u], {type:'audio/x-mpegurl'});
+      const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+      a.download='vvip25-playlist.m3u'; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
+
+      // 2) Offer to fetch up to 10 MP3s (in playlist order)
+      const limit = Math.min(10, view.length);
+      if (confirm(`Also download up to ${limit} MP3s now? (Your browser may request permission for multiple downloads.)`)){
+        for (let i=0;i<limit;i++){
+          const t=view[i], url=t.src;
+          try{
+            const resp=await fetch(url,{mode:'cors'}); if(!resp.ok) throw new Error('HTTP '+resp.status);
+            const b=await resp.blob();
+            const fname=decodeURIComponent(url.split('/').pop()||`track-${i+1}.mp3`);
+            const link=document.createElement('a');
+            link.href=URL.createObjectURL(b); link.download=fname; document.body.appendChild(link); link.click(); link.remove();
+            setTimeout(()=>URL.revokeObjectURL(link.href), 2000);
+          }catch(err){
+            console.warn('Skip download:', url, err);
+          }
+        }
+      }
+    });
+  }
 
   /* ---------- Events ---------- */
   document.addEventListener('click',(e)=>{
