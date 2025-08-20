@@ -119,6 +119,17 @@ body.light .player::after{
   filter: blur(4px) saturate(120%);
 }
 
+/* keep the blue streak from ever being clipped on some browsers */
+.player{ overflow: visible; }
+
+/* match volume SVG size to transport icons */
+.range[title="Volume"] svg { width:18px; height:18px; vertical-align:middle; }
+
+/* ensure the streak stays behind player contents */
+body.light .player::after { z-index: 0; }
+.player > * { position: relative; z-index: 1; }
+
+[hidden]{display:none!important}
   </style>
 </head>
 <body>
@@ -179,7 +190,7 @@ body.light .player::after{
   <audio id="audio" preload="metadata"></audio>
 
 <script>
-/* ========= VVIP25 — Phase 6 tidy + day-mode secondary-title logic ========= */
+/* ========= VVIP25 — Phase 6 tidy + day-mode secondary-title logic + UI fixes ========= */
 
   const ASSET_VERSION = 14; // bump to beat caches on JSON fetches
 
@@ -200,7 +211,8 @@ body.light .player::after{
     }catch(_){}
   })();
 
-  /* ---------- CSS patches (logo-colored icons + footer icon-only + light vars) ---------- */
+  /* ---------- CSS patches (icons, footer, light vars) ----------
+     NOTE: we DO NOT hide panels here; we rely on the [hidden] attribute. */
   (function injectCSS(){
     const css = `
     :root{--logo:#fdf6d0}
@@ -213,10 +225,10 @@ body.light .player::after{
     .tog{opacity:.75;transition:opacity .15s, box-shadow .15s}
     .tog.on{opacity:1;box-shadow:0 0 0 2px var(--accent) inset}
 
-    .util-panel,.links-panel{display:none;margin-top:8px;border:1px solid var(--border);border-radius:10px;padding:8px}
+    .util-panel,.links-panel{margin-top:8px;border:1px solid var(--border);border-radius:10px;padding:8px}
     .util-row,.links-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 
-    .search-wrap{display:none;gap:8px;align-items:center;margin-top:8px}
+    .search-wrap{gap:8px;align-items:center;margin-top:8px}
     .search-wrap input{flex:1;min-width:140px;background:var(--card);color:var(--fg);
       border:1px solid var(--border);border-radius:10px;padding:8px 10px}
 
@@ -226,7 +238,6 @@ body.light .player::after{
 
     /* Player control icons inherit the logo color */
     .controls button svg{width:18px;height:18px;fill:var(--logo)}
-    /* keep button look; just recolor the icon */
     .controls button{display:inline-flex;align-items:center;justify-content:center}
 
     /* Footer download bar — icon only */
@@ -308,6 +319,7 @@ body.light .player::after{
     buildMenuUI();
     buildDownloadFooter();  // icon-only, bottom of playlist
     setControlIcons();      // bespoke SVG icons (logo-colored)
+    replaceVolumeIcon();    // swap 🔊 for SVG sound icon
 
     const mres = await fetch(`./manifest.json?v=${ASSET_VERSION}`, { cache:'no-store' });
     if(!mres.ok){ els.list.innerHTML = `<div class="row"><div></div><div>manifest.json missing</div></div>`; return; }
@@ -621,22 +633,45 @@ body.light .player::after{
     if (els.toggle) els.toggle.innerHTML = (state.playing ? svgPause : svgPlay);
   }
 
+  /* Volume (sound) icon */
+  function svgSound(){
+    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9v6h4l5 4V5L7 9H3zM16.5 12c0-1.77-1.02-3.29-2.5-4.03v8.06c1.48-.74 2.5-2.26 2.5-4.03zm2.5 0c0 3.04-1.7 5.64-4.2 6.92l-.3.16v-2.27c1.5-1.01 2.5-2.74 2.5-4.81s-1-3.8-2.5-4.81V4.93l.3.16C19.3 6.36 21 8.96 21 12z"/></svg>';
+  }
+  function replaceVolumeIcon(){
+    const volWrap = document.querySelector('.range[title="Volume"]');
+    if (volWrap && volWrap.firstElementChild && volWrap.firstElementChild.tagName === 'SPAN') {
+      volWrap.firstElementChild.innerHTML = svgSound();
+    }
+  }
+
   /* ---------- Menu / UI ---------- */
   function buildMenuUI(){
     const tb=els.toolbar; if(!tb) return; tb.innerHTML='';
-    const row=document.createElement('div'); row.style.display='flex'; row.style.gap='8px'; row.style.flexWrap='wrap'; row.style.alignItems='center'; tb.appendChild(row);
+    const row=document.createElement('div');
+    row.style.display='flex'; row.style.gap='8px'; row.style.flexWrap='wrap'; row.style.alignItems='center';
+    tb.appendChild(row);
 
     // 📜 About
-    const btnAbout=document.createElement('button'); btnAbout.className='btn'; btnAbout.id='btnAbout'; btnAbout.title='About'; btnAbout.textContent='📜'; row.appendChild(btnAbout);
+    const btnAbout=document.createElement('button');
+    btnAbout.className='btn'; btnAbout.id='btnAbout'; btnAbout.title='About'; btnAbout.textContent='📜';
+    row.appendChild(btnAbout);
     btnAbout.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); alert("VVIP25 — Vancouver Music and Videography Project 2025"); keepMenuOpen(e); });
 
-    // 🎵 Playlist (favorites view)
-    const btnFavList=document.createElement('button'); btnFavList.className='btn'; btnFavList.id='btnFavList'; btnFavList.title='My favorites playlist'; btnFavList.textContent='🎵'; row.appendChild(btnFavList);
+    // 🎵 Favorites
+    const btnFavList=document.createElement('button');
+    btnFavList.className='btn'; btnFavList.id='btnFavList'; btnFavList.title='My favorites playlist'; btnFavList.textContent='🎵';
+    row.appendChild(btnFavList);
     btnFavList.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); state.searchQuery='#favorites'; applyFilterSort(false); keepMenuOpen(e); });
 
-    // 🛠️ Utilities (titles/wav/mov/light)
-    const btnUtils=document.createElement('button'); btnUtils.className='btn'; btnUtils.id='btnUtils'; btnUtils.title='Utilities'; btnUtils.textContent='🛠️'; row.appendChild(btnUtils);
-    const util=document.createElement('div'); util.className='util-panel';
+    // 🛠️ Utilities toggle
+    const btnUtils=document.createElement('button');
+    btnUtils.className='btn'; btnUtils.id='btnUtils'; btnUtils.title='Utilities'; btnUtils.textContent='🛠️';
+    btnUtils.setAttribute('aria-expanded','false');
+    row.appendChild(btnUtils);
+
+    const util=document.createElement('div');
+    util.className='util-panel';
+    util.hidden = true;  // use hidden instead of style.display
     util.innerHTML = `<div class="util-row">
       <button class="tog" id="togTitles" title="Song Titles (on/off)">📝</button>
       <button class="tog" id="togWav" title="Show WAV buttons">🎚️</button>
@@ -645,9 +680,15 @@ body.light .player::after{
     </div>`;
     tb.appendChild(util);
 
-    // 🔗 Links submenu
-    const btnLinks=document.createElement('button'); btnLinks.className='btn'; btnLinks.id='btnLinks'; btnLinks.title='Links'; btnLinks.textContent='🔗'; row.appendChild(btnLinks);
-    const links=document.createElement('div'); links.className='links-panel';
+    // 🔗 Links toggle
+    const btnLinks=document.createElement('button');
+    btnLinks.className='btn'; btnLinks.id='btnLinks'; btnLinks.title='Links'; btnLinks.textContent='🔗';
+    btnLinks.setAttribute('aria-expanded','false');
+    row.appendChild(btnLinks);
+
+    const links=document.createElement('div');
+    links.className='links-panel';
+    links.hidden = true;
     links.innerHTML = `<div class="links-row">
       <a class="btn" href="https://www.youtube.com/@VVVVIIPP25" target="_blank" rel="noopener" title="YouTube">📺</a>
       <a class="btn" href="https://virtualvip.bandcamp.com/" target="_blank" rel="noopener" title="Bandcamp">🎧</a>
@@ -657,7 +698,10 @@ body.light .player::after{
     tb.appendChild(links);
 
     // 🛍️ Shop → /shoppe
-    const aShop=document.createElement('a'); aShop.className='btn'; aShop.id='btnShop'; aShop.title='Shoppe'; aShop.textContent='🛍️'; aShop.href='/shoppe'; aShop.target='_self'; row.appendChild(aShop);
+    const aShop=document.createElement('a');
+    aShop.className='btn'; aShop.id='btnShop'; aShop.title='Shoppe'; aShop.textContent='🛍️';
+    aShop.href='/shoppe'; aShop.target='_self';
+    row.appendChild(aShop);
 
     // Sort select
     const sortSel=document.createElement('select'); sortSel.id='sort'; sortSel.title='Sort';
@@ -665,17 +709,43 @@ body.light .player::after{
     row.appendChild(sortSel); els.sort=sortSel;
 
     // 🔍 Search
-    const btnSearch=document.createElement('button'); btnSearch.className='btn'; btnSearch.id='btnSearch'; btnSearch.title='Search'; btnSearch.textContent='🔍'; row.appendChild(btnSearch);
-    const searchWrap=document.createElement('div'); searchWrap.className='search-wrap'; searchWrap.innerHTML=`<input id="searchInput" placeholder="Search… use #tags (e.g. #mbv)" inputmode="search" />`; tb.appendChild(searchWrap);
-    const searchInput=searchWrap.querySelector('#searchInput');
-    btnSearch.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); searchWrap.style.display=(searchWrap.style.display==='none'||!searchWrap.style.display)?'flex':'none'; if(searchWrap.style.display==='flex'){ searchInput.value=state.searchQuery; searchInput.focus(); } keepMenuOpen(e); });
-    searchInput.addEventListener('input', debounce(()=>{ state.searchQuery=searchInput.value||''; applyFilterSort(false,true); },150));
+    const btnSearch=document.createElement('button');
+    btnSearch.className='btn'; btnSearch.id='btnSearch'; btnSearch.title='Search'; btnSearch.textContent='🔍';
+    row.appendChild(btnSearch);
 
-    // Toggle wiring
+    const searchWrap=document.createElement('div');
+    searchWrap.className='search-wrap';
+    searchWrap.hidden = true;
+    searchWrap.innerHTML=`<input id="searchInput" placeholder="Search… use #tags (e.g. #mbv)" inputmode="search" />`;
+    tb.appendChild(searchWrap);
+    const searchInput=searchWrap.querySelector('#searchInput');
+
+    // Toggle panels with `hidden` + aria-expanded (prevents details from closing)
+    btnUtils.addEventListener('click',(e)=>{
+      e.preventDefault(); e.stopPropagation();
+      util.hidden = !util.hidden;
+      btnUtils.setAttribute('aria-expanded', String(!util.hidden));
+      keepMenuOpen(e);
+    });
+    btnLinks.addEventListener('click',(e)=>{
+      e.preventDefault(); e.stopPropagation();
+      links.hidden = !links.hidden;
+      btnLinks.setAttribute('aria-expanded', String(!links.hidden));
+      keepMenuOpen(e);
+    });
+    btnSearch.addEventListener('click',(e)=>{
+      e.preventDefault(); e.stopPropagation();
+      searchWrap.hidden = !searchWrap.hidden;
+      if(!searchWrap.hidden){ searchInput.value=state.searchQuery; searchInput.focus(); }
+      keepMenuOpen(e);
+    });
+
+    // Toggle wiring inside Utilities
     const btnTitles=util.querySelector('#togTitles');
     const btnWav=util.querySelector('#togWav');
     const btnMov=util.querySelector('#togMov');
     const btnLight=util.querySelector('#togLight');
+
     function syncToggles(){
       btnTitles.classList.toggle('on',state.showTitles);
       btnWav.classList.toggle('on',state.showWavButtons);
@@ -683,13 +753,16 @@ body.light .player::after{
       btnLight.classList.toggle('on',document.body.classList.contains('light'));
     }
     syncToggles();
+
     btnTitles.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); state.showTitles=!state.showTitles; syncToggles(); refreshTitles(); keepMenuOpen(e); });
     btnWav.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); state.showWavButtons=!state.showWavButtons; syncToggles(); rerenderVisibleRowsBadges(); if(state.i>=0) updateNowbar(); keepMenuOpen(e); });
     btnMov.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); state.showMovButtons=!state.showMovButtons; syncToggles(); rerenderVisibleRowsBadges(); if(state.i>=0) updateNowbar(); keepMenuOpen(e); });
     btnLight.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); document.body.classList.toggle('light'); syncToggles(); refreshTitles(); keepMenuOpen(e); });
 
+    // Keep details open on any toolbar click (except real links)
     tb.addEventListener('click', keepMenuOpen);
   }
+
   function keepMenuOpen(e){
     if (!els.menu) return;
     if (e && e.target && e.target.closest && e.target.closest('a')) return; // allow real links
