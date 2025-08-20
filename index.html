@@ -190,9 +190,9 @@ body.light .player::after { z-index: 0; }
   <audio id="audio" preload="metadata"></audio>
 
 <script>
-/* ========= VVIP25 — Phase 6 tidy + mobile/title fixes + day-mode logic ========= */
+/* ========= VVIP25 — Platform-specific title presentation (mobile vs desktop) ========= */
 
-  const ASSET_VERSION = 14; // bump to beat caches on JSON fetches
+  const ASSET_VERSION = 15; // bump to beat caches on JSON fetches
 
   /* ---------- Config ---------- */
   const BASE_MP3   = 'https://media.vvipmedia.net/ACCESS/';
@@ -211,8 +211,7 @@ body.light .player::after { z-index: 0; }
     }catch(_){}
   })();
 
-  /* ---------- CSS patches (icons, footer, light vars) ----------
-     NOTE: we rely on the [hidden] attribute for panel toggling. */
+  /* ---------- CSS patches (icons, footer, light vars) ---------- */
   (function injectCSS(){
     const css = `
     :root{--logo:#fdf6d0}
@@ -245,7 +244,7 @@ body.light .player::after { z-index: 0; }
     #dlbar .btn{min-width:36px;padding:0 10px}
     #dlbar .btn svg{width:18px;height:18px;fill:var(--fg)}
 
-    /* Light mode minimal support */
+    /* Light mode minimal support (visual only; no title logic here) */
     body.light{--bg:#f7f7f8;--fg:#111;--muted:#4b5563;--card:#ffffff;--border:#d1d5db;--accent:#2563eb}
     body.light .player{background:linear-gradient(180deg,rgba(255,255,255,.96),rgba(255,255,255,.92))}
     body.light #site-title{-webkit-text-stroke:2px #111}
@@ -257,6 +256,8 @@ body.light .player::after { z-index: 0; }
 
   /* ---------- Helpers ---------- */
   const $=sel=>document.querySelector(sel);
+  const isMobile = () => window.matchMedia('(max-width: 560px)').matches;
+
   function fmtDur(sec){ sec=Number(sec||0); const m=Math.floor(sec/60), s=Math.floor(sec%60); return `${m}:${String(s).padStart(2,'0')}`; }
   function debounce(fn,ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); } }
   function escapeHTML(s){ return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -264,7 +265,6 @@ body.light .player::after { z-index: 0; }
   const stripExt=s=>String(s).replace(/\.[a-z0-9]+$/i,'');
   const softNorm=s=>stripExt(s).toLowerCase().replace(/[ _]+/g,'-').replace(/-+/g,'-');
   function deriveTitleFromFilename(name){ const b=stripExt(rawFile(name)).replace(/^[\d._-]+/,'').replace(/[_-]+/g,' ').trim(); return b || stripExt(rawFile(name)); }
-  const primaryOnly = t => String(t||'').split('//')[0].trim();
 
   const DATE_RX_YYYY=/^\s*(\d{4})[.\-_](\d{2})[.\-_](\d{2})(?=\D|$)/;
   const DATE_RX_YY=/^\s*(\d{2})[.\-_](\d{2})[.\-_](\d{2})(?=\D|$)/;
@@ -302,15 +302,15 @@ body.light .player::after { z-index: 0; }
   const state = {
     tracks:[], filtered:[], i:-1, playing:false,
     pageSize:60, renderCount:0,
-    titlesLookup:new Map(), thumbBases:new Set(), resolvedThumb:new Map(),
-    showTitles:false, showWavButtons:false, showMovButtons:false,
+    titlesMap:new Map(), // key -> {L,R}
+    thumbBases:new Set(), resolvedThumb:new Map(),
+    showTitles:false, // interpreted per-platform (see visibleMainLabel)
+    showWavButtons:false, showMovButtons:false,
     favorites:new Set(JSON.parse(localStorage.getItem('vvip25:favs')||'[]')),
     favOrder: JSON.parse(localStorage.getItem('vvip25:favOrder')||'[]'),
-    searchQuery:''
+    searchQuery:'',
+    _mobileFlag: null
   };
-
-  // Titles.json readiness flag (prevents premature filtering on mobile)
-  let TITLES_READY = false;
 
   // Persisted volume
   els.vol.value = localStorage.getItem('vvip25:vol') ?? '0.9';
@@ -319,10 +319,14 @@ body.light .player::after { z-index: 0; }
   /* ---------- Boot ---------- */
   init();
   async function init(){
+    // Platform-specific default:
+    state._mobileFlag = isMobile();
+    state.showTitles = !state._mobileFlag; // desktop: ON by default, mobile: OFF by default
+
     buildMenuUI();
-    buildDownloadFooter();  // icon-only, bottom of playlist
-    setControlIcons();      // bespoke SVG icons (logo-colored)
-    replaceVolumeIcon();    // swap 🔊 for SVG sound icon
+    buildDownloadFooter();
+    setControlIcons();
+    replaceVolumeIcon();
 
     const mres = await fetch(`./manifest.json?v=${ASSET_VERSION}`, { cache:'no-store' });
     if(!mres.ok){ els.list.innerHTML = `<div class="row"><div></div><div>manifest.json missing</div></div>`; return; }
@@ -337,12 +341,11 @@ body.light .player::after { z-index: 0; }
       const wav = BASE_WAV + encodeURIComponent(base + '.wav');
       const mov = t.has_mov ? (BASE_VIDEO + encodeURIComponent(base + '.mov')) : null;
       const thumbCandidate = BASE_THUMB + encodeURIComponent(baseLower + 'thumb.jpg');
-
-      // SEARCH TAGS: put #hashtags in "details" in manifest; indexed but NOT shown.
       const details = t.details || '';
 
       return { id:idx, orig:idx, name, base, baseLower,
-        title: t.title?String(t.title):'',
+        // Title parts populated after titles.json loads
+        titleL:'', titleR:'',
         bpm:t.bpm??null, bpm_min:t.bpm_min??null, bpm_max:t.bpm_max??null,
         details, length:t.length||0,
         date:dateObj||null, labelDate, src:mp3, wav, video:mov, thumbCandidate };
@@ -356,42 +359,89 @@ body.light .player::after { z-index: 0; }
 
     (requestIdleCallback?.(fetchTitles,{timeout:600})||setTimeout(fetchTitles,0));
     (requestIdleCallback?.(fetchThumbs,{timeout:900})||setTimeout(fetchThumbs,50));
+
+    // If viewport crosses mobile/desktop boundary, re-render labels appropriately
+    window.addEventListener('resize', debounce(()=>{
+      const nowMobile = isMobile();
+      if (nowMobile !== state._mobileFlag){
+        state._mobileFlag = nowMobile;
+        // Do NOT change user's toggle, just re-render according to platform semantics
+        refreshTitles();
+      }
+    }, 120), { passive:true });
   }
 
-  /* ---------- Titles (primary only) ---------- */
-  function buildTitleLookup(json){
-    const map=new Map();
-    const add=(k,titleRaw)=>{ if(!k||!titleRaw) return; const title=primaryOnly(titleRaw);
-      const rawLower=String(k).toLowerCase(); const justFile=rawFile(rawLower);
-      const noExt=stripExt(justFile); const norm=softNorm(justFile);
-      map.set(justFile,String(title)); map.set(noExt,String(title)); map.set(norm,String(title));
+  /* ---------- Titles loading: build {L,R} per track ---------- */
+  function normalizeKeyVariants(k){
+    const rawLower=String(k||'').toLowerCase();
+    const justFile=rawFile(rawLower);
+    return [
+      justFile,
+      stripExt(justFile),
+      softNorm(justFile)
+    ];
+  }
+  function splitLRFromString(s){
+    const parts = String(s||'').split('//');
+    const L = (parts[0]||'').trim();
+    const R = (parts[1]||'').trim();
+    if (R) return {L,R};
+    return {L: L, R: ''};
+  }
+  function getLRFromObj(o){
+    // Support a bunch of plausible keys
+    const L = (o.left ?? o.title ?? o.t ?? o.primary ?? o.main ?? o.display ?? '').toString().trim();
+    const R = (o.right ?? o.alt ?? o.secondary ?? o.s ?? o.subtitle ?? o.title2 ?? '').toString().trim();
+    if (L || R) return {L, R};
+    // As a fallback: if 'title' contains //, split it
+    if (o.title && typeof o.title === 'string') return splitLRFromString(o.title);
+    return {L:'', R:''};
+  }
+  function buildTitlesMap(json){
+    const map=new Map(); // keyVariant -> {L,R}
+    const add=(key, val)=>{
+      if(!key) return;
+      let LR = {L:'', R:''};
+      if (typeof val === 'string'){ LR = splitLRFromString(val); }
+      else if (val && typeof val==='object'){ LR = getLRFromObj(val); }
+      if (!LR.L && !LR.R) return;
+      for (const v of normalizeKeyVariants(key)){ map.set(v, {L:LR.L, R:LR.R}); }
     };
-    if (Array.isArray(json)){ for(const row of json||[]){ if(!row) continue; add(row.key||row.src||row.name, row.title||row.t||row.display); } }
-    else if (json && typeof json==='object'){ for(const [k,v] of Object.entries(json)){ add(k, (typeof v==='string')?v:(v&&typeof v.title==='string'?v.title:'')); } }
+
+    if (Array.isArray(json)){
+      for (const row of json){
+        if (!row) continue;
+        // row may be {key, left,right} OR {src,title,alt} etc.
+        const key = row.key ?? row.src ?? row.name ?? row.file ?? row.id ?? '';
+        const val = (row.left || row.right) ? row : (row.title || row.t || row.display) ? row : row.value ?? row;
+        add(key, val);
+      }
+    } else if (json && typeof json==='object'){
+      for (const [k,v] of Object.entries(json)){ add(k, v); }
+    }
     return map;
   }
-  function bestTitleForTrack(t,lookup){
-    const f=rawFile(t.name).toLowerCase(), noExt=stripExt(f), norm=softNorm(f), fromSrc=t.src?rawFile(t.src).toLowerCase():'';
-    const candidates=[f,noExt,norm,fromSrc,stripExt(fromSrc),softNorm(fromSrc),t.base?.toLowerCase?.(),softNorm(t.base||'')].filter(Boolean);
-    for(const c of candidates){ if(lookup.has(c)) return lookup.get(c); } return '';
+  function titlesForTrack(t){
+    const f=rawFile(t.name).toLowerCase();
+    const candidates=[f, stripExt(f), softNorm(f)];
+    for(const c of candidates){ if(state.titlesMap.has(c)) return state.titlesMap.get(c); }
+    return {L:'', R:''};
   }
   async function fetchTitles(){
     try{
       const tres=await fetch(`./titles.json?v=${ASSET_VERSION}`,{cache:'no-store'});
-      if(!tres.ok){ TITLES_READY = true; applyFilterSort(false,true); return; }
+      if(!tres.ok) { applyFilterSort(false,true); return; }
       const json=await tres.json();
-      const lookup=buildTitleLookup(json);
+      state.titlesMap = buildTitlesMap(json);
+
       let changed=false;
       for(const t of state.tracks){
-        const fromTitles=bestTitleForTrack(t,lookup);
-        const finalTitle=fromTitles || t.title || deriveTitleFromFilename(t.name);
-        if (finalTitle!==t.title){ t.title=finalTitle; changed=true; }
+        const {L,R}=titlesForTrack(t);
+        if (t.titleL!==L || t.titleR!==R){ t.titleL=L; t.titleR=R; changed=true; }
       }
-      TITLES_READY = true;
-      if (changed){ applyFilterSort(false,true); refreshTitles(); }
+      if (changed){ refreshTitles(); }
       else { applyFilterSort(false,true); }
     }catch(_){
-      TITLES_READY = true;
       applyFilterSort(false,true);
     }
   }
@@ -419,8 +469,6 @@ body.light .player::after { z-index: 0; }
   const getResolvedThumb=t=>state.resolvedThumb.get(t.id)||DEFAULT_THUMB;
 
   /* ---------- Filtering / sorting ---------- */
-  function isNameless(t){ const derived=deriveTitleFromFilename(t.name); return !t.title || t.title===derived; }
-
   function applyFilterSort(firstPaint=false, keepIndex=false){
     const q=state.searchQuery.trim().toLowerCase();
     const tokens=q? q.split(/\s+/).filter(Boolean):[];
@@ -430,18 +478,16 @@ body.light .player::after { z-index: 0; }
     let favoritesOnly=false;
     if (tokens.includes('#favorites')){ favoritesOnly=true; out=out.filter(t=>state.favorites.has(t.name)); }
 
-    // when titles ON, hide “nameless” ONLY after titles.json is ready
-    if (state.showTitles && TITLES_READY){ out=out.filter(t=>!isNameless(t)); }
-
-    // search on name/title/details (details includes #tags). We DO NOT show details in UI.
+    // search over name + both title columns + hidden details (#tags)
     out = out.filter(t=>{
       const hayName  =(t.name||'').toLowerCase();
-      const hayTitle =(t.title||'').toLowerCase();
-      const hayTags  =(t.details||'').toLowerCase(); // hidden field
+      const hayL     =(t.titleL||'').toLowerCase();
+      const hayR     =(t.titleR||'').toLowerCase();
+      const hayTags  =(t.details||'').toLowerCase();
       return tokens.every(tok=>{
         if (tok==='#favorites') return true;
         if (tok.startsWith('#')) return hayTags.includes(tok);
-        return hayName.includes(tok) || hayTitle.includes(tok) || hayTags.includes(tok);
+        return hayName.includes(tok) || hayL.includes(tok) || hayR.includes(tok) || hayTags.includes(tok);
       });
     });
 
@@ -511,33 +557,29 @@ body.light .player::after { z-index: 0; }
     renderList(); setupInfiniteScroll(); fillViewport();
   }
 
-  /* ---------- Visibility rules for main/sub labels ---------- */
-  const fileLabel = (t) => stripExt(t.name); // “filename row” (secondary label)
+  /* ---------- Title presentation rules ---------- */
+  function fileLabel(t){ return stripExt(t.name); } // fallback only
 
-  function visibleMainLabel(t) {
-    const inLight = document.body.classList.contains('light');
-    const filename = fileLabel(t) || deriveTitleFromFilename(t.name) || t.name || 'untitled';
-    const titled   = (t.title && t.title.trim()) ? t.title : '';
+  function pickMainTitle(t){
+    const L = t.titleL?.trim?.() || '';
+    const R = t.titleR?.trim?.() || '';
+    const fallback = deriveTitleFromFilename(t.name) || t.name || 'untitled';
 
-    // Day mode: show the second title exclusively if present
-    if (inLight && titled) return titled;
-
-    // Otherwise, obey the title toggle inversion:
-    // showTitles ON -> main = Titles JSON; OFF -> main = filename
-    return (state.showTitles && titled) ? titled : filename;
+    // Mobile: default show RIGHT (state.showTitles=false), toggle shows LEFT (true)
+    // Desktop: default show LEFT  (state.showTitles=true), toggle shows RIGHT (false)
+    // Implementation: state.showTitles means "LEFT selected"
+    const wantLeft = !!state.showTitles;
+    return (wantLeft ? (L || R || fallback) : (R || L || fallback));
   }
 
-  function visibleSubLabel(t) {
-    const inLight = document.body.classList.contains('light');
-    if (inLight) return ''; // exclusive in day mode
-
-    // Opposite of main, per spec:
-    // showTitles ON -> sub=filename; OFF -> sub=title
-    const titled = (t.title && t.title.trim()) ? t.title : '';
-    return state.showTitles ? (fileLabel(t) || deriveTitleFromFilename(t.name) || t.name || '') : titled;
+  function pickUnderTitle(t){
+    if (isMobile()) return ''; // mobile: no subline at all (keeps layout tight)
+    const L = t.titleL?.trim?.() || '';
+    const R = t.titleR?.trim?.() || '';
+    const wantLeft = !!state.showTitles;
+    const other = wantLeft ? (R || '') : (L || '');
+    return other;
   }
-
-  const displayName = (t) => visibleMainLabel(t); // backwards-compat shim
 
   /* ---------- Renderers ---------- */
   function imgHTML(src){ const esc=s=>s.replace(/"/g,'&quot;');
@@ -554,24 +596,13 @@ body.light .player::after { z-index: 0; }
     return `<div class="badge">${parts.join('\n')}</div>`;
   }
 
-  function sublineText(t){
-    const parts = [
-      visibleSubLabel(t),
-      bpmLabel(t),
-      t.length ? fmtDur(t.length) : '',
-      t.labelDate || ''
-    ].filter(Boolean);
-    return parts.join(' · ');
-  }
-
   function rowHTML(t,active){
     const thumbURL=getResolvedThumb(t);
-    const hasTitleClass=(t.title && !isNameless(t)) ? 'has-title':'';
-    return `<div class="row ${hasTitleClass}" role="listitem" data-id="${t.id}">
+    return `<div class="row" role="listitem" data-id="${t.id}">
       <div class="cover" aria-hidden="true">${imgHTML(thumbURL)}</div>
       <div>
-        <div class="title">${active?'▶︎ ':''}${escapeHTML(visibleMainLabel(t))}</div>
-        <div class="sub">${escapeHTML(sublineText(t))}</div>
+        <div class="title">${active?'▶︎ ':''}${escapeHTML(pickMainTitle(t))}</div>
+        <div class="sub">${escapeHTML(pickUnderTitle(t))}</div>
       </div>
       ${badgeHTML(t)}
     </div>`;
@@ -598,14 +629,13 @@ body.light .player::after { z-index: 0; }
       const isActive=(state.i>=0 && state.filtered[state.i]?.id===id);
 
       const titleEl=row.querySelector('.title');
-      if (titleEl){ titleEl.innerHTML=(isActive?'▶︎ ':'') + escapeHTML(visibleMainLabel(t)); }
+      if (titleEl){ titleEl.innerHTML=(isActive?'▶︎ ':'') + escapeHTML(pickMainTitle(t)); }
 
       const subEl=row.querySelector('.sub');
-      if (subEl){ subEl.textContent = sublineText(t); }
-
-      row.classList.toggle('has-title', (t.title && !isNameless(t)));
+      if (subEl){ subEl.textContent = pickUnderTitle(t); }
     });
     if (state.i>=0) updateNowbar();
+    // No item-hiding based on titles anymore.
     applyFilterSort(false,true);
   }
 
@@ -647,14 +677,14 @@ body.light .player::after { z-index: 0; }
     const rendered=els.list.querySelectorAll('.row');
     rendered.forEach(row=>{
       const id=Number(row.getAttribute('data-id')); const isActive=(state.filtered[state.i]?.id===id);
-      const titleEl=row.querySelector('.title'); if(titleEl){ const target=state.tracks.find(x=>x.id===id)||t; titleEl.innerHTML=(isActive?'▶︎ ':'') + escapeHTML(visibleMainLabel(target)); }
+      const titleEl=row.querySelector('.title'); if(titleEl){ const target=state.tracks.find(x=>x.id===id)||t; titleEl.innerHTML=(isActive?'▶︎ ':'') + escapeHTML(pickMainTitle(target)); }
       const favBtn=row.querySelector('.star[data-fav]'); if(favBtn){ const key=favBtn.getAttribute('data-fav'); favBtn.classList.toggle('on', state.favorites.has(key)); }
     });
   }
   function updateNowbar(){
     const t=state.filtered[state.i]; if(!t) return;
-    els.nowTitle.textContent=visibleMainLabel(t);
-    els.nowSub.textContent=sublineText(t);
+    els.nowTitle.textContent=pickMainTitle(t);
+    els.nowSub.textContent=pickUnderTitle(t);
     const url=getResolvedThumb(t);
     els.cover.innerHTML=`<img src="${url.replace(/"/g,'&quot;')}" alt="" style="width:56px;height:56px;object-fit:cover;border-radius:8px" onerror="if(this.dataset.fbk!=='1'){this.dataset.fbk='1';this.onerror=null;this.src='${DEFAULT_THUMB}';}">`;
   }
@@ -664,7 +694,7 @@ body.light .player::after { z-index: 0; }
       state.playing=true; updateToggle(); setControlIcons();
       if('mediaSession' in navigator){
         const t=state.filtered[state.i];
-        navigator.mediaSession.metadata=new MediaMetadata({ title:visibleMainLabel(t) });
+        navigator.mediaSession.metadata=new MediaMetadata({ title:pickMainTitle(t) });
         navigator.mediaSession.setActionHandler('previoustrack', ()=>jump(-1));
         navigator.mediaSession.setActionHandler('nexttrack', ()=>jump(1));
         navigator.mediaSession.setActionHandler('seekbackward', ()=> els.audio.currentTime=Math.max(0,els.audio.currentTime-10));
@@ -726,9 +756,9 @@ body.light .player::after { z-index: 0; }
 
     const util=document.createElement('div');
     util.className='util-panel';
-    util.hidden = true;  // use hidden instead of style.display
+    util.hidden = true;  // use [hidden]
     util.innerHTML = `<div class="util-row">
-      <button class="tog" id="togTitles" title="Song Titles (on/off)">📝</button>
+      <button class="tog" id="togTitles" title="Song Titles (toggle L/R)">📝</button>
       <button class="tog" id="togWav" title="Show WAV buttons">🎚️</button>
       <button class="tog" id="togMov" title="Show MOV buttons">🎬</button>
       <button class="tog" id="togLight" title="Light mode">🌞</button>
@@ -775,7 +805,7 @@ body.light .player::after { z-index: 0; }
     tb.appendChild(searchWrap);
     const searchInput=searchWrap.querySelector('#searchInput');
 
-    // Toggle panels with `hidden` + aria-expanded (prevents details from closing)
+    // Toggle panels with [hidden] + aria-expanded
     btnUtils.addEventListener('click',(e)=>{
       e.preventDefault(); e.stopPropagation();
       util.hidden = !util.hidden;
@@ -802,19 +832,22 @@ body.light .player::after { z-index: 0; }
     const btnLight=util.querySelector('#togLight');
 
     function syncToggles(){
-      btnTitles.classList.toggle('on',state.showTitles);
+      // "on" means LEFT column selected (desktop default)
+      btnTitles.classList.toggle('on', state.showTitles);
       btnWav.classList.toggle('on',state.showWavButtons);
       btnMov.classList.toggle('on',state.showMovButtons);
       btnLight.classList.toggle('on',document.body.classList.contains('light'));
     }
     syncToggles();
 
-    btnTitles.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); state.showTitles=!state.showTitles; syncToggles(); refreshTitles(); keepMenuOpen(e); });
+    btnTitles.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation();
+      state.showTitles = !state.showTitles; // flip L/R
+      syncToggles(); refreshTitles(); keepMenuOpen(e);
+    });
     btnWav.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); state.showWavButtons=!state.showWavButtons; syncToggles(); rerenderVisibleRowsBadges(); if(state.i>=0) updateNowbar(); keepMenuOpen(e); });
     btnMov.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); state.showMovButtons=!state.showMovButtons; syncToggles(); rerenderVisibleRowsBadges(); if(state.i>=0) updateNowbar(); keepMenuOpen(e); });
     btnLight.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); document.body.classList.toggle('light'); syncToggles(); refreshTitles(); keepMenuOpen(e); });
 
-    // Keep details open on any toolbar click (except real links)
     tb.addEventListener('click', keepMenuOpen);
   }
 
