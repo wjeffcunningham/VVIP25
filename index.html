@@ -190,9 +190,9 @@ body.light .player::after { z-index: 0; }
   <audio id="audio" preload="metadata"></audio>
 
 <script>
-/* ========= VVIP25 — Platform-specific title presentation (mobile vs desktop) ========= */
+/* ========= VVIP25 — Titles toggle = RIGHT (titles) ↔ LEFT (filenames) from titles.json ========= */
 
-  const ASSET_VERSION = 15; // bump to beat caches on JSON fetches
+  const ASSET_VERSION = 16; // bump to beat caches on JSON fetches
 
   /* ---------- Config ---------- */
   const BASE_MP3   = 'https://media.vvipmedia.net/ACCESS/';
@@ -211,40 +211,15 @@ body.light .player::after { z-index: 0; }
     }catch(_){}
   })();
 
-  /* ---------- CSS patches (icons, footer, light vars) ---------- */
+  /* ---------- Inline CSS patches used by this script (safe) ---------- */
   (function injectCSS(){
     const css = `
     :root{--logo:#fdf6d0}
-
-    .btn,.tog{
-      display:inline-flex;align-items:center;justify-content:center;
-      height:36px;min-width:36px;padding:0 12px;border-radius:10px;border:1px solid var(--border);
-      background:var(--card);color:var(--fg);text-decoration:none;line-height:1;cursor:pointer
-    }
-    .tog{opacity:.75;transition:opacity .15s, box-shadow .15s}
-    .tog.on{opacity:1;box-shadow:0 0 0 2px var(--accent) inset}
-
-    .util-panel,.links-panel{margin-top:8px;border:1px solid var(--border);border-radius:10px;padding:8px}
-    .util-row,.links-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-
-    .search-wrap{gap:8px;align-items:center;margin-top:8px}
-    .search-wrap input{flex:1;min-width:140px;background:var(--card);color:var(--fg);
-      border:1px solid var(--border);border-radius:10px;padding:8px 10px}
-
-    .pill{border:1px solid var(--border);border-radius:999px;padding:4px 10px;font-size:12px;text-decoration:none;color:var(--fg)}
-    .star{cursor:pointer}
-    .star.on{filter:drop-shadow(0 0 2px var(--accent)) brightness(1.2)}
-
-    /* Player control icons inherit the logo color */
     .controls button svg{width:18px;height:18px;fill:var(--logo)}
     .controls button{display:inline-flex;align-items:center;justify-content:center}
-
-    /* Footer download bar — icon only */
     #dlbar{display:flex;justify-content:flex-end;margin:12px 0 40px}
     #dlbar .btn{min-width:36px;padding:0 10px}
     #dlbar .btn svg{width:18px;height:18px;fill:var(--fg)}
-
-    /* Light mode minimal support (visual only; no title logic here) */
     body.light{--bg:#f7f7f8;--fg:#111;--muted:#4b5563;--card:#ffffff;--border:#d1d5db;--accent:#2563eb}
     body.light .player{background:linear-gradient(180deg,rgba(255,255,255,.96),rgba(255,255,255,.92))}
     body.light #site-title{-webkit-text-stroke:2px #111}
@@ -264,7 +239,6 @@ body.light .player::after { z-index: 0; }
   const rawFile=s=>(String(s).split('/').pop()||'');
   const stripExt=s=>String(s).replace(/\.[a-z0-9]+$/i,'');
   const softNorm=s=>stripExt(s).toLowerCase().replace(/[ _]+/g,'-').replace(/-+/g,'-');
-  function deriveTitleFromFilename(name){ const b=stripExt(rawFile(name)).replace(/^[\d._-]+/,'').replace(/[_-]+/g,' ').trim(); return b || stripExt(rawFile(name)); }
 
   const DATE_RX_YYYY=/^\s*(\d{4})[.\-_](\d{2})[.\-_](\d{2})(?=\D|$)/;
   const DATE_RX_YY=/^\s*(\d{2})[.\-_](\d{2})[.\-_](\d{2})(?=\D|$)/;
@@ -302,27 +276,22 @@ body.light .player::after { z-index: 0; }
   const state = {
     tracks:[], filtered:[], i:-1, playing:false,
     pageSize:60, renderCount:0,
-    titlesMap:new Map(), // key -> {L,R}
+    titlesMap:new Map(), // keyVariant -> {L,R}  (LEFT=filenames col, RIGHT=titles col)
     thumbBases:new Set(), resolvedThumb:new Map(),
-    showTitles:false, // interpreted per-platform (see visibleMainLabel)
+    showTitles:true, // DEFAULT ON = show RIGHT column (titles) initially (desktop + mobile)
     showWavButtons:false, showMovButtons:false,
     favorites:new Set(JSON.parse(localStorage.getItem('vvip25:favs')||'[]')),
     favOrder: JSON.parse(localStorage.getItem('vvip25:favOrder')||'[]'),
-    searchQuery:'',
-    _mobileFlag: null
+    searchQuery:''
   };
 
-  // Persisted volume
+  // Persist volume
   els.vol.value = localStorage.getItem('vvip25:vol') ?? '0.9';
   els.audio.volume = parseFloat(els.vol.value);
 
   /* ---------- Boot ---------- */
   init();
   async function init(){
-    // Platform-specific default:
-    state._mobileFlag = isMobile();
-    state.showTitles = !state._mobileFlag; // desktop: ON by default, mobile: OFF by default
-
     buildMenuUI();
     buildDownloadFooter();
     setControlIcons();
@@ -342,10 +311,8 @@ body.light .player::after { z-index: 0; }
       const mov = t.has_mov ? (BASE_VIDEO + encodeURIComponent(base + '.mov')) : null;
       const thumbCandidate = BASE_THUMB + encodeURIComponent(baseLower + 'thumb.jpg');
       const details = t.details || '';
-
       return { id:idx, orig:idx, name, base, baseLower,
-        // Title parts populated after titles.json loads
-        titleL:'', titleR:'',
+        titleL:'', titleR:'', // populated from titles.json
         bpm:t.bpm??null, bpm_min:t.bpm_min??null, bpm_max:t.bpm_max??null,
         details, length:t.length||0,
         date:dateObj||null, labelDate, src:mp3, wav, video:mov, thumbCandidate };
@@ -360,64 +327,63 @@ body.light .player::after { z-index: 0; }
     (requestIdleCallback?.(fetchTitles,{timeout:600})||setTimeout(fetchTitles,0));
     (requestIdleCallback?.(fetchThumbs,{timeout:900})||setTimeout(fetchThumbs,50));
 
-    // If viewport crosses mobile/desktop boundary, re-render labels appropriately
-    window.addEventListener('resize', debounce(()=>{
-      const nowMobile = isMobile();
-      if (nowMobile !== state._mobileFlag){
-        state._mobileFlag = nowMobile;
-        // Do NOT change user's toggle, just re-render according to platform semantics
-        refreshTitles();
-      }
-    }, 120), { passive:true });
+    // If viewport crosses boundary, only affects presence/absence of subline
+    window.addEventListener('resize', debounce(()=>{ refreshTitles(); }, 120), { passive:true });
   }
 
-  /* ---------- Titles loading: build {L,R} per track ---------- */
+  /* ---------- Titles loading: map keys -> {L,R} ---------- */
   function normalizeKeyVariants(k){
     const rawLower=String(k||'').toLowerCase();
     const justFile=rawFile(rawLower);
-    return [
-      justFile,
-      stripExt(justFile),
-      softNorm(justFile)
-    ];
+    return [ justFile, stripExt(justFile), softNorm(justFile) ];
   }
   function splitLRFromString(s){
-    const parts = String(s||'').split('//');
+    // Accept "LEFT // RIGHT" or "LEFT || RIGHT" or "LEFT | RIGHT"
+    const str = String(s||'');
+    let parts = str.split('//');
+    if (parts.length<2) parts = str.split('||');
+    if (parts.length<2) parts = str.split('|');
     const L = (parts[0]||'').trim();
     const R = (parts[1]||'').trim();
-    if (R) return {L,R};
-    return {L: L, R: ''};
+    return {L, R};
   }
   function getLRFromObj(o){
-    // Support a bunch of plausible keys
-    const L = (o.left ?? o.title ?? o.t ?? o.primary ?? o.main ?? o.display ?? '').toString().trim();
-    const R = (o.right ?? o.alt ?? o.secondary ?? o.s ?? o.subtitle ?? o.title2 ?? '').toString().trim();
-    if (L || R) return {L, R};
-    // As a fallback: if 'title' contains //, split it
-    if (o.title && typeof o.title === 'string') return splitLRFromString(o.title);
-    return {L:'', R:''};
+    // Robust key support
+    const L = (o.left ?? o.filename ?? o.file ?? o.name ?? o.primary ?? o.main ?? o.l ?? '').toString().trim();
+    const R = (o.right ?? o.title ?? o.alt ?? o.secondary ?? o.subtitle ?? o.display ?? o.r ?? '').toString().trim();
+    if (L || R) return {L,R};
+    if (typeof o.title === 'string') return splitLRFromString(o.title);
+    return {L:'',R:''};
   }
   function buildTitlesMap(json){
     const map=new Map(); // keyVariant -> {L,R}
-    const add=(key, val)=>{
+    const add=(key,val)=>{
       if(!key) return;
-      let LR = {L:'', R:''};
-      if (typeof val === 'string'){ LR = splitLRFromString(val); }
+      let LR = {L:'',R:''};
+      if (typeof val==='string'){ LR = splitLRFromString(val); }
       else if (val && typeof val==='object'){ LR = getLRFromObj(val); }
       if (!LR.L && !LR.R) return;
-      for (const v of normalizeKeyVariants(key)){ map.set(v, {L:LR.L, R:LR.R}); }
+      for (const v of normalizeKeyVariants(key)){ map.set(v, LR); }
     };
 
     if (Array.isArray(json)){
       for (const row of json){
         if (!row) continue;
-        // row may be {key, left,right} OR {src,title,alt} etc.
-        const key = row.key ?? row.src ?? row.name ?? row.file ?? row.id ?? '';
-        const val = (row.left || row.right) ? row : (row.title || row.t || row.display) ? row : row.value ?? row;
-        add(key, val);
+        // Possible shapes:
+        // { key, left, right }, { file, title }, { name, title }, array like [key, left, right], etc.
+        if (Array.isArray(row)){
+          // Expect [key, left, right]
+          const key=row[0]; const val={left:row[1]??'', right:row[2]??''};
+          add(key,val);
+        } else {
+          const key = row.key ?? row.src ?? row.file ?? row.name ?? row.id ?? row.filename ?? '';
+          const val = (row.left || row.right || row.title || row.display || row.alt || row.subtitle) ? row : row.value ?? row;
+          add(key,val);
+        }
       }
     } else if (json && typeof json==='object'){
-      for (const [k,v] of Object.entries(json)){ add(k, v); }
+      // { "fileA.mp3": "LEFT // RIGHT", "fileB.mp3": {left:"...", right:"..."} }
+      for (const [k,v] of Object.entries(json)){ add(k,v); }
     }
     return map;
   }
@@ -425,12 +391,13 @@ body.light .player::after { z-index: 0; }
     const f=rawFile(t.name).toLowerCase();
     const candidates=[f, stripExt(f), softNorm(f)];
     for(const c of candidates){ if(state.titlesMap.has(c)) return state.titlesMap.get(c); }
-    return {L:'', R:''};
+    // Fallback: LEFT := filename base; RIGHT := empty (so toggle still works)
+    return {L: stripExt(f), R: ''};
   }
   async function fetchTitles(){
     try{
       const tres=await fetch(`./titles.json?v=${ASSET_VERSION}`,{cache:'no-store'});
-      if(!tres.ok) { applyFilterSort(false,true); return; }
+      if(!tres.ok){ applyFilterSort(false,true); return; }
       const json=await tres.json();
       state.titlesMap = buildTitlesMap(json);
 
@@ -442,7 +409,13 @@ body.light .player::after { z-index: 0; }
       if (changed){ refreshTitles(); }
       else { applyFilterSort(false,true); }
     }catch(_){
-      applyFilterSort(false,true);
+      // titles.json missing: we still show LEFT=fallback filename ONLY
+      for(const t of state.tracks){
+        const f = stripExt(rawFile(t.name));
+        t.titleL = f;
+        t.titleR = '';
+      }
+      refreshTitles();
     }
   }
 
@@ -478,7 +451,7 @@ body.light .player::after { z-index: 0; }
     let favoritesOnly=false;
     if (tokens.includes('#favorites')){ favoritesOnly=true; out=out.filter(t=>state.favorites.has(t.name)); }
 
-    // search over name + both title columns + hidden details (#tags)
+    // search over filename (key), LEFT, RIGHT, hidden details
     out = out.filter(t=>{
       const hayName  =(t.name||'').toLowerCase();
       const hayL     =(t.titleL||'').toLowerCase();
@@ -491,7 +464,7 @@ body.light .player::after { z-index: 0; }
       });
     });
 
-    // sorting (stable across browsers via orig tiebreak)
+    // sorting (stable via orig)
     if (favoritesOnly){
       const orderIndex=new Map(state.favOrder.map((name,idx)=>[name,idx]));
       out.sort((a,b)=>(orderIndex.get(a.name)??1e9)-(orderIndex.get(b.name)??1e9) || (a.orig-b.orig));
@@ -520,32 +493,16 @@ body.light .player::after { z-index: 0; }
           });
           break;
         case 'bpm_desc':
-          out.sort((a,b)=>{
-            const d=bpmSortValue(b)-bpmSortValue(a);
-            if (d!==0) return d;
-            return a.orig - b.orig;
-          });
+          out.sort((a,b)=>{ const d=bpmSortValue(b)-bpmSortValue(a); return d!==0?d:(a.orig-b.orig); });
           break;
         case 'bpm_asc':
-          out.sort((a,b)=>{
-            const d=bpmSortValue(a)-bpmSortValue(b);
-            if (d!==0) return d;
-            return a.orig - b.orig;
-          });
+          out.sort((a,b)=>{ const d=bpmSortValue(a)-bpmSortValue(b); return d!==0?d:(a.orig-b.orig); });
           break;
         case 'len_desc':
-          out.sort((a,b)=>{
-            const d=(b.length||0)-(a.length||0);
-            if (d!==0) return d;
-            return a.orig - b.orig;
-          });
+          out.sort((a,b)=>{ const d=(b.length||0)-(a.length||0); return d!==0?d:(a.orig-b.orig); });
           break;
         case 'len_asc':
-          out.sort((a,b)=>{
-            const d=(a.length||0)-(b.length||0);
-            if (d!==0) return d;
-            return a.orig - b.orig;
-          });
+          out.sort((a,b)=>{ const d=(a.length||0)-(b.length||0); return d!==0?d:(a.orig-b.orig); });
           break;
       }
     }
@@ -557,28 +514,22 @@ body.light .player::after { z-index: 0; }
     renderList(); setupInfiniteScroll(); fillViewport();
   }
 
-  /* ---------- Title presentation rules ---------- */
-  function fileLabel(t){ return stripExt(t.name); } // fallback only
-
-  function pickMainTitle(t){
-    const L = t.titleL?.trim?.() || '';
-    const R = t.titleR?.trim?.() || '';
-    const fallback = deriveTitleFromFilename(t.name) || t.name || 'untitled';
-
-    // Mobile: default show RIGHT (state.showTitles=false), toggle shows LEFT (true)
-    // Desktop: default show LEFT  (state.showTitles=true), toggle shows RIGHT (false)
-    // Implementation: state.showTitles means "LEFT selected"
-    const wantLeft = !!state.showTitles;
-    return (wantLeft ? (L || R || fallback) : (R || L || fallback));
+  /* ---------- Title presentation ---------- */
+  // showTitles === true  -> show RIGHT column (titles)
+  // showTitles === false -> show LEFT column (filenames)
+  function pickMain(t){
+    const right = t.titleR?.trim?.() || '';
+    const left  = t.titleL?.trim?.() || '';
+    // If the requested column is empty, gracefully fall back to the other
+    if (state.showTitles) return right || left || stripExt(rawFile(t.name)) || 'untitled';
+    return left || right || stripExt(rawFile(t.name)) || 'untitled';
   }
-
-  function pickUnderTitle(t){
-    if (isMobile()) return ''; // mobile: no subline at all (keeps layout tight)
-    const L = t.titleL?.trim?.() || '';
-    const R = t.titleR?.trim?.() || '';
-    const wantLeft = !!state.showTitles;
-    const other = wantLeft ? (R || '') : (L || '');
-    return other;
+  function pickUnder(t){
+    if (isMobile()) return '';               // mobile: no subline
+    const right = t.titleR?.trim?.() || '';
+    const left  = t.titleL?.trim?.() || '';
+    // Undershadow = the opposite column (if present)
+    return state.showTitles ? (left) : (right);
   }
 
   /* ---------- Renderers ---------- */
@@ -601,8 +552,8 @@ body.light .player::after { z-index: 0; }
     return `<div class="row" role="listitem" data-id="${t.id}">
       <div class="cover" aria-hidden="true">${imgHTML(thumbURL)}</div>
       <div>
-        <div class="title">${active?'▶︎ ':''}${escapeHTML(pickMainTitle(t))}</div>
-        <div class="sub">${escapeHTML(pickUnderTitle(t))}</div>
+        <div class="title">${active?'▶︎ ':''}${escapeHTML(pickMain(t))}</div>
+        <div class="sub">${escapeHTML(pickUnder(t))}</div>
       </div>
       ${badgeHTML(t)}
     </div>`;
@@ -629,13 +580,12 @@ body.light .player::after { z-index: 0; }
       const isActive=(state.i>=0 && state.filtered[state.i]?.id===id);
 
       const titleEl=row.querySelector('.title');
-      if (titleEl){ titleEl.innerHTML=(isActive?'▶︎ ':'') + escapeHTML(pickMainTitle(t)); }
+      if (titleEl){ titleEl.innerHTML=(isActive?'▶︎ ':'') + escapeHTML(pickMain(t)); }
 
       const subEl=row.querySelector('.sub');
-      if (subEl){ subEl.textContent = pickUnderTitle(t); }
+      if (subEl){ subEl.textContent = pickUnder(t); }
     });
     if (state.i>=0) updateNowbar();
-    // No item-hiding based on titles anymore.
     applyFilterSort(false,true);
   }
 
@@ -677,14 +627,14 @@ body.light .player::after { z-index: 0; }
     const rendered=els.list.querySelectorAll('.row');
     rendered.forEach(row=>{
       const id=Number(row.getAttribute('data-id')); const isActive=(state.filtered[state.i]?.id===id);
-      const titleEl=row.querySelector('.title'); if(titleEl){ const target=state.tracks.find(x=>x.id===id)||t; titleEl.innerHTML=(isActive?'▶︎ ':'') + escapeHTML(pickMainTitle(target)); }
+      const titleEl=row.querySelector('.title'); if(titleEl){ const target=state.tracks.find(x=>x.id===id)||t; titleEl.innerHTML=(isActive?'▶︎ ':'') + escapeHTML(pickMain(target)); }
       const favBtn=row.querySelector('.star[data-fav]'); if(favBtn){ const key=favBtn.getAttribute('data-fav'); favBtn.classList.toggle('on', state.favorites.has(key)); }
     });
   }
   function updateNowbar(){
     const t=state.filtered[state.i]; if(!t) return;
-    els.nowTitle.textContent=pickMainTitle(t);
-    els.nowSub.textContent=pickUnderTitle(t);
+    els.nowTitle.textContent=pickMain(t);
+    els.nowSub.textContent=pickUnder(t);
     const url=getResolvedThumb(t);
     els.cover.innerHTML=`<img src="${url.replace(/"/g,'&quot;')}" alt="" style="width:56px;height:56px;object-fit:cover;border-radius:8px" onerror="if(this.dataset.fbk!=='1'){this.dataset.fbk='1';this.onerror=null;this.src='${DEFAULT_THUMB}';}">`;
   }
@@ -694,7 +644,7 @@ body.light .player::after { z-index: 0; }
       state.playing=true; updateToggle(); setControlIcons();
       if('mediaSession' in navigator){
         const t=state.filtered[state.i];
-        navigator.mediaSession.metadata=new MediaMetadata({ title:pickMainTitle(t) });
+        navigator.mediaSession.metadata=new MediaMetadata({ title:pickMain(t) });
         navigator.mediaSession.setActionHandler('previoustrack', ()=>jump(-1));
         navigator.mediaSession.setActionHandler('nexttrack', ()=>jump(1));
         navigator.mediaSession.setActionHandler('seekbackward', ()=> els.audio.currentTime=Math.max(0,els.audio.currentTime-10));
@@ -706,7 +656,7 @@ body.light .player::after { z-index: 0; }
   function updateToggle(){ const btn=$('#toggle'); if(btn) btn.setAttribute('data-state', state.playing ? 'pause' : 'play'); }
   function jump(dir){ if(!state.filtered.length) return; let i=state.i+dir; if(i<0) i=state.filtered.length-1; if(i>=state.filtered.length) i=0; select(i); play(); }
 
-  /* ---------- Bespoke SVG icons (logo color via CSS) ---------- */
+  /* ---------- Control icons ---------- */
   function setControlIcons(){
     const svgPrev = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h2v14H6zM20 6v12L9 12z"/></svg>';
     const svgNext = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 5h2v14h-2zM4 6v12l11-6z"/></svg>';
@@ -756,9 +706,9 @@ body.light .player::after { z-index: 0; }
 
     const util=document.createElement('div');
     util.className='util-panel';
-    util.hidden = true;  // use [hidden]
+    util.hidden = true;
     util.innerHTML = `<div class="util-row">
-      <button class="tog" id="togTitles" title="Song Titles (toggle L/R)">📝</button>
+      <button class="tog ${state.showTitles?'on':''}" id="togTitles" title="Toggle: RIGHT (titles) ↔ LEFT (filenames)">📝</button>
       <button class="tog" id="togWav" title="Show WAV buttons">🎚️</button>
       <button class="tog" id="togMov" title="Show MOV buttons">🎬</button>
       <button class="tog" id="togLight" title="Light mode">🌞</button>
@@ -805,7 +755,7 @@ body.light .player::after { z-index: 0; }
     tb.appendChild(searchWrap);
     const searchInput=searchWrap.querySelector('#searchInput');
 
-    // Toggle panels with [hidden] + aria-expanded
+    // Panel toggles using [hidden]
     btnUtils.addEventListener('click',(e)=>{
       e.preventDefault(); e.stopPropagation();
       util.hidden = !util.hidden;
@@ -825,28 +775,27 @@ body.light .player::after { z-index: 0; }
       keepMenuOpen(e);
     });
 
-    // Toggle wiring inside Utilities
+    // Utility toggle handlers
     const btnTitles=util.querySelector('#togTitles');
     const btnWav=util.querySelector('#togWav');
     const btnMov=util.querySelector('#togMov');
     const btnLight=util.querySelector('#togLight');
 
-    function syncToggles(){
-      // "on" means LEFT column selected (desktop default)
+    const syncToggles=()=>{
       btnTitles.classList.toggle('on', state.showTitles);
       btnWav.classList.toggle('on',state.showWavButtons);
       btnMov.classList.toggle('on',state.showMovButtons);
       btnLight.classList.toggle('on',document.body.classList.contains('light'));
-    }
+    };
     syncToggles();
 
     btnTitles.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation();
-      state.showTitles = !state.showTitles; // flip L/R
+      state.showTitles = !state.showTitles; // RIGHT ↔ LEFT
       syncToggles(); refreshTitles(); keepMenuOpen(e);
     });
     btnWav.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); state.showWavButtons=!state.showWavButtons; syncToggles(); rerenderVisibleRowsBadges(); if(state.i>=0) updateNowbar(); keepMenuOpen(e); });
     btnMov.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); state.showMovButtons=!state.showMovButtons; syncToggles(); rerenderVisibleRowsBadges(); if(state.i>=0) updateNowbar(); keepMenuOpen(e); });
-    btnLight.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); document.body.classList.toggle('light'); syncToggles(); refreshTitles(); keepMenuOpen(e); });
+    btnLight.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); document.body.classList.toggle('light'); syncToggles(); keepMenuOpen(e); });
 
     tb.addEventListener('click', keepMenuOpen);
   }
@@ -862,20 +811,16 @@ body.light .player::after { z-index: 0; }
   function buildDownloadFooter(){
     const listEl = $('#list');
     if (!listEl) return;
-
     const bar = document.createElement('div');
     bar.id = 'dlbar';
     const svgDownload = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20h14v-2H5v2zm7-18v10.17l3.59-3.58L17 10l-5 5-5-5 1.41-1.41L11 12.17V2h1z"/></svg>';
     bar.innerHTML = `<button class="btn" id="btnDl" title="Download playlist (.m3u)">${svgDownload}</button>`;
-
-    // place *after* the list so it sits at the bottom of the page
     listEl.insertAdjacentElement('afterend', bar);
 
     $('#btnDl').addEventListener('click', (e)=>{
       e.preventDefault(); e.stopPropagation();
       const view = state.filtered.slice();
       if (!view.length) return;
-
       const m3u = ['#EXTM3U', ...view.map(t => t.src)].join('\n');
       const blob = new Blob([m3u], {type:'audio/x-mpegurl'});
       const a=document.createElement('a');
