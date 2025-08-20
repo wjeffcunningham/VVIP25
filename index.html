@@ -190,7 +190,7 @@ body.light .player::after { z-index: 0; }
   <audio id="audio" preload="metadata"></audio>
 
 <script>
-/* ========= VVIP25 — Phase 6 tidy + day-mode secondary-title logic + UI fixes ========= */
+/* ========= VVIP25 — Phase 6 tidy + mobile/title fixes + day-mode logic ========= */
 
   const ASSET_VERSION = 14; // bump to beat caches on JSON fetches
 
@@ -212,7 +212,7 @@ body.light .player::after { z-index: 0; }
   })();
 
   /* ---------- CSS patches (icons, footer, light vars) ----------
-     NOTE: we DO NOT hide panels here; we rely on the [hidden] attribute. */
+     NOTE: we rely on the [hidden] attribute for panel toggling. */
   (function injectCSS(){
     const css = `
     :root{--logo:#fdf6d0}
@@ -309,6 +309,9 @@ body.light .player::after { z-index: 0; }
     searchQuery:''
   };
 
+  // Titles.json readiness flag (prevents premature filtering on mobile)
+  let TITLES_READY = false;
+
   // Persisted volume
   els.vol.value = localStorage.getItem('vvip25:vol') ?? '0.9';
   els.audio.volume = parseFloat(els.vol.value);
@@ -338,7 +341,8 @@ body.light .player::after { z-index: 0; }
       // SEARCH TAGS: put #hashtags in "details" in manifest; indexed but NOT shown.
       const details = t.details || '';
 
-      return { id:idx, name, base, baseLower, title: t.title?String(t.title):'',
+      return { id:idx, orig:idx, name, base, baseLower,
+        title: t.title?String(t.title):'',
         bpm:t.bpm??null, bpm_min:t.bpm_min??null, bpm_max:t.bpm_max??null,
         details, length:t.length||0,
         date:dateObj||null, labelDate, src:mp3, wav, video:mov, thumbCandidate };
@@ -374,7 +378,7 @@ body.light .player::after { z-index: 0; }
   async function fetchTitles(){
     try{
       const tres=await fetch(`./titles.json?v=${ASSET_VERSION}`,{cache:'no-store'});
-      if(!tres.ok) return;
+      if(!tres.ok){ TITLES_READY = true; applyFilterSort(false,true); return; }
       const json=await tres.json();
       const lookup=buildTitleLookup(json);
       let changed=false;
@@ -383,8 +387,13 @@ body.light .player::after { z-index: 0; }
         const finalTitle=fromTitles || t.title || deriveTitleFromFilename(t.name);
         if (finalTitle!==t.title){ t.title=finalTitle; changed=true; }
       }
+      TITLES_READY = true;
       if (changed){ applyFilterSort(false,true); refreshTitles(); }
-    }catch(_){}
+      else { applyFilterSort(false,true); }
+    }catch(_){
+      TITLES_READY = true;
+      applyFilterSort(false,true);
+    }
   }
 
   /* ---------- Thumbs ---------- */
@@ -402,7 +411,7 @@ body.light .player::after { z-index: 0; }
   function computeThumbCascade(){
     const asc=[...state.tracks].sort((a,b)=>{ const da=a.date?.getTime()||0, db=b.date?.getTime()||0;
       if(da!==db) return da-db;
-      return withinDayIndexFromName(a.name)-withinDayIndexFromName(b.name) || a.name.localeCompare(b.name);
+      return withinDayIndexFromName(a.name)-withinDayIndexFromName(b.name) || a.name.localeCompare(b.name) || (a.orig-b.orig);
     });
     let currentThumb=DEFAULT_THUMB;
     for(const t of asc){ if(state.thumbBases.has(t.baseLower)) currentThumb=t.thumbCandidate; state.resolvedThumb.set(t.id,currentThumb); }
@@ -421,8 +430,8 @@ body.light .player::after { z-index: 0; }
     let favoritesOnly=false;
     if (tokens.includes('#favorites')){ favoritesOnly=true; out=out.filter(t=>state.favorites.has(t.name)); }
 
-    // when titles ON, hide “nameless”
-    if (state.showTitles){ out=out.filter(t=>!isNameless(t)); }
+    // when titles ON, hide “nameless” ONLY after titles.json is ready
+    if (state.showTitles && TITLES_READY){ out=out.filter(t=>!isNameless(t)); }
 
     // search on name/title/details (details includes #tags). We DO NOT show details in UI.
     out = out.filter(t=>{
@@ -436,20 +445,62 @@ body.light .player::after { z-index: 0; }
       });
     });
 
-    // sorting
+    // sorting (stable across browsers via orig tiebreak)
     if (favoritesOnly){
       const orderIndex=new Map(state.favOrder.map((name,idx)=>[name,idx]));
-      out.sort((a,b)=>(orderIndex.get(a.name)??1e9)-(orderIndex.get(b.name)??1e9));
+      out.sort((a,b)=>(orderIndex.get(a.name)??1e9)-(orderIndex.get(b.name)??1e9) || (a.orig-b.orig));
     } else {
       switch(els.sort?.value||'date_desc'){
-        case 'date_desc': out.sort((a,b)=>{ const da=a.date?.getTime()||0, db=b.date?.getTime()||0;
-          if (db!==da) return db-da; return withinDayIndexFromName(b.name)-withinDayIndexFromName(a.name) || b.name.localeCompare(a.name); }); break;
-        case 'date_asc':  out.sort((a,b)=>{ const da=a.date?.getTime()||0, db=b.date?.getTime()||0;
-          if (da!==db) return da-db; return withinDayIndexFromName(a.name)-withinDayIndexFromName(b.name) || a.name.localeCompare(b.name); }); break;
-        case 'bpm_desc':  out.sort((a,b)=> bpmSortValue(b)-bpmSortValue(a)); break;
-        case 'bpm_asc':   out.sort((a,b)=> bpmSortValue(a)-bpmSortValue(b)); break;
-        case 'len_desc':  out.sort((a,b)=> (b.length||0)-(a.length||0)); break;
-        case 'len_asc':   out.sort((a,b)=> (a.length||0)-(b.length||0)); break;
+        case 'date_desc':
+          out.sort((a,b)=>{
+            const da=a.date?.getTime()||0, db=b.date?.getTime()||0;
+            if (db!==da) return db-da;
+            const wi = withinDayIndexFromName(b.name) - withinDayIndexFromName(a.name);
+            if (wi!==0) return wi;
+            const nc = b.name.localeCompare(a.name);
+            if (nc!==0) return nc;
+            return a.orig - b.orig;
+          });
+          break;
+        case 'date_asc':
+          out.sort((a,b)=>{
+            const da=a.date?.getTime()||0, db=b.date?.getTime()||0;
+            if (da!==db) return da-db;
+            const wi = withinDayIndexFromName(a.name) - withinDayIndexFromName(b.name);
+            if (wi!==0) return wi;
+            const nc = a.name.localeCompare(b.name);
+            if (nc!==0) return nc;
+            return a.orig - b.orig;
+          });
+          break;
+        case 'bpm_desc':
+          out.sort((a,b)=>{
+            const d=bpmSortValue(b)-bpmSortValue(a);
+            if (d!==0) return d;
+            return a.orig - b.orig;
+          });
+          break;
+        case 'bpm_asc':
+          out.sort((a,b)=>{
+            const d=bpmSortValue(a)-bpmSortValue(b);
+            if (d!==0) return d;
+            return a.orig - b.orig;
+          });
+          break;
+        case 'len_desc':
+          out.sort((a,b)=>{
+            const d=(b.length||0)-(a.length||0);
+            if (d!==0) return d;
+            return a.orig - b.orig;
+          });
+          break;
+        case 'len_asc':
+          out.sort((a,b)=>{
+            const d=(a.length||0)-(b.length||0);
+            if (d!==0) return d;
+            return a.orig - b.orig;
+          });
+          break;
       }
     }
 
@@ -465,12 +516,15 @@ body.light .player::after { z-index: 0; }
 
   function visibleMainLabel(t) {
     const inLight = document.body.classList.contains('light');
-    // Day mode: if second title exists, show it exclusively.
-    if (inLight && t.title) return t.title;
+    const filename = fileLabel(t) || deriveTitleFromFilename(t.name) || t.name || 'untitled';
+    const titled   = (t.title && t.title.trim()) ? t.title : '';
 
-    // Otherwise, defer to the title toggle inversion:
+    // Day mode: show the second title exclusively if present
+    if (inLight && titled) return titled;
+
+    // Otherwise, obey the title toggle inversion:
     // showTitles ON -> main = Titles JSON; OFF -> main = filename
-    return (state.showTitles && t.title) ? t.title : fileLabel(t);
+    return (state.showTitles && titled) ? titled : filename;
   }
 
   function visibleSubLabel(t) {
@@ -479,7 +533,8 @@ body.light .player::after { z-index: 0; }
 
     // Opposite of main, per spec:
     // showTitles ON -> sub=filename; OFF -> sub=title
-    return state.showTitles ? fileLabel(t) : (t.title || '');
+    const titled = (t.title && t.title.trim()) ? t.title : '';
+    return state.showTitles ? (fileLabel(t) || deriveTitleFromFilename(t.name) || t.name || '') : titled;
   }
 
   const displayName = (t) => visibleMainLabel(t); // backwards-compat shim
