@@ -192,7 +192,7 @@ body.light .player::after { z-index: 0; }
 (function(){
   "use strict";
 
-  /* ---------- Small Safari-friendly setup ---------- */
+  /* ---------- Idle + DOM ready (Safari-safe) ---------- */
   if (typeof window.requestIdleCallback !== "function") {
     window.requestIdleCallback = function(cb){ return setTimeout(()=>cb({timeRemaining:()=>50}), 1); };
     window.cancelIdleCallback = function(id){ clearTimeout(id); };
@@ -200,7 +200,7 @@ body.light .player::after { z-index: 0; }
   function ready(fn){ if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", fn, {once:true}); else fn(); }
 
   /* ---------- Config ---------- */
-  const ASSET_VERSION = 20;
+  const ASSET_VERSION = 21; // bump if you change titles.json/manifest.json
   const BASE_MP3   = 'https://media.vvipmedia.net/ACCESS/';
   const BASE_WAV   = 'https://media.vvipmedia.net/WAV/';
   const BASE_THUMB = 'https://media.vvipmedia.net/ACCESS/';
@@ -212,7 +212,7 @@ body.light .player::after { z-index: 0; }
     try{ const m=document.createElement('meta'); m.httpEquiv='Cache-Control'; m.content='no-store, max-age=0, must-revalidate'; document.head.appendChild(m);}catch(_){}
   })();
 
-  /* ---------- Minimal CSS dependency for icons ---------- */
+  /* ---------- Minimal CSS the script relies on ---------- */
   (function(){
     const css = `
       :root{--logo:#fdf6d0}
@@ -221,18 +221,21 @@ body.light .player::after { z-index: 0; }
       #dlbar{display:flex;justify-content:flex-end;margin:12px 0 40px}
       #dlbar .btn{min-width:36px;padding:0 10px}
       #dlbar .btn svg{width:18px;height:18px;fill:var(--fg)}
+      /* Light theme variables so the whole UI actually turns light */
+      body.light{--bg:#f7f7f8;--fg:#111;--muted:#4b5563;--card:#ffffff;--border:#d1d5db;--accent:#2563eb}
+      body.light .player{background:linear-gradient(180deg,rgba(255,255,255,.96),rgba(255,255,255,.92))}
+      body.light #site-title{-webkit-text-stroke:2px #111}
     `;
     const style=document.createElement('style'); style.textContent=css; document.head.appendChild(style);
   })();
 
   /* ---------- Helpers ---------- */
   const $=sel=>document.querySelector(sel);
-  function escapeHTML(s){ return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
   const rawFile=s=>(String(s).split('/').pop()||'');
   const stripExt=s=>String(s).replace(/\.[a-z0-9]+$/i,'');
+  function escapeHTML(s){ return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
   function fmtTime(sec){ sec=Number(sec||0); const m=Math.floor(sec/60), s=Math.floor(sec%60); return `${m}:${String(s).padStart(2,'0')}`; }
-
-  // Value cleaner: keep only the first segment before //, ||, or | (no alternates)
+  // titles.json value cleaner: keep only first segment before //, ||, or |
   function primaryOnly(s){
     s = String(s||'');
     const a = s.split('//')[0];
@@ -241,6 +244,7 @@ body.light .player::after { z-index: 0; }
     return c.trim();
   }
 
+  // date helpers (for stable sort when dates are encoded in filenames)
   const DATE_RX_YYYY=/^\s*(\d{4})[.\-_](\d{2})[.\-_](\d{2})(?=\D|$)/;
   const DATE_RX_YY=/^\s*(\d{2})[.\-_](\d{2})[.\-_](\d{2})(?=\D|$)/;
   const WITHIN_DAY_RX=/^\s*(?:\d{4}|\d{2})[.\-_]\d{2}[.\-_]\d{2}(?:[.\-_](\d+))?/;
@@ -286,6 +290,9 @@ body.light .player::after { z-index: 0; }
   }
 
   async function boot(){
+    // restore saved light-mode if any
+    try{ const savedLight = localStorage.getItem('vvip25:light'); if (savedLight === '1') document.body.classList.add('light'); }catch(_){}
+    // volume
     if (els.vol){ els.vol.value = localStorage.getItem('vvip25:vol') ?? '0.9'; }
     if (els.audio && els.vol){ els.audio.volume = parseFloat(els.vol.value); }
 
@@ -303,8 +310,13 @@ body.light .player::after { z-index: 0; }
       const wav = BASE_WAV + encodeURIComponent(base + '.wav');
       const mov = t.has_mov ? (BASE_VIDEO + encodeURIComponent(base + '.mov')) : null;
       const thumbCandidate = BASE_THUMB + encodeURIComponent(baseLower + 'thumb.jpg');
+      // Start with manifest’s own title if present so the UI isn’t empty while we fetch titles.json
+      const titleFromManifest = t.title ? String(t.title) : '';
+      const filenamePrimary = rawFile(name);
       return { id:idx, orig:idx, name, base, baseLower,
-        titleL:'', titleR:'', length:t.length||0,
+        titleL: filenamePrimary,              // LEFT defaults to filename
+        titleR: titleFromManifest || '',      // RIGHT defaults to manifest title (will be replaced by titles.json)
+        length:t.length||0,
         bpm:t.bpm??null, bpm_min:t.bpm_min??null, bpm_max:t.bpm_max??null,
         details:t.details||'', date:dateObj||null, src:mp3, wav, video:mov, thumbCandidate };
     });
@@ -315,7 +327,7 @@ body.light .player::after { z-index: 0; }
     fillViewport();
     if (state.filtered.length && state.i === -1) { select(0); }
 
-    requestIdleCallback(fetchTitles);
+    requestIdleCallback(fetchTitles); // overlay titles.json when ready
     requestIdleCallback(fetchThumbs);
 
     /* player wiring */
@@ -358,21 +370,24 @@ body.light .player::after { z-index: 0; }
 
   /* ---------- Data loading ---------- */
   async function fetchManifest(){
-    const urls = [`./manifest.json?v=${ASSET_VERSION}`, `/manifest.json?v=${ASSET_VERSION}`];
+    const urls = [
+      `./manifest.json?v=${ASSET_VERSION}`,
+      `/manifest.json?v=${ASSET_VERSION}`
+    ];
     for (const u of urls){ try{ const r=await fetch(u,{cache:'no-store'}); if(r.ok) return await r.json(); }catch(_){}} 
     els.list.innerHTML = `<div class="row"><div></div><div>manifest.json not found</div></div>`;
     return null;
   }
 
-  // Your titles.json: { "file.mp3": "Display Title // maybe alt" }
+  // titles.json is OBJECT: { "file.mp3": "Display Title // maybe alt" }
   function buildTitlesMapFromObject(obj){
     const map = new Map();
     for (const [file, value] of Object.entries(obj||{})){
-      const key = rawFile(String(file).toLowerCase());
-      const L = String(file);            // LEFT = filename (exact key)
-      const R = primaryOnly(value);      // RIGHT = first segment only
+      const key = rawFile(String(file).toLowerCase());     // normalize
+      const L = String(file);                               // LEFT = filename (exact key)
+      const R = primaryOnly(value);                         // RIGHT = first segment only
       map.set(key, {L,R});
-      map.set(stripExt(key), {L,R});     // also allow key without extension
+      map.set(stripExt(key), {L,R});                        // also allow key without extension
     }
     return map;
   }
@@ -384,20 +399,30 @@ body.light .player::after { z-index: 0; }
 
   async function fetchTitles(){
     try{
-      const r1 = await fetch(`./titles.json?v=${ASSET_VERSION}`, {cache:'no-store'});
-      const r  = r1.ok ? r1 : await fetch(`/titles.json?v=${ASSET_VERSION}`, {cache:'no-store'});
-      if (!r.ok) { applyFilterSort(false,true); return; }
-      const json = await r.json();
-      state.titlesMap = buildTitlesMapFromObject(json);
+      const urls = [
+        `./titles.json?v=${ASSET_VERSION}`,
+        `/titles.json?v=${ASSET_VERSION}`
+      ];
+      let data=null, okUrl='';
+      for (const u of urls){
+        try{ const r=await fetch(u,{cache:'no-store'}); if(r.ok){ data=await r.json(); okUrl=u; break; } }catch(_){}
+      }
+      if (!data || typeof data !== 'object' || Array.isArray(data)) {
+        // keep manifest titles (R) and filenames (L)
+        refreshTitles(); 
+        return;
+      }
+      state.titlesMap = buildTitlesMapFromObject(data);
 
       let changed=false;
       for(const t of state.tracks){
         const {L,R}=titlesForTrack(t);
         if (t.titleL!==L || t.titleR!==R){ t.titleL=L; t.titleR=R; changed=true; }
       }
-      if (changed) refreshTitles(); else applyFilterSort(false,true);
+      if (changed) refreshTitles();
+      else applyFilterSort(false,true);
     }catch(_){
-      for(const t of state.tracks){ t.titleL = rawFile(t.name); t.titleR=''; }
+      // leave manifest titles as-is
       refreshTitles();
     }
   }
@@ -405,10 +430,10 @@ body.light .player::after { z-index: 0; }
   /* ---------- Thumbs ---------- */
   async function fetchThumbs(){
     try{
-      const r1 = await fetch(`./thumbs.json?v=${ASSET_VERSION}`,{cache:'no-store'});
-      const r  = r1.ok ? r1 : await fetch(`/thumbs.json?v=${ASSET_VERSION}`,{cache:'no-store'});
-      if(!r.ok) return;
-      const data=await r.json();
+      const urls=[`./thumbs.json?v=${ASSET_VERSION}`, `/thumbs.json?v=${ASSET_VERSION}`];
+      let data=null;
+      for (const u of urls){ try{ const r=await fetch(u,{cache:'no-store'}); if(r.ok){ data=await r.json(); break; } }catch(_){ } }
+      if(!data) return;
       const set=new Set();
       if(Array.isArray(data)) data.forEach(b=>set.add(String(b).toLowerCase()));
       else if(data && typeof data==='object') Object.keys(data).forEach(b=>{ if(data[b]) set.add(b.toLowerCase()); });
@@ -428,7 +453,7 @@ body.light .player::after { z-index: 0; }
   }
   const getResolvedThumb=t=>state.resolvedThumb.get(t.id)||DEFAULT_THUMB;
 
-  /* ---------- Titles display logic ---------- */
+  /* ---------- Titles display logic (toggle) ---------- */
   function pickMain(t){ return state.showTitles ? (t.titleR || t.titleL || stripExt(rawFile(t.name)) || 'untitled')
                                                : (t.titleL || t.titleR || stripExt(rawFile(t.name)) || 'untitled'); }
   function pickUnder(t){ return state.showTitles ? (t.titleL || '') : (t.titleR || ''); }
@@ -678,10 +703,12 @@ body.light .player::after { z-index: 0; }
     tb.appendChild(searchWrap);
     const searchInput=searchWrap.querySelector('#searchInput');
 
+    // Toggle panels
     btnUtils.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); util.hidden = !util.hidden; btnUtils.setAttribute('aria-expanded', String(!util.hidden)); keepMenuOpen(e); });
     btnLinks.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); links.hidden = !links.hidden; btnLinks.setAttribute('aria-expanded', String(!links.hidden)); keepMenuOpen(e); });
     btnSearch.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); searchWrap.hidden = !searchWrap.hidden; if(!searchWrap.hidden){ searchInput.value=state.searchQuery; searchInput.focus(); } keepMenuOpen(e); });
 
+    // Utility toggles
     const btnTitles=util.querySelector('#togTitles');
     const btnWav=util.querySelector('#togWav');
     const btnMov=util.querySelector('#togMov');
@@ -698,13 +725,19 @@ body.light .player::after { z-index: 0; }
     btnTitles.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); state.showTitles = !state.showTitles; syncToggles(); refreshTitles(); keepMenuOpen(e); });
     btnWav.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); state.showWavButtons=!state.showWavButtons; syncToggles(); rerenderVisibleRowsBadges(); if(state.i>=0) updateNowbar(); keepMenuOpen(e); });
     btnMov.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); state.showMovButtons=!state.showMovButtons; syncToggles(); rerenderVisibleRowsBadges(); if(state.i>=0) updateNowbar(); keepMenuOpen(e); });
-    btnLight.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); document.body.classList.toggle('light'); syncToggles(); keepMenuOpen(e); });
+    btnLight.addEventListener('click',(e)=>{ 
+      e.preventDefault(); e.stopPropagation(); 
+      document.body.classList.toggle('light'); 
+      try{ localStorage.setItem('vvip25:light', document.body.classList.contains('light') ? '1' : '0'); }catch(_){}
+      syncToggles(); 
+      keepMenuOpen(e); 
+    });
 
     tb.addEventListener('click', keepMenuOpen);
   }
   function keepMenuOpen(e){
     if (!els.menu) return;
-    if (e && e.target && e.target.closest && e.target.closest('a')) return;
+    if (e && e.target && e.target.closest && e.target.closest('a')) return; // real links close naturally
     e.preventDefault?.(); e.stopPropagation?.();
     els.menu.open=true;
   }
