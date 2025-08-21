@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>VVIP25: VVIP+SHOPPE</title>
+  <link rel="icon" type="image/png" sizes="64x64" href="../favicon-64.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="../favicon-192.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="../apple-touch-icon.png">
+  <link rel="icon" href="../favicon.ico?v=3">
+  <meta name="theme-color" content="#0b0b0c" />
+  <style>
+    :root{--bg:#0b0b0c;--fg:#eceff4;--muted:#9aa0a6;--card:#141416;--border:#26272b;--accent:#6ee7b7}
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 -apple-system,BlinkMacSystemFont,"Helvetica Neue",Helvetica,Arial,"Segoe UI",Roboto,Inter,system-ui,sans-serif}
+    .wrap{max-width:920px;margin:0 auto;padding:16px}
+
+    html{-webkit-text-size-adjust:100%}        /* stop iOS auto-zooming text */
+input,select,button{font-size:16px}        /* prevent tap-to-zoom on controls */
+@media (max-width:560px){
+  body{font-size:15px}                      /* slightly smaller base on small screens */
+  header{gap:8px}
+  #site-title{font-size:44px;-webkit-text-stroke:1.5px #fdf6d0}
+  .wrap{padding:12px}
+  .row{grid-template-columns:auto 1fr auto;padding:8px 10px;min-height:64px}
+  .badge .pill{padding:3px 8px;font-size:11px}
+}
+
+    header{display:flex;align-items:center;justify-content:space-between;gap:12px;position:relative}
+    #site-title{margin:0;font-size:56px;font-weight:bold;font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;color:transparent;-webkit-text-fill-color:transparent;-webkit-text-stroke:2px #fdf6d0}
+
+    .player{position:sticky;top:0;z-index:10;background:linear-gradient(180deg,rgba(11,11,12,.97),rgba(11,11,12,.92));backdrop-filter:saturate(120%) blur(8px);border-bottom:1px solid var(--border)}
+    .now{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:12px 0}
+    .cover{width:56px;height:56px;border-radius:8px;background:#1e1f24;display:grid;place-items:center;color:var(--muted);font-weight:700;border:1px solid var(--border)}
+    .meta{min-width:0}
+    .title{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .sub{color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .controls{display:flex;align-items:center;gap:8px}
+    button{appearance:none;background:var(--card);color:var(--fg);border:1px solid var(--border);border-radius:10px;padding:8px 12px;cursor:pointer}
+    button:disabled{opacity:.55;cursor:not-allowed}
+    .range{display:flex;align-items:center;gap:8px}
+    input[type="range"]{width:160px}
+    .list{margin:12px 0 40px;border:1px solid var(--border);border-radius:14px;overflow:hidden}
+    .row{display:grid;grid-template-columns:56px 1fr auto;gap:12px;align-items:center;padding:10px 12px;border-top:1px solid var(--border);background:var(--card);min-height:78px}
+    .row:first-child{border-top:0}
+    .row:hover{background:#17171b}
+    .badge{display:flex;gap:10px;align-items:center;font-size:12px;justify-self:end}
+    .badge a{color:var(--fg);text-decoration:none;border:1px solid var(--border);padding:4px 8px;border-radius:8px}
+    .badge .muted{color:var(--muted)}
+    .kbd{font:12px/1.2 ui-monospace,Menlo,Consolas;background:#1b1c20;border:1px solid #2a2b30;border-radius:6px;padding:2px 6px;color:#d7dae0}
+
+    /* Toolbar + toggles */
+    .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    select{background:var(--card);color:var(--fg);border:1px solid var(--border);border-radius:10px;padding:8px 10px}
+    .tog,.btn{
+      display:inline-flex;align-items:center;justify-content:center;
+      height:36px;min-width:36px;padding:0 10px;
+      border-radius:10px;border:1px solid var(--border);background:var(--card);
+      text-decoration:none;color:var(--fg);line-height:1
+    }
+    .tog{opacity:.6;transition:opacity .15s, box-shadow .15s}
+    .tog.on{opacity:1;box-shadow:0 0 0 2px var(--accent) inset}
+
+    /* Hamburger (overlay) */
+    details.menu{position:static}
+    details.menu>summary{cursor:pointer;list-style:none;background:var(--card);border:1px solid var(--border);padding:8px 12px;border-radius:10px;user-select:none}
+    .sheet{position:absolute;top:calc(100% + 8px);right:0;z-index:20;width:min(420px,calc(100vw - 32px));background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px;display:none;box-shadow:0 10px 24px rgba(0,0,0,.35)}
+    details.menu[open]>.sheet{display:block}
+    details.menu[open]>summary{border-bottom-left-radius:10px;border-bottom-right-radius:10px}
+
+    /* Hide the volume control on iOS Safari */
+    @supports (-webkit-touch-callout:none){.range[title="Volume"]{display:none !important}}
+
+    @media (max-width:560px){
+      .now{grid-template-columns:1fr;gap:8px}
+      .cover{display:none}
+      .controls{flex-wrap:wrap}
+      .range input[type="range"]{width:120px}
+      .row{grid-template-columns:1fr auto}
+    }
+  </style>
+</head>
+<body>
+  
+Apparrel
+**basic t's for basic b's
+**VVIP25 this year only gear
+**VVIP+ prestige
+**VI KIDS
+
+
+
+</body>
+</html>
