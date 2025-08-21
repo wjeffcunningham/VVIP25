@@ -141,7 +141,7 @@ input,select,button{font-size:16px}        /* prevent tap-to-zoom on controls */
 <script>
 /* ========= VVIP25 — Controls color = logo + silent M3U footer ========= */
 
-  const ASSET_VERSION = 16; // bump to beat caches on JSON fetches
+  const ASSET_VERSION = 17; // bump to beat caches on JSON fetches
 
   /* ---------- Config ---------- */
   const BASE_MP3   = 'https://media.vvipmedia.net/ACCESS/';
@@ -543,7 +543,7 @@ input,select,button{font-size:16px}        /* prevent tap-to-zoom on controls */
     els.nowSub.textContent=[ (state.showTitles? '' : (t.title||'')), bpmTxt, t.length?fmtDur(t.length):'', t.labelDate||'' ]
       .filter(Boolean).join(' · ');
     const url=getResolvedThumb(t);
-    els.cover.innerHTML=`<img src="${url.replace(/"/g,'&quot;')}" alt="" style="width:56px;height:56px;object-fit:cover;border-radius:8px" onerror="if(this.dataset.fbk!=='1'){this.dataset.fbk='1';this.onerror=null;this.src='${DEFAULT_THUMB}';}">`;
+    els.cover.innerHTML=`<img src="${url.replace(/"/g,'&quot;')}" alt="" style="width:56px;height:56px;object-fit:cover;border-radius:8px" onerror="if(this.dataset.fbk!=='1'){this.onerror=null;this.src='${DEFAULT_THUMB}';}">`;
   }
   async function play(){
     try{
@@ -642,7 +642,23 @@ input,select,button{font-size:16px}        /* prevent tap-to-zoom on controls */
     btnMov.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); state.showMovButtons=!state.showMovButtons; syncToggles(); rerenderVisibleRowsBadges(); if(state.i>=0) updateNowbar(); keepMenuOpen(); });
     btnLight.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); document.body.classList.toggle('light'); syncToggles(); keepMenuOpen(); });
 
-    // ⛔️ Removed: tb.addEventListener('click', keepMenuOpen);  // this was swallowing clicks/focus
+    /* ✅ FIX: wire the panel toggles */
+    btnUtils.addEventListener('click',(e)=>{
+      e.preventDefault(); e.stopPropagation();
+      const showing = util.style.display === 'block';
+      util.style.display = showing ? 'none' : 'block';
+      if (!showing) { links.style.display='none'; }  // close the other panel
+      keepMenuOpen();
+    });
+    btnLinks.addEventListener('click',(e)=>{
+      e.preventDefault(); e.stopPropagation();
+      const showing = links.style.display === 'block';
+      links.style.display = showing ? 'none' : 'block';
+      if (!showing) { util.style.display='none'; }  // close the other panel
+      keepMenuOpen();
+    });
+
+    // ⛔️ DO NOT re-add: tb.addEventListener('click', keepMenuOpen);  // would swallow clicks/focus
   }
   function keepMenuOpen(){
     if (!els.menu) return;
