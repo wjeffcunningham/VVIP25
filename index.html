@@ -141,7 +141,7 @@ input,select,button{font-size:16px}        /* prevent tap-to-zoom on controls */
 <script>
 /* ========= VVIP25 — Controls color = logo + silent M3U footer ========= */
 
-  const ASSET_VERSION = 15; // bump to beat caches on JSON fetches
+  const ASSET_VERSION = 16; // bump to beat caches on JSON fetches
 
   /* ---------- Config ---------- */
   const BASE_MP3   = 'https://media.vvipmedia.net/ACCESS/';
@@ -390,14 +390,16 @@ input,select,button{font-size:16px}        /* prevent tap-to-zoom on controls */
     let favoritesOnly=false;
     if (tokens.includes('#favorites')){ favoritesOnly=true; out=out.filter(t=>state.favorites.has(t.name)); }
 
-    // when titles ON, hide “nameless”
-    if (state.showTitles){ out=out.filter(t=>!isNameless(t)); }
+    // when titles ON, hide “nameless” — but only if not searching
+    if (state.showTitles && tokens.length===0){
+      out = out.filter(t=>!isNameless(t));
+    }
 
     // search on name/title/details (details includes #tags). We DO NOT show details in UI.
     out = out.filter(t=>{
       const hayName  =(t.name||'').toLowerCase();
       const hayTitle =(t.title||'').toLowerCase();
-      const hayTags  =(t.details||'').toLowerCase(); // hidden field
+      const hayTags  =(t.details||'').toLowerCase(); // hidden field from manifest.json
       return tokens.every(tok=>{
         if (tok==='#favorites') return true;
         if (tok.startsWith('#')) return hayTags.includes(tok);
@@ -553,7 +555,7 @@ input,select,button{font-size:16px}        /* prevent tap-to-zoom on controls */
         navigator.mediaSession.setActionHandler('previoustrack', ()=>jump(-1));
         navigator.mediaSession.setActionHandler('nexttrack', ()=>jump(1));
         navigator.mediaSession.setActionHandler('seekbackward', ()=> els.audio.currentTime=Math.max(0,els.audio.currentTime-10));
-        navigator.mediaSession.setActionHandler('seekforward',  ()=> els.audio.currentTime=Math.min(els.audio.duration||0,els.audio.currentTime+10));
+        navigator.mediaSession.setActionHandler('seekforward',  ()=> els.audio.currentTime=Math.min((els.audio.duration||0),els.audio.currentTime+10));
       }
     }catch(_){}
   }
@@ -580,11 +582,11 @@ input,select,button{font-size:16px}        /* prevent tap-to-zoom on controls */
 
     // 📜 About
     const btnAbout=document.createElement('button'); btnAbout.className='btn'; btnAbout.id='btnAbout'; btnAbout.title='About'; btnAbout.textContent='📜'; row.appendChild(btnAbout);
-    btnAbout.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); alert("VVIP25 — Vancouver Music and Videography Project 2025"); keepMenuOpen(e); });
+    btnAbout.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); alert("VVIP25 — Vancouver Music and Videography Project 2025"); keepMenuOpen(); });
 
     // 🎵 Playlist (favorites view)
     const btnFavList=document.createElement('button'); btnFavList.className='btn'; btnFavList.id='btnFavList'; btnFavList.title='My favorites playlist'; btnFavList.textContent='🎵'; row.appendChild(btnFavList);
-    btnFavList.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); state.searchQuery='#favorites'; applyFilterSort(false); keepMenuOpen(e); });
+    btnFavList.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); state.searchQuery='#favorites'; applyFilterSort(false); keepMenuOpen(); });
 
     // 🛠️ Utilities (titles/wav/mov/light)
     const btnUtils=document.createElement('button'); btnUtils.className='btn'; btnUtils.id='btnUtils'; btnUtils.title='Utilities'; btnUtils.textContent='🛠️'; row.appendChild(btnUtils);
@@ -620,7 +622,7 @@ input,select,button{font-size:16px}        /* prevent tap-to-zoom on controls */
     const btnSearch=document.createElement('button'); btnSearch.className='btn'; btnSearch.id='btnSearch'; btnSearch.title='Search'; btnSearch.textContent='🔍'; row.appendChild(btnSearch);
     const searchWrap=document.createElement('div'); searchWrap.className='search-wrap'; searchWrap.innerHTML=`<input id="searchInput" placeholder="Search… use #tags (e.g. #mbv)" inputmode="search" />`; tb.appendChild(searchWrap);
     const searchInput=searchWrap.querySelector('#searchInput');
-    btnSearch.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); searchWrap.style.display=(searchWrap.style.display==='none'||!searchWrap.style.display)?'flex':'none'; if(searchWrap.style.display==='flex'){ searchInput.value=state.searchQuery; searchInput.focus(); } keepMenuOpen(e); });
+    btnSearch.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); searchWrap.style.display=(searchWrap.style.display==='none'||!searchWrap.style.display)?'flex':'none'; if(searchWrap.style.display==='flex'){ searchInput.value=state.searchQuery; searchInput.focus(); } keepMenuOpen(); });
     searchInput.addEventListener('input', debounce(()=>{ state.searchQuery=searchInput.value||''; applyFilterSort(false,true); },150));
 
     // Toggle wiring
@@ -635,18 +637,16 @@ input,select,button{font-size:16px}        /* prevent tap-to-zoom on controls */
       btnLight.classList.toggle('on',document.body.classList.contains('light'));
     }
     syncToggles();
-    btnTitles.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); state.showTitles=!state.showTitles; syncToggles(); refreshTitles(); keepMenuOpen(e); });
-    btnWav.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); state.showWavButtons=!state.showWavButtons; syncToggles(); rerenderVisibleRowsBadges(); if(state.i>=0) updateNowbar(); keepMenuOpen(e); });
-    btnMov.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); state.showMovButtons=!state.showMovButtons; syncToggles(); rerenderVisibleRowsBadges(); if(state.i>=0) updateNowbar(); keepMenuOpen(e); });
-    btnLight.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); document.body.classList.toggle('light'); syncToggles(); keepMenuOpen(e); });
+    btnTitles.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); state.showTitles=!state.showTitles; syncToggles(); refreshTitles(); keepMenuOpen(); });
+    btnWav.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); state.showWavButtons=!state.showWavButtons; syncToggles(); rerenderVisibleRowsBadges(); if(state.i>=0) updateNowbar(); keepMenuOpen(); });
+    btnMov.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); state.showMovButtons=!state.showMovButtons; syncToggles(); rerenderVisibleRowsBadges(); if(state.i>=0) updateNowbar(); keepMenuOpen(); });
+    btnLight.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); document.body.classList.toggle('light'); syncToggles(); keepMenuOpen(); });
 
-    tb.addEventListener('click', keepMenuOpen);
+    // ⛔️ Removed: tb.addEventListener('click', keepMenuOpen);  // this was swallowing clicks/focus
   }
-  function keepMenuOpen(e){
+  function keepMenuOpen(){
     if (!els.menu) return;
-    if (e && e.target && e.target.closest && e.target.closest('a')) return; // allow real links
-    if (e){ e.preventDefault?.(); e.stopPropagation?.(); }
-    els.menu.open=true;
+    els.menu.open = true;   // non-blocking: no preventDefault/stopPropagation
   }
 
   /* ---------- Footer Download (icon-only, silent .m3u) ---------- */
@@ -696,7 +696,7 @@ input,select,button{font-size:16px}        /* prevent tap-to-zoom on controls */
     }
   }, { passive:false });
 
-  document.addEventListener('change',(e)=>{ if (e.target && e.target.id==='sort'){ applyFilterSort(false,true); keepMenuOpen(e); } }, { passive:true });
+  document.addEventListener('change',(e)=>{ if (e.target && e.target.id==='sort'){ applyFilterSort(false,true); keepMenuOpen(); } }, { passive:true });
 
   $('#toggle')?.addEventListener('click', ()=>{ if (state.i<0 && state.filtered.length) select(0); state.playing?pause():play(); }, { passive:true });
   els.prev?.addEventListener('click', ()=> jump(-1), { passive:true });
@@ -706,7 +706,6 @@ input,select,button{font-size:16px}        /* prevent tap-to-zoom on controls */
   els.seek.addEventListener('input', ()=>{ els.audio.currentTime=Number(els.seek.value); });
   els.vol.addEventListener('input', ()=>{ els.audio.volume=parseFloat(els.vol.value); localStorage.setItem('vvip25:vol', els.vol.value); });
   els.audio.addEventListener('ended', ()=> jump(1));
-
 </script>
 </body>
 </html>
