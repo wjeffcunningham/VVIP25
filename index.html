@@ -16,6 +16,17 @@
     body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 -apple-system,BlinkMacSystemFont,"Helvetica Neue",Helvetica,Arial,"Segoe UI",Roboto,Inter,system-ui,sans-serif}
     .wrap{max-width:920px;margin:0 auto;padding:16px}
 
+    html{-webkit-text-size-adjust:100%}        /* stop iOS auto-zooming text */
+input,select,button{font-size:16px}        /* prevent tap-to-zoom on controls */
+@media (max-width:560px){
+  body{font-size:15px}                      /* slightly smaller base on small screens */
+  header{gap:8px}
+  #site-title{font-size:44px;-webkit-text-stroke:1.5px #fdf6d0}
+  .wrap{padding:12px}
+  .row{grid-template-columns:auto 1fr auto;padding:8px 10px;min-height:64px}
+  .badge .pill{padding:3px 8px;font-size:11px}
+}
+
     header{display:flex;align-items:center;justify-content:space-between;gap:12px;position:relative}
     #site-title{margin:0;font-size:56px;font-weight:bold;font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;color:transparent;-webkit-text-fill-color:transparent;-webkit-text-stroke:2px #fdf6d0}
 
@@ -130,7 +141,7 @@
 <script>
 /* ========= VVIP25 — Controls color = logo + silent M3U footer ========= */
 
-  const ASSET_VERSION = 14; // bump to beat caches on JSON fetches
+  const ASSET_VERSION = 15; // bump to beat caches on JSON fetches
 
   /* ---------- Config ---------- */
   const BASE_MP3   = 'https://media.vvipmedia.net/ACCESS/';
@@ -175,7 +186,6 @@
 
     /* Player control icons inherit the logo color */
     .controls button svg{width:18px;height:18px;fill:var(--logo)}
-    /* keep button look; just recolor the icon */
     .controls button{display:inline-flex;align-items:center;justify-content:center}
 
     /* Footer download bar — icon only */
@@ -241,7 +251,8 @@
     tracks:[], filtered:[], i:-1, playing:false,
     pageSize:60, renderCount:0,
     titlesLookup:new Map(), thumbBases:new Set(), resolvedThumb:new Map(),
-    showTitles:false, showWavButtons:false, showMovButtons:false,
+    showTitles:true,                // default ON for canonical names
+    showWavButtons:false, showMovButtons:false,
     favorites:new Set(JSON.parse(localStorage.getItem('vvip25:favs')||'[]')),
     favOrder: JSON.parse(localStorage.getItem('vvip25:favOrder')||'[]'),
     searchQuery:''
@@ -251,17 +262,26 @@
   els.vol.value = localStorage.getItem('vvip25:vol') ?? '0.9';
   els.audio.volume = parseFloat(els.vol.value);
 
-  /* ---------- Boot ---------- */
+  /* ---------- Boot (titles BEFORE first paint) ---------- */
   init();
   async function init(){
     buildMenuUI();
-    buildDownloadFooter();  // icon-only, bottom of playlist
-    setControlIcons();      // bespoke SVG icons (logo-colored)
+    buildDownloadFooter();
+    setControlIcons();
 
-    const mres = await fetch(`./manifest.json?v=${ASSET_VERSION}`, { cache:'no-store' });
-    if(!mres.ok){ els.list.innerHTML = `<div class="row"><div></div><div>manifest.json missing</div></div>`; return; }
-    const data = await mres.json();
+    // 1) Load manifest
+    let data = [];
+    try{
+      const mres = await fetch(`./manifest.json?v=${ASSET_VERSION}`, { cache:'no-store' });
+      if(!mres.ok) throw new Error(`manifest.json HTTP ${mres.status}`);
+      data = await mres.json();
+    }catch(err){
+      console.warn('Manifest load failed:', err);
+      els.list.innerHTML = `<div class="row"><div></div><div>manifest.json missing</div></div>`;
+      return;
+    }
 
+    // 2) Build track objects
     state.tracks = data.map((t,idx)=>{
       const name = t.name || t.file || t.src?.split('/').pop() || `track-${idx}.mp3`;
       const base = stripExt(name), baseLower = base.toLowerCase();
@@ -271,36 +291,45 @@
       const wav = BASE_WAV + encodeURIComponent(base + '.wav');
       const mov = t.has_mov ? (BASE_VIDEO + encodeURIComponent(base + '.mov')) : null;
       const thumbCandidate = BASE_THUMB + encodeURIComponent(baseLower + 'thumb.jpg');
-
-      // SEARCH TAGS: put #hashtags in "details" in manifest; indexed but NOT shown.
       const details = t.details || '';
-
       return { id:idx, name, base, baseLower, title: t.title?String(t.title):'',
         bpm:t.bpm??null, bpm_min:t.bpm_min??null, bpm_max:t.bpm_max??null,
         details, length:t.length||0,
         date:dateObj||null, labelDate, src:mp3, wav, video:mov, thumbCandidate };
     });
 
-    applyFilterSort(true);
-    computeThumbCascade();
+    // 3) Preload titles BEFORE first render; thumbs best-effort
+    await fetchTitles();
+    await fetchThumbs().catch(()=>{});
+
+    // 4) First paint with canonical titles already present
+    applyFilterSort(true);        // firstPaint = true
     renderList();
     fillViewport();
     if (state.filtered.length && state.i === -1) { select(0); }
-
-    (requestIdleCallback?.(fetchTitles,{timeout:600})||setTimeout(fetchTitles,0));
-    (requestIdleCallback?.(fetchThumbs,{timeout:900})||setTimeout(fetchThumbs,50));
   }
 
   /* ---------- Titles (primary only) ---------- */
   function buildTitleLookup(json){
     const map=new Map();
-    const add=(k,titleRaw)=>{ if(!k||!titleRaw) return; const title=primaryOnly(titleRaw);
-      const rawLower=String(k).toLowerCase(); const justFile=rawFile(rawLower);
-      const noExt=stripExt(justFile); const norm=softNorm(justFile);
-      map.set(justFile,String(title)); map.set(noExt,String(title)); map.set(norm,String(title));
+    const add=(k,titleRaw)=>{
+      if(!k||!titleRaw) return;
+      const title=primaryOnly(titleRaw); // split at //
+      const keyLower = rawFile(String(k).toLowerCase());
+      const noExt = stripExt(keyLower);
+      const norm  = softNorm(keyLower);
+      map.set(keyLower, String(title));
+      map.set(noExt,   String(title));
+      map.set(norm,    String(title));
     };
-    if (Array.isArray(json)){ for(const row of json||[]){ if(!row) continue; add(row.key||row.src||row.name, row.title||row.t||row.display); } }
-    else if (json && typeof json==='object'){ for(const [k,v] of Object.entries(json)){ add(k, (typeof v==='string')?v:(v&&typeof v.title==='string'?v.title:'')); } }
+    if (Array.isArray(json)){
+      for(const row of json){ if(!row) continue; add(row.key||row.src||row.name, row.title||row.t||row.display); }
+    } else if (json && typeof json==='object'){
+      for(const [k,v] of Object.entries(json)){
+        const title = (typeof v==='string') ? v : (v && typeof v.title==='string' ? v.title : '');
+        add(k, title);
+      }
+    }
     return map;
   }
   function bestTitleForTrack(t,lookup){
@@ -310,8 +339,9 @@
   }
   async function fetchTitles(){
     try{
-      const tres=await fetch(`./titles.json?v=${ASSET_VERSION}`,{cache:'no-store'});
-      if(!tres.ok) return;
+      const url = `./titles.json?v=${ASSET_VERSION}&t=${Date.now()}`; // stubborn cache buster
+      const tres=await fetch(url,{cache:'no-store'});
+      if(!tres.ok) { console.warn('titles.json HTTP', tres.status); return; }
       const json=await tres.json();
       const lookup=buildTitleLookup(json);
       let changed=false;
@@ -321,7 +351,9 @@
         if (finalTitle!==t.title){ t.title=finalTitle; changed=true; }
       }
       if (changed){ applyFilterSort(false,true); refreshTitles(); }
-    }catch(_){}
+    }catch(err){
+      console.warn('Failed to apply titles.json:', err);
+    }
   }
 
   /* ---------- Thumbs ---------- */
@@ -415,7 +447,6 @@
   }
   function rowHTML(t,active){
     const bpmTxt=bpmLabel(t), thumbURL=getResolvedThumb(t);
-    // do NOT include t.details (hidden tags) in the subline
     const subline=[ (state.showTitles? '' : (t.title||'')), bpmTxt, t.length?fmtDur(t.length):'', t.labelDate||'' ]
       .filter(Boolean).join(' · ');
     const hasTitleClass=(t.title && !isNameless(t)) ? 'has-title':'';
@@ -608,13 +639,6 @@
     btnWav.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); state.showWavButtons=!state.showWavButtons; syncToggles(); rerenderVisibleRowsBadges(); if(state.i>=0) updateNowbar(); keepMenuOpen(e); });
     btnMov.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); state.showMovButtons=!state.showMovButtons; syncToggles(); rerenderVisibleRowsBadges(); if(state.i>=0) updateNowbar(); keepMenuOpen(e); });
     btnLight.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); document.body.classList.toggle('light'); syncToggles(); keepMenuOpen(e); });
-
-    btnUtils.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation();
-      util.style.display=(util.style.display==='none'||!util.style.display)?'block':'none'; keepMenuOpen(e);
-    });
-    btnLinks.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation();
-      links.style.display=(links.style.display==='none'||!links.style.display)?'block':'none'; keepMenuOpen(e);
-    });
 
     tb.addEventListener('click', keepMenuOpen);
   }
