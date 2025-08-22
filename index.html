@@ -69,145 +69,6 @@
 
     @supports (-webkit-touch-callout:none){.range[title="Volume"]{display:none !important}}
 
-    @media (max-width:560px){
-      .now{grid-template-columns:1fr;gap:8px}
-      .cover{display:none}
-      .controls{flex-wrap:wrap}
-      .range input[type="range"]{width:120px}
-      .row{grid-template-columns:1fr auto}
-    }
-  </style>
-</head>
-<body>
-  <div class="player">
-    <div class="wrap">
-      <header>
-        <h1 id="site-title">VVIP25</h1>
-        <details class="menu" id="menu">
-          <summary>☰ Menu</summary>
-          <div class="sheet">
-            <div class="toolbar" id="toolbar">
-              <select id="sort" title="Sort">
-                <option value="date_desc">Newest</option>
-                <option value="date_asc">Oldest</option>
-                <option value="bpm_desc">BPM ↓</option>
-                <option value="bpm_asc">BPM ↑</option>
-                <option value="len_desc">Longest</option>
-                <option value="len_asc">Shortest</option>
-              </select>
-              <button class="tog on" id="togTitles" title="Song Titles (on/off)">📝</button>
-              <button class="tog" id="togWav" title="Show WAV buttons">🎚️</button>
-              <button class="tog" id="togMov" title="Show MOV buttons">🎬</button>
-              <button class="btn" id="btnAbout" title="About">ℹ️</button>
-              <a class="btn" id="btnShop" href="/shoppe/" data-nav title="Shop">🛍️</a>
-            </div>
-          </div>
-        </details>
-      </header>
-
-      <div class="now">
-        <div class="cover" id="cover">V25</div>
-        <div class="meta">
-          <div class="title" id="now-title">—</div>
-          <div class="sub" id="now-sub">Ready</div>
-        </div>
-        <div class="controls">
-          <button id="prev" aria-label="Previous">⏮️</button>
-          <button id="toggle" aria-label="Play/Pause">▶️</button>
-          <button id="next" aria-label="Next">⏭️</button>
-          <div class="range">
-            <span id="tcur">0:00</span>
-            <input id="seek" type="range" min="0" max="100" value="0" step="1" aria-label="Seek" />
-            <span id="tdur">0:00</span>
-          </div>
-          <div class="range" title="Volume">
-            <span>🔊</span>
-            <input id="vol" type="range" min="0" max="1" step="0.01" />
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <main id="page-root" data-page="home">
-    <div class="wrap">
-      <div id="list" class="list" role="list"></div>
-    </div>
-  </main>
-
-  <audio id="audio" preload="metadata"></audio>
-
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>VVIP25</title>
-  <link rel="icon" type="image/png" sizes="64x64" href="/favicon-64.png">
-  <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png">
-  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
-  <link rel="icon" href="/favicon.ico?v=3">
-  <meta name="theme-color" content="#0b0b0c"/>
-  <style>
-    :root{--bg:#0b0b0c;--fg:#eceff4;--muted:#9aa0a6;--card:#141416;--border:#26272b;--accent:#6ee7b7}
-    *{box-sizing:border-box}
-    html,body{height:100%}
-    body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 -apple-system,BlinkMacSystemFont,"Helvetica Neue",Helvetica,Arial,"Segoe UI",Roboto,Inter,system-ui,sans-serif}
-    .wrap{max-width:920px;margin:0 auto;padding:16px}
-
-    html{-webkit-text-size-adjust:100%}
-    input,select,button{font-size:16px}
-    @media (max-width:560px){
-      body{font-size:15px}
-      header{gap:8px}
-      #site-title{font-size:44px;-webkit-text-stroke:1.5px #fdf6d0}
-      .wrap{padding:12px}
-      .row{grid-template-columns:auto 1fr auto;padding:8px 10px;min-height:64px}
-      .badge .pill{padding:3px 8px;font-size:11px}
-    }
-
-    header{display:flex;align-items:center;justify-content:space-between;gap:12px;position:relative}
-    #site-title{margin:0;font-size:56px;font-weight:bold;font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;color:transparent;-webkit-text-fill-color:transparent;-webkit-text-stroke:2px #fdf6d0}
-
-    .player{position:sticky;top:0;z-index:10;background:linear-gradient(180deg,rgba(11,11,12,.97),rgba(11,11,12,.92));backdrop-filter:saturate(120%) blur(8px);border-bottom:1px solid var(--border)}
-    .now{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:12px 0}
-    .cover{width:56px;height:56px;border-radius:8px;background:#1e1f24;display:grid;place-items:center;color:var(--muted);font-weight:700;border:1px solid var(--border)}
-    .meta{min-width:0}
-    .title{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .sub{color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .controls{display:flex;align-items:center;gap:8px}
-    button{appearance:none;background:var(--card);color:var(--fg);border:1px solid var(--border);border-radius:10px;padding:8px 12px;cursor:pointer}
-    button:disabled{opacity:.55;cursor:not-allowed}
-    .range{display:flex;align-items:center;gap:8px}
-    input[type="range"]{width:160px}
-    .list{margin:12px 0 40px;border:1px solid var(--border);border-radius:14px;overflow:hidden}
-    .row{display:grid;grid-template-columns:56px 1fr auto;gap:12px;align-items:center;padding:10px 12px;border-top:1px solid var(--border);background:var(--card);min-height:78px}
-    .row:first-child{border-top:0}
-    .row:hover{background:#17171b}
-    .badge{display:flex;gap:10px;align-items:center;font-size:12px;justify-self:end}
-    .badge a{color:var(--fg);text-decoration:none;border:1px solid var(--border);padding:4px 8px;border-radius:8px}
-    .badge .muted{color:var(--muted)}
-    .kbd{font:12px/1.2 ui-monospace,Menlo,Consolas;background:#1b1c20;border:1px solid #2a2b30;border-radius:6px;padding:2px 6px;color:#d7dae0}
-
-    .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-    select{background:var(--card);color:var(--fg);border:1px solid var(--border);border-radius:10px;padding:8px 10px}
-    .tog,.btn{
-      display:inline-flex;align-items:center;justify-content:center;
-      height:36px;min-width:36px;padding:0 10px;
-      border-radius:10px;border:1px solid var(--border);background:var(--card);
-      text-decoration:none;color:var(--fg);line-height:1
-    }
-    .tog{opacity:.6;transition:opacity .15s, box-shadow .15s}
-    .tog.on{opacity:1;box-shadow:0 0 0 2px var(--accent) inset}
-
-    details.menu{position:static}
-    details.menu>summary{cursor:pointer;list-style:none;background:var(--card);border:1px solid var(--border);padding:8px 12px;border-radius:10px;user-select:none}
-    .sheet{position:absolute;top:calc(100% + 8px);right:0;z-index:20;width:min(420px,calc(100vw - 32px));background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px;display:none;box-shadow:0 10px 24px rgba(0,0,0,.35)}
-    details.menu[open]>.sheet{display:block}
-    details.menu[open]>summary{border-bottom-left-radius:10px;border-bottom-right-radius:10px}
-
-    @supports (-webkit-touch-callout:none){.range[title="Volume"]{display:none !important}}
-
     /* Light mode theme */
     body.light{--bg:#f7f7f8;--fg:#111;--muted:#4b5563;--card:#ffffff;--border:#d1d5db;--accent:#2563eb}
     body.light .player{background:linear-gradient(180deg,rgba(255,255,255,.96),rgba(255,255,255,.92))}
@@ -223,6 +84,7 @@
   </style>
 </head>
 <body>
+  <!-- Sticky player/header -->
   <div class="player">
     <div class="wrap">
       <header>
@@ -242,11 +104,10 @@
               <button class="tog on" id="togTitles" title="Song Titles (on/off)">📝</button>
               <button class="tog" id="togWav" title="Show WAV buttons">🎚️</button>
               <button class="tog" id="togMov" title="Show MOV buttons">🎬</button>
-              <button class="tog" id="togTrk" title="Show Trinkets button">💎</button>
+              <button class="tog" id="togTrk" title="Show Trinkets">💎</button>
               <button class="tog" id="togLight" title="Light mode">🌞</button>
               <button class="btn" id="btnAbout" title="About">ℹ️</button>
-              <!-- Shoppe lives in /shoppe/ (shoppe.html + shoppe.json inside that folder) -->
-              <a class="btn" id="btnShop" href="/shoppe/" data-nav title="Shop">🛍️</a>
+              <a class="btn" id="btnShop" href="/shoppe/" title="Shop">🛍️</a>
             </div>
           </div>
         </details>
@@ -276,6 +137,7 @@
     </div>
   </div>
 
+  <!-- Page content -->
   <main id="page-root" data-page="home">
     <div class="wrap">
       <div id="list" class="list" role="list"></div>
@@ -285,45 +147,28 @@
   <audio id="audio" preload="metadata"></audio>
 
 <script>
-/* ===== VVIP25 — Preload “Gone Jotti”, light-mode solid, shoppe folder routing, trinkets, hand-wired MOV ===== */
-
-const ASSET_VERSION = 19;             // bump when JSON or JS changes
-const LOGO_COLOR    = '#fdf6d0';      // bespoke icon color
-
-/* ---- Config ---- */
-const BASE_MP3      = 'https://media.vvipmedia.net/ACCESS/';
-const BASE_WAV      = 'https://media.vvipmedia.net/WAV/';
-const BASE_THUMB    = 'https://media.vvipmedia.net/ACCESS/';
-const BASE_VIDEO    = 'https://media.vvipmedia.net/VIDEOS/';     // used if has_mov=true
-const BASE_TRINKETS = 'https://media.vvipmedia.net/TRINKETS/';   // fallback (e.g. TRINKETS/<base>/)
+/* ===== VVIP25 — Home (single document) ===== */
+const ASSET_VERSION = 20;
+const LOGO_COLOR = '#fdf6d0';
+const BASE_MP3='https://media.vvipmedia.net/ACCESS/';
+const BASE_WAV='https://media.vvipmedia.net/WAV/';
+const BASE_THUMB='https://media.vvipmedia.net/ACCESS/';
+const BASE_VIDEO='https://media.vvipmedia.net/VIDEOS/';
+const BASE_TRINKETS='https://media.vvipmedia.net/TRINKETS/';
 const DEFAULT_THUMB = BASE_THUMB + 'default_thumb.jpg';
 
-/* ---- Small cache hint ---- */
-(function(){ try{ const m=document.createElement('meta'); m.httpEquiv='Cache-Control'; m.content='no-store, max-age=0, must-revalidate'; document.head.appendChild(m);}catch(_){}})();
+(()=>{ try{ const m=document.createElement('meta'); m.httpEquiv='Cache-Control'; m.content='no-store, max-age=0, must-revalidate'; document.head.appendChild(m);}catch(_){} })();
 
-/* ---- Helpers ---- */
 const $=s=>document.querySelector(s);
 function fmtDur(sec){sec=+sec||0;const m=Math.floor(sec/60),s=Math.floor(sec%60);return `${m}:${String(s).padStart(2,'0')}`;}
-function debounce(fn,ms){let t;return(...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),ms);};}
-function escapeHTML(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-const rawFile=s=>(String(s).split('/').pop()||'');
-const stripExt=s=>String(s).replace(/\.[a-z0-9]+$/i,'');
-const softNorm=s=>stripExt(String(s)).toLowerCase().replace(/[ _]+/g,'-').replace(/-+/g,'-');
+const rawFile=s=>(String(s).split('/').pop()||''); const stripExt=s=>String(s).replace(/\.[a-z0-9]+$/i,''); const softNorm=s=>stripExt(String(s)).toLowerCase().replace(/[ _]+/g,'-').replace(/-+/g,'-');
 function deriveTitleFromFilename(name){const b=stripExt(rawFile(name)).replace(/^[\d._-]+/,'').replace(/[_-]+/g,' ').trim();return b||stripExt(rawFile(name));}
-const primaryOnly = t => String(t||'').split('//')[0].trim();
-const DATE_RX_YYYY=/^\s*(\d{4})[.\-_](\d{2})[.\-_](\d{2})(?=\D|$)/;
-const DATE_RX_YY   =/^\s*(\d{2})[.\-_](\d{2})[.\-_](\d{2})(?=\D|$)/;
-const WITHIN_DAY_RX=/^\s*(?:\d{4}|\d{2})[.\-_]\d{2}[.\-_]\d{2}(?:[.\-_](\d+))?/;
-function fallbackDateFromName(name){
-  const s=String(name); let m=s.match(DATE_RX_YYYY); if(m){return new Date(Date.UTC(+m[1],+m[2]-1,+m[3]));}
-  m=s.match(DATE_RX_YY); if(m){const yy=+m[1];const yyyy=(yy>=70?1900+yy:2000+yy);return new Date(Date.UTC(yyyy,+m[2]-1,+m[3]));}
-  return null;
-}
+const DATE_RX_YYYY=/^\s*(\d{4})[.\-_](\d{2})[.\-_](\d{2})(?=\D|$)/; const DATE_RX_YY=/^\s*(\d{2})[.\-_](\d{2})[.\-_](\d{2})(?=\D|$)/; const WITHIN_DAY_RX=/^\s*(?:\d{4}|\d{2})[.\-_]\d{2}[.\-_]\d{2}(?:[.\-_](\d+))?/;
+function fallbackDateFromName(name){const s=String(name); let m=s.match(DATE_RX_YYYY); if(m){return new Date(Date.UTC(+m[1],+m[2]-1,+m[3]));} m=s.match(DATE_RX_YY); if(m){const yy=+m[1];const yyyy=(yy>=70?1900+yy:2000+yy);return new Date(Date.UTC(yyyy,+m[2]-1,+m[3]));} return null;}
 function withinDayIndexFromName(name){ const m=String(name).match(WITHIN_DAY_RX); return m&&m[1]?parseInt(m[1],10):0; }
 function bpmSortValue(t){ if(t.bpm!=null) return t.bpm; if(t.bpm_min!=null&&t.bpm_max!=null) return (t.bpm_min+t.bpm_max)/2; return 0; }
 function bpmLabel(t){ if(t.bpm!=null) return `${t.bpm} BPM`; if(t.bpm_min!=null&&t.bpm_max!=null) return `${t.bpm_min}–${t.bpm_max} BPM`; return ''; }
 
-/* ---- Elements & State ---- */
 const els={ audio:$('#audio'), list:$('#list'), sort:$('#sort'),
   toggle:$('#toggle'), prev:$('#prev'), next:$('#next'),
   seek:$('#seek'), vol:$('#vol'), nowTitle:$('#now-title'), nowSub:$('#now-sub'),
@@ -331,405 +176,182 @@ const els={ audio:$('#audio'), list:$('#list'), sort:$('#sort'),
 };
 const state={
   tracks:[], filtered:[], i:-1, playing:false,
-  pageSize:60, renderCount:0,
-  titlesLookup:new Map(), thumbBases:new Set(), resolvedThumb:new Map(),
+  pageSize:60, renderCount:0, resolvedThumb:new Map(),
   searchQuery:'',
   favorites:new Set(JSON.parse(localStorage.getItem('vvip25:favs')||'[]')),
   favOrder: JSON.parse(localStorage.getItem('vvip25:favOrder')||'[]'),
-  playlistMode:false,
   showWavButtons: localStorage.getItem('vvip25:showWav')==='1',
   showMovButtons: localStorage.getItem('vvip25:showMov')==='1',
   showTrinketButtons: localStorage.getItem('vvip25:showTrinkets')==='1',
   lightMode:      localStorage.getItem('vvip25:light')==='1',
-  hideNameless:   localStorage.getItem('vvip25:hideNameless')==='1'
+  hideNameless:   localStorage.getItem('vvip25:hideNameless')==='1',
+  thumbBases:new Set()
 };
-
-/* ---- Apply light mode on boot ---- */
 if (state.lightMode) document.body.classList.add('light');
+els.vol.value = localStorage.getItem('vvip25:vol') ?? '0.9'; els.audio.volume = parseFloat(els.vol.value);
 
-/* ---- Bespoke control icons ---- */
 function iconPlay(){return `<svg viewBox="0 0 24 24" width="20" height="20"><polygon fill="${LOGO_COLOR}" points="8,5 20,12 8,19"/></svg>`;}
 function iconPause(){return `<svg viewBox="0 0 24 24" width="20" height="20"><rect fill="${LOGO_COLOR}" x="6" y="5" width="4" height="14" rx="1"/><rect fill="${LOGO_COLOR}" x="14" y="5" width="4" height="14" rx="1"/></svg>`;}
 function iconPrev(){return `<svg viewBox="0 0 24 24" width="20" height="20"><path d="M5 5v14" stroke="${LOGO_COLOR}" stroke-width="2" fill="none" stroke-linecap="round"/><polygon fill="${LOGO_COLOR}" points="6,12 19,5 19,19"/></svg>`;}
 function iconNext(){return `<svg viewBox="0 0 24 24" width="20" height="20"><path d="M19 5v14" stroke="${LOGO_COLOR}" stroke-width="2" fill="none" stroke-linecap="round"/><polygon fill="${LOGO_COLOR}" points="5,5 18,12 5,19"/></svg>`;}
-function setupBespokeControls(){ if($('#prev'))$('#prev').innerHTML=iconPrev(); if($('#toggle'))$('#toggle').innerHTML=iconPlay(); if($('#next'))$('#next').innerHTML=iconNext(); }
+function setIcons(){ $('#prev').innerHTML=iconPrev(); $('#toggle').innerHTML=state.playing?iconPause():iconPlay(); $('#next').innerHTML=iconNext(); }
 
-/* ---- Volume persist ---- */
-els.vol.value = localStorage.getItem('vvip25:vol') ?? '0.9';
-els.audio.volume = parseFloat(els.vol.value);
-
-/* ---- Preload helper for "Gone Jotti" ---- */
-function preloadByTitleOrName(q){
-  const needle = String(q||'').toLowerCase();
-  let idx = state.tracks.findIndex(t => (t.title||'').toLowerCase().includes(needle));
-  if (idx < 0) idx = state.tracks.findIndex(t => (t.name||'').toLowerCase().includes(needle));
-  return idx;
-}
-
-/* ---- Boot ---- */
 init();
 async function init(){
-  buildMenuUI();
-  setupBespokeControls();
+  buildMenu();
+  setIcons();
 
-  // Load manifest (root then relative as fallback)
   let mres = await fetch(`/manifest.json?v=${ASSET_VERSION}`, { cache:'no-store' });
   if(!mres.ok) mres = await fetch(`./manifest.json?v=${ASSET_VERSION}`, { cache:'no-store' });
   if(!mres.ok){ els.list.innerHTML = `<div class="row"><div></div><div>manifest.json not found</div></div>`; return; }
 
   const data = await mres.json();
-
   state.tracks = data.map((t,idx)=>{
     const name = t.name || t.file || t.src?.split('/').pop() || `track-${idx}.mp3`;
-    const base = stripExt(name), baseLower = base.toLowerCase();
-    const dateObj = t.date ? new Date(t.date) : fallbackDateFromName(name);
-
-    // MP3/WAV
-    const mp3 = t.src || (BASE_MP3 + encodeURIComponent(name));
-    const wav = BASE_WAV + encodeURIComponent(base + '.wav');
-
-    // MOV: allow hand-wired URL via mov_url; else optional has_mov => BASE_VIDEO/<base>.mov
-    const mov = t.mov_url ? String(t.mov_url)
-              : (t.has_mov ? (BASE_VIDEO + encodeURIComponent(base + '.mov')) : null);
-
-    // TRINKETS: allow hand-wired trinkets_url; else optional has_trinkets => BASE_TRINKETS/<base>/
-    const trinkets = t.trinkets_url ? String(t.trinkets_url)
-                  : (t.has_trinkets ? (BASE_TRINKETS + encodeURIComponent(base) + '/') : null);
-
+    const base = stripExt(name), baseLower=base.toLowerCase();
+    const mp3  = t.src || (BASE_MP3 + encodeURIComponent(name));
+    const wav  = BASE_WAV + encodeURIComponent(base + '.wav');
+    const mov  = t.mov_url ? String(t.mov_url) : (t.has_mov ? (BASE_VIDEO + encodeURIComponent(base + '.mov')) : null);
+    const trinkets = t.trinkets_url ? String(t.trinkets_url) : (t.has_trinkets ? (BASE_TRINKETS + encodeURIComponent(base) + '/') : null);
     const thumbCandidate = BASE_THUMB + encodeURIComponent(baseLower + 'thumb.jpg');
-    const details = t.details || '';
-
-    return { id:idx, name, base, baseLower, title: t.title?String(t.title):'',
-      bpm:t.bpm??null, bpm_min:t.bpm_min??null, bpm_max:t.bpm_max??null,
-      details, length:t.length||0, date:dateObj||null,
-      src:mp3, wav, video:mov, trinkets, thumbCandidate
-    };
+    return { id:idx, name, base, baseLower, title:t.title||'', src:mp3, wav, video:mov, trinkets, thumbCandidate, length:t.length||0,
+      bpm:t.bpm??null, bpm_min:t.bpm_min??null, bpm_max:t.bpm_max??null, date: t.date?new Date(t.date):fallbackDateFromName(name), details:t.details||'' };
   });
 
-  // Ensure titles are in place before first paint (so "Gone Jotti" can be found by title)
-  await fetchTitles();
-  await fetchThumbs().catch(()=>{});
+  await applyTitles(); await applyThumbs();
 
-  // Preselect "Gone Jotti" if present
-  let jottiTrackIdx = preloadByTitleOrName('Gone Jotti');
-
-  applyFilterSort(true);
-  renderList();
-  fillViewport();
-
-  if (jottiTrackIdx >= 0) {
-    const filteredIdx = state.filtered.findIndex(t => t.id === state.tracks[jottiTrackIdx].id);
-    if (filteredIdx >= 0) select(filteredIdx);
-    else if (state.filtered.length && state.i === -1) select(0);
-  } else if (state.filtered.length && state.i === -1) {
-    select(0);
-  }
+  // Preselect Gone Jotti
+  const jottiIdx = state.tracks.findIndex(t => (t.title||'').toLowerCase().includes('gone jotti') || t.name.toLowerCase().includes('gone jotti'));
+  applyFilterSort(true); renderList(); fillViewport();
+  if (jottiIdx>=0){
+    const filteredIdx = state.filtered.findIndex(t=>t.id===state.tracks[jottiIdx].id);
+    select(filteredIdx>=0?filteredIdx:0);
+  } else if(state.filtered.length){ select(0); }
 }
 
-/* ---- Titles / Thumbs ---- */
-function buildTitleLookup(json){
-  const map=new Map();
-  const add=(k,titleRaw)=>{ if(!k||!titleRaw) return; const title=primaryOnly(titleRaw);
-    const f=rawFile(String(k).toLowerCase()); const noExt=stripExt(f); const norm=softNorm(f);
-    map.set(f,String(title)); map.set(noExt,String(title)); map.set(norm,String(title));
-  };
-  if (Array.isArray(json)){ for(const row of json){ add(row.key||row.src||row.name, row.title||row.t||row.display); } }
-  else if (json && typeof json==='object'){ for(const [k,v] of Object.entries(json)){ add(k, typeof v==='string'?v:(v&&v.title)); } }
-  return map;
+function buildMenu(){
+  const tb=$('#toolbar'); tb.innerHTML='';
+  const row=document.createElement('div'); row.style.display='flex'; row.style.gap='8px'; row.style.flexWrap='wrap'; row.style.alignItems='center'; tb.appendChild(row);
+
+  const util=document.createElement('div'); util.className='panel'; util.style.display='none';
+  util.innerHTML=`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+    <button class="tog ${state.hideNameless?'on':''}" id="togTitles" title="Hide untitled/date-only">📝</button>
+    <button class="tog ${state.showWavButtons?'on':''}" id="togWav" title="Show WAV">🎚️</button>
+    <button class="tog ${state.showMovButtons?'on':''}" id="togMov" title="Show MOV">🎬</button>
+    <button class="tog ${state.showTrinketButtons?'on':''}" id="togTrk" title="Show Trinkets">💎</button>
+    <button class="tog ${state.lightMode?'on':''}" id="togLight" title="Light">🌞</button>
+  </div>`;
+  tb.appendChild(util);
+
+  const btnUtils=document.createElement('button'); btnUtils.className='btn'; btnUtils.textContent='⚙️'; btnUtils.title='Settings'; row.appendChild(btnUtils);
+  btnUtils.addEventListener('click',(e)=>{ e.preventDefault(); util.style.display = util.style.display==='block' ? 'none':'block'; keepMenuOpen(); });
+
+  const aShop=document.createElement('a'); aShop.className='btn'; aShop.title='Shoppe'; aShop.textContent='🛍️'; aShop.href='/shoppe/'; aShop.target='_self'; row.appendChild(aShop);
+
+  const sortSel=document.createElement('select'); sortSel.id='sort'; sortSel.title='Sort';
+  sortSel.innerHTML=`<option value="date_desc">Newest</option><option value="date_asc">Oldest</option><option value="bpm_desc">BPM ↓</option><option value="bpm_asc">BPM ↑</option><option value="len_desc">Longest</option><option value="len_asc">Shortest</option>`;
+  row.appendChild(sortSel);
+
+  $('#menu').open=true;
+
+  util.querySelector('#togWav').addEventListener('click',()=>{ state.showWavButtons=!state.showWavButtons; localStorage.setItem('vvip25:showWav', state.showWavButtons?'1':'0'); util.querySelector('#togWav').classList.toggle('on',state.showWavButtons); rerenderBadges(); keepMenuOpen(); });
+  util.querySelector('#togMov').addEventListener('click',()=>{ state.showMovButtons=!state.showMovButtons; localStorage.setItem('vvip25:showMov', state.showMovButtons?'1':'0'); util.querySelector('#togMov').classList.toggle('on',state.showMovButtons); rerenderBadges(); keepMenuOpen(); });
+  util.querySelector('#togTrk').addEventListener('click',()=>{ state.showTrinketButtons=!state.showTrinketButtons; localStorage.setItem('vvip25:showTrinkets', state.showTrinketButtons?'1':'0'); util.querySelector('#togTrk').classList.toggle('on',state.showTrinketButtons); rerenderBadges(); keepMenuOpen(); });
+  util.querySelector('#togLight').addEventListener('click',()=>{ state.lightMode=!state.lightMode; document.body.classList.toggle('light',state.lightMode); localStorage.setItem('vvip25:light', state.lightMode?'1':'0'); util.querySelector('#togLight').classList.toggle('on',state.lightMode); keepMenuOpen(); });
+
+  document.addEventListener('change',(e)=>{ if(e.target && e.target.id==='sort'){ applyFilterSort(false,true); keepMenuOpen(); } }, {passive:true});
 }
-function bestTitleForTrack(t,lookup){
-  const f=rawFile(t.name).toLowerCase(), noExt=stripExt(f), norm=softNorm(f), fromSrc=t.src?rawFile(t.src).toLowerCase():'';
-  const cands=[f,noExt,norm,fromSrc,stripExt(fromSrc),softNorm(fromSrc),t.base?.toLowerCase?.(),softNorm(t.base||'')].filter(Boolean);
-  for(const c of cands){ if(lookup.has(c)) return lookup.get(c); } return '';
-}
-async function fetchTitles(){
+function keepMenuOpen(){ const m=$('#menu'); if(m) m.open=true; }
+
+async function applyTitles(){
   try{
-    let r=await fetch(`/titles.json?v=${ASSET_VERSION}`,{cache:'no-store'});
-    if(!r.ok) r=await fetch(`./titles.json?v=${ASSET_VERSION}`,{cache:'no-store'});
-    if(!r.ok) return;
-    const lookup=buildTitleLookup(await r.json());
+    let r=await fetch(`/titles.json?v=${ASSET_VERSION}`,{cache:'no-store'}); if(!r.ok) r=await fetch(`./titles.json?v=${ASSET_VERSION}`,{cache:'no-store'}); if(!r.ok) return;
+    const json=await r.json();
+    const map=new Map();
+    const add=(k,v)=>{ if(!k||!v) return; const f=rawFile(String(k).toLowerCase()); const noExt=stripExt(f); const norm=softNorm(f); map.set(f,v); map.set(noExt,v); map.set(norm,v); };
+    if(Array.isArray(json)) json.forEach(row=>add(row.key||row.src||row.name, row.title||row.t||row.display));
+    else Object.entries(json).forEach(([k,v])=> add(k, typeof v==='string'?v:(v&&v.title)));
     let changed=false;
-    for(const t of state.tracks){
-      const from=bestTitleForTrack(t,lookup);
-      const finalTitle=from || t.title || deriveTitleFromFilename(t.name);
-      if (finalTitle!==t.title){ t.title=finalTitle; changed=true; }
-    }
-    if (changed){ applyFilterSort(false,true); refreshTitlesOnly(); }
+    for(const t of state.tracks){ const f=rawFile(t.name).toLowerCase(); const cands=[f,stripExt(f),softNorm(f)]; for(const c of cands){ if(map.has(c)){ if(map.get(c)!==t.title){ t.title=map.get(c); changed=true; } break; } } }
+    if(changed) refreshTitles();
   }catch(_){}
 }
-async function fetchThumbs(){
+async function applyThumbs(){
   try{
-    let r=await fetch(`/thumbs.json?v=${ASSET_VERSION}`,{cache:'no-store'});
-    if(!r.ok) r=await fetch(`./thumbs.json?v=${ASSET_VERSION}`,{cache:'no-store'});
-    if(!r.ok) return;
+    let r=await fetch(`/thumbs.json?v=${ASSET_VERSION}`,{cache:'no-store'}); if(!r.ok) r=await fetch(`./thumbs.json?v=${ASSET_VERSION}`,{cache:'no-store'}); if(!r.ok) return;
     const data=await r.json(); const set=new Set();
-    if(Array.isArray(data)) data.forEach(b=>set.add(String(b).toLowerCase()));
-    else if(data && typeof data==='object') Object.keys(data).forEach(b=>{ if(data[b]) set.add(b.toLowerCase()); });
-    state.thumbBases=set; computeThumbCascade(); rerenderVisibleRowsThumbs(); if(state.i>=0) updateNowbar();
+    if(Array.isArray(data)) data.forEach(b=>set.add(String(b).toLowerCase())); else Object.keys(data).forEach(b=>{ if(data[b]) set.add(b.toLowerCase()); });
+    state.thumbBases=set;
+    // simple cascade: last seen thumb sticks forward in time
+    const asc=[...state.tracks].sort((a,b)=> (a.date?.getTime()||0)-(b.date?.getTime()||0) || withinDayIndexFromName(a.name)-withinDayIndexFromName(b.name));
+    let cur=DEFAULT_THUMB; for(const t of asc){ if(set.has(t.baseLower)) cur = BASE_THUMB + encodeURIComponent(t.baseLower + 'thumb.jpg'); state.resolvedThumb.set(t.id, cur); }
   }catch(_){}
 }
-function computeThumbCascade(){
-  const asc=[...state.tracks].sort((a,b)=>{ const da=a.date?.getTime()||0, db=b.date?.getTime()||0;
-    if(da!==db) return da-db;
-    return withinDayIndexFromName(a.name)-withinDayIndexFromName(b.name) || a.name.localeCompare(b.name);
-  });
-  let currentThumb=DEFAULT_THUMB;
-  for(const t of asc){ if(state.thumbBases.has(t.baseLower)) currentThumb=t.thumbCandidate; state.resolvedThumb.set(t.id,currentThumb); }
-}
-const getResolvedThumb=t=>state.resolvedThumb.get(t.id)||DEFAULT_THUMB;
+const getThumb=t=>state.resolvedThumb.get(t.id)||DEFAULT_THUMB;
 
-/* ---- Filter / sort ---- */
-function isNameless(t){ const derived=deriveTitleFromFilename(t.name); return !t.title || t.title===derived; }
-function matchesSearchTokens(t,tokens){
-  if(!tokens.length) return true;
-  const hayName=(t.name||'').toLowerCase();
-  const hayTitle=(t.title||'').toLowerCase();
-  const hayDetails=(t.details||'').toLowerCase();
-  return tokens.every(tok=>{
-    if (tok.startsWith('#')) return hayDetails.includes(tok);
-    return hayName.includes(tok) || hayTitle.includes(tok) || hayDetails.includes(tok);
-  });
-}
-function applyFilterSort(firstPaint=false, keepIndex=false){
-  const q=(state.searchQuery||'').trim().toLowerCase();
-  const tokens=q? q.split(/\s+/).filter(Boolean):[];
+function applyFilterSort(first=false, keepIndex=false){
   let out=[...state.tracks];
-
   switch($('#sort')?.value||'date_desc'){
-    case 'date_desc': out.sort((a,b)=>{ const da=a.date?.getTime()||0, db=b.date?.getTime()||0;
-      if (db!==da) return db-da; return withinDayIndexFromName(b.name)-withinDayIndexFromName(a.name) || b.name.localeCompare(a.name); }); break;
-    case 'date_asc':  out.sort((a,b)=>{ const da=a.date?.getTime()||0, db=b.date?.getTime()||0;
-      if (da!==db) return da-db; return withinDayIndexFromName(a.name)-withinDayIndexFromName(b.name) || a.name.localeCompare(b.name); }); break;
-    case 'bpm_desc':  out.sort((a,b)=> bpmSortValue(b)-bpmSortValue(a)); break;
-    case 'bpm_asc':   out.sort((a,b)=> bpmSortValue(a)-bpmSortValue(b)); break;
-    case 'len_desc':  out.sort((a,b)=> (b.length||0)-(a.length||0)); break;
-    case 'len_asc':   out.sort((a,b)=> (a.length||0)-(b.length||0)); break;
+    case 'date_desc': out.sort((a,b)=> (b.date?.getTime()||0)-(a.date?.getTime()||0) || withinDayIndexFromName(b.name)-withinDayIndexFromName(a.name)); break;
+    case 'date_asc' : out.sort((a,b)=> (a.date?.getTime()||0)-(b.date?.getTime()||0) || withinDayIndexFromName(a.name)-withinDayIndexFromName(b.name)); break;
+    case 'bpm_desc': out.sort((a,b)=> bpmSortValue(b)-bpmSortValue(a)); break;
+    case 'bpm_asc' : out.sort((a,b)=> bpmSortValue(a)-bpmSortValue(b)); break;
+    case 'len_desc': out.sort((a,b)=> (b.length||0)-(a.length||0)); break;
+    case 'len_asc' : out.sort((a,b)=> (a.length||0)-(b.length||0)); break;
   }
-
-  if (state.hideNameless && tokens.length===0) out = out.filter(t=>!isNameless(t));
-  out = out.filter(t=>matchesSearchTokens(t,tokens));
-
-  state.filtered=out;
-  const initialChunk=firstPaint ? Math.max(60,state.pageSize) : state.pageSize;
-  state.renderCount=Math.min(state.filtered.length, initialChunk);
-  if (!keepIndex) state.i=Math.min(state.i, state.renderCount-1);
-  renderList(); setupInfiniteScroll(); fillViewport();
-}
-
-/* ---- Render ---- */
-function imgHTML(src){ const esc=s=>s.replace(/"/g,'&quot;');
-  return `<img src="${esc(src)}" alt="" loading="lazy" style="width:56px;height:56px;border-radius:8px;object-fit:cover;" onerror="if(this.dataset.fbk!=='1'){this.dataset.fbk='1';this.onerror=null;this.src='${DEFAULT_THUMB}';}">`;
-}
-function favHTML(t){ const on=state.favorites.has(t.name)?'is-on':''; const title=state.favorites.has(t.name)?'Remove from favorites':'Add to favorites'; return `<button class="btn icon-only ${on}" data-fav="${escapeHTML(t.name)}" title="${title}">★</button>`; }
-function gemHTML(t){
-  if (!state.showTrinketButtons) return '';
-  if (!t.trinkets) return `<span class="btn icon-only" title="No trinkets" style="opacity:.45;cursor:not-allowed">💎</span>`;
-  return `<a class="btn icon-only" href="${escapeHTML(t.trinkets)}" target="_blank" rel="noopener" title="Trinkets">💎</a>`;
+  if (state.hideNameless) out = out.filter(t=> !!t.title && t.title !== deriveTitleFromFilename(t.name));
+  state.filtered = out;
+  state.renderCount = Math.min(out.length, first?Math.max(60,state.pageSize):state.pageSize);
+  if(!keepIndex) state.i = Math.min(state.i, state.renderCount-1);
 }
 function badgeHTML(t){
-  const parts=[favHTML(t), `<a class="btn" href="${t.src}" download title="Download MP3">MP3</a>`];
+  const parts=[`<a class="btn" href="${t.src}" download title="Download MP3">MP3</a>`];
   if (state.showWavButtons) parts.push(`<a class="btn" href="${t.wav}" download title="Download WAV">WAV</a>`);
-  if (state.showMovButtons) parts.push(t.video ? `<a class="btn" href="${t.video}" target="_blank" rel="noopener" title="Open MOV">🎬</a>` : `<span class="btn" title="No MOV" style="opacity:.45;cursor:not-allowed">🎬</span>`);
-  const gem = gemHTML(t); if (gem) parts.push(gem);
-  return `<div class="badge" style="display:flex;gap:10px;align-items:center">${parts.join('')}</div>`;
+  if (state.showMovButtons) parts.push(t.video?`<a class="btn" href="${t.video}" target="_blank" rel="noopener" title="Open MOV">🎬</a>`:`<span class="btn" title="No MOV" style="opacity:.45;cursor:not-allowed">🎬</span>`);
+  if (state.showTrinketButtons) parts.push(t.trinkets?`<a class="btn" href="${t.trinkets}" target="_blank" rel="noopener" title="Trinkets">💎</a>`:`<span class="btn" title="No trinkets" style="opacity:.45;cursor:not-allowed">💎</span>`);
+  return `<div class="badge">${parts.join('')}</div>`;
 }
 function rowHTML(t,active){
-  const bpmTxt=bpmLabel(t), thumbURL=getResolvedThumb(t);
-  const subBits=[ t.name ];
-  if (bpmTxt) subBits.push(bpmTxt);
-  if (t.length) subBits.push(fmtDur(t.length));
-  if (t.details && /#[^\s]/.test(t.details)===false) subBits.push(t.details);
-  const subline=subBits.join(' · ');
-
+  const thumb=getThumb(t), title=t.title || deriveTitleFromFilename(t.name);
   return `<div class="row" role="listitem" data-id="${t.id}">
-    <div class="cover" aria-hidden="true">${imgHTML(thumbURL)}</div>
-    <div>
-      <div class="title">${active?'▶︎ ':''}${escapeHTML(t.title || deriveTitleFromFilename(t.name))}</div>
-      <div class="sub">${escapeHTML(subline)}</div>
-    </div>
+    <div class="cover"><img src="${thumb}" alt="" loading="lazy" style="width:56px;height:56px;border-radius:8px;object-fit:cover;" onerror="this.onerror=null;this.src='${DEFAULT_THUMB}'"></div>
+    <div><div class="title">${active?'▶︎ ':''}${title}</div><div class="sub">${t.name}${t.length?` · ${fmtDur(t.length)}`:''}${t.bpm?` · ${bpmLabel(t)}`:''}</div></div>
     ${badgeHTML(t)}
   </div>`;
 }
 function renderList(){
   if(!state.filtered.length){ els.list.innerHTML='<div class="row"><div></div><div>No results.</div></div>'; return; }
   const slice=state.filtered.slice(0,state.renderCount);
-  els.list.innerHTML = slice.map(t=>rowHTML(t,(state.i>=0 && state.filtered[state.i]?.id===t.id))).join('') + `<div id="sentinel" style="height:1px"></div>`;
+  els.list.innerHTML = slice.map(t=>rowHTML(t,(state.i>=0 && state.filtered[state.i]?.id===t.id))).join('');
 }
-function rerenderVisibleRowsThumbs(){ els.list.querySelectorAll('.row').forEach(row=>{ const id=+row.getAttribute('data-id'); const t=state.tracks.find(x=>x.id===id); if(!t) return; const img=row.querySelector('.cover img'); if(img) img.src=getResolvedThumb(t); }); }
-function rerenderVisibleRowsBadges(){ document.querySelectorAll('.row .badge').forEach((b,i)=>{ const row=b.closest('.row'); const id=+row.getAttribute('data-id'); const t=state.tracks.find(x=>x.id===id); if(!t) return; b.outerHTML=badgeHTML(t); }); }
-function refreshTitlesOnly(){
-  document.querySelectorAll('.row').forEach(row=>{
-    const id=+row.getAttribute('data-id'); const t=state.tracks.find(x=>x.id===id); if(!t) return;
-    const titleEl=row.querySelector('.title'); const subEl=row.querySelector('.sub');
-    if (titleEl){ const isActive=(state.i>=0 && state.filtered[state.i]?.id===id); titleEl.innerHTML=(isActive?'▶︎ ':'') + escapeHTML(t.title || deriveTitleFromFilename(t.name)); }
-    if (subEl){
-      const subBits=[ t.name ]; const bpmTxt=bpmLabel(t); if (bpmTxt) subBits.push(bpmTxt);
-      if (t.length) subBits.push(fmtDur(t.length));
-      if (t.details && /#[^\s]/.test(t.details)===false) subBits.push(t.details);
-      subEl.textContent=subBits.join(' · ');
-    }
-  });
-}
+function rerenderBadges(){ els.list.querySelectorAll('.row').forEach(row=>{ const id=+row.getAttribute('data-id'); const t=state.filtered.find(x=>x.id===id)||state.tracks.find(x=>x.id===id); row.querySelector('.badge').outerHTML=badgeHTML(t); }); }
 
-/* ---- Infinite scroll ---- */
-let sentinelObserver;
-function setupInfiniteScroll(){
-  const s=$('#sentinel'); if(!s) return;
-  if(sentinelObserver) sentinelObserver.disconnect();
-  if('IntersectionObserver' in window){
-    sentinelObserver=new IntersectionObserver((entries)=>{ for(const e of entries){ if(e.isIntersecting) appendChunk(); } },{root:null,rootMargin:'1200px 0px',threshold:0});
-    sentinelObserver.observe(s);
-  }
-  window.addEventListener('scroll', onScrollMaybeLoad, { passive:true });
-  window.addEventListener('resize', debounce(fillViewport,120), { passive:true });
+function select(i){
+  state.i=i; const t=state.filtered[i]; if(!t) return;
+  els.audio.src=t.src; updateNow(); state.playing=false; setIcons();
+  els.list.querySelectorAll('.row .title').forEach((el,idx)=>{ const id=+el.closest('.row').getAttribute('data-id'); const active = id===t.id; el.innerHTML = (active?'▶︎ ':'') + (state.tracks.find(x=>x.id===id)?.title || deriveTitleFromFilename(state.tracks.find(x=>x.id===id)?.name||'')); });
 }
-function appendChunk(){
-  if (state.renderCount>=state.filtered.length) return;
-  const prev=state.renderCount; state.renderCount=Math.min(state.filtered.length, state.renderCount+state.pageSize);
-  const sentinel=$('#sentinel'); if(!sentinel) return;
-  const frag=document.createDocumentFragment();
-  for(let i=prev;i<state.renderCount;i++){
-    const t=state.filtered[i]; const div=document.createElement('div'); div.innerHTML=rowHTML(t,(state.i>=0 && state.filtered[state.i]?.id===t.id)); frag.appendChild(div.firstChild);
-  }
-  els.list.insertBefore(frag, sentinel);
-}
-function atBottomBuffer(px=1200){ return (window.scrollY + window.innerHeight + px) >= document.documentElement.scrollHeight; }
-function onScrollMaybeLoad(){ if (atBottomBuffer()) appendChunk(); }
-function fillViewport(){
-  let guard=0; while(guard++<10){ const scrollable=document.documentElement.scrollHeight>window.innerHeight+200;
-    if (scrollable || state.renderCount>=state.filtered.length) break; appendChunk();
-  }
-}
-
-/* ---- Selection / Player ---- */
-function select(indexInFiltered){
-  state.i=indexInFiltered;
-  const t=state.filtered[indexInFiltered]; if(!t) return;
-  els.audio.src=t.src; updateNowbar(); state.playing=false; updateToggle(); setupBespokeControls();
-  els.list.querySelectorAll('.row').forEach(row=>{
-    const id=+row.getAttribute('data-id'); const titleEl=row.querySelector('.title');
-    if(titleEl){ const target=state.tracks.find(x=>x.id===id)||t; const isActive=(state.filtered[state.i]?.id===id);
-      titleEl.innerHTML=(isActive?'▶︎ ':'') + escapeHTML(target.title || deriveTitleFromFilename(target.name));
-    }
-    const favBtn=row.querySelector('.btn[data-fav]'); if(favBtn){ const key=favBtn.getAttribute('data-fav'); favBtn.classList.toggle('is-on', state.favorites.has(key)); }
-  });
-}
-function updateNowbar(){
+function updateNow(){
   const t=state.filtered[state.i]; if(!t) return;
   els.nowTitle.textContent=t.title || deriveTitleFromFilename(t.name);
-  const subBits=[ t.name ]; const bpmTxt=bpmLabel(t); if (bpmTxt) subBits.push(bpmTxt);
-  if (t.length) subBits.push(fmtDur(t.length));
-  if (t.details && /#[^\s]/.test(t.details)===false) subBits.push(t.details);
-  els.nowSub.textContent=subBits.join(' · ');
-  const url=getResolvedThumb(t);
-  els.cover.innerHTML=`<img src="${url.replace(/"/g,'&quot;')}" alt="" style="width:56px;height:56px;object-fit:cover;border-radius:8px" onerror="if(this.dataset.fbk!=='1'){this.dataset.fbk='1';this.onerror=null;this.src='${DEFAULT_THUMB}';}">`;
+  const bits=[t.name]; if(t.length) bits.push(fmtDur(t.length)); const b=bpmLabel(t); if(b) bits.push(b); els.nowSub.textContent=bits.join(' · ');
+  const url=getThumb(t); $('#cover').innerHTML=`<img src="${url}" alt="" style="width:56px;height:56px;object-fit:cover;border-radius:8px" onerror="this.onerror=null;this.src='${DEFAULT_THUMB}'">`;
 }
-async function play(){ try{ await els.audio.play(); state.playing=true; updateToggle(); setupBespokeControls(); }catch(_){} }
-function pause(){ els.audio.pause(); state.playing=false; updateToggle(); setupBespokeControls(); }
-function updateToggle(){ if ($('#toggle')) $('#toggle').innerHTML = (state.playing ? iconPause() : iconPlay()); }
-function jump(dir){ if(!state.filtered.length) return; let i=state.i+dir; if(i<0) i=state.filtered.length-1; if(i>=state.filtered.length) i=0; select(i); play(); }
 
-/* ---- Menu / UI ---- */
-function buildMenuUI(){
-  const tb=els.toolbar; if(!tb) return; tb.innerHTML='';
-  const row=document.createElement('div'); row.style.display='flex'; row.style.gap='8px'; row.style.flexWrap='wrap'; row.style.alignItems='center'; tb.appendChild(row);
+$('#toggle').addEventListener('click',()=>{ if (state.i<0 && state.filtered.length) select(0); if(state.playing){ els.audio.pause(); state.playing=false; } else { els.audio.play().then(()=>{ state.playing=true; }).catch(()=>{}); } setIcons(); });
+$('#prev').addEventListener('click',()=>{ if(!state.filtered.length) return; let i=state.i-1; if(i<0) i=state.filtered.length-1; select(i); els.audio.play().catch(()=>{}); state.playing=true; setIcons(); });
+$('#next').addEventListener('click',()=>{ if(!state.filtered.length) return; let i=state.i+1; if(i>=state.filtered.length) i=0; select(i); els.audio.play().catch(()=>{}); state.playing=true; setIcons(); });
+els.audio.addEventListener('timeupdate',()=>{ const a=els.audio; if(!isFinite(a.duration)) return; $('#seek').max=Math.floor(a.duration); $('#seek').value=Math.floor(a.currentTime); $('#tcur').textContent=fmtDur(a.currentTime); $('#tdur').textContent=isFinite(a.duration)?fmtDur(a.duration):'0:00'; });
+$('#seek').addEventListener('input',()=>{ els.audio.currentTime=Number($('#seek').value); });
+$('#vol').addEventListener('input',()=>{ els.audio.volume=parseFloat($('#vol').value); localStorage.setItem('vvip25:vol', $('#vol').value); });
 
-  // 📜 About
-  const btnAbout=document.createElement('button'); btnAbout.className='btn'; btnAbout.title='About'; btnAbout.textContent='📜'; row.appendChild(btnAbout);
-  btnAbout.addEventListener('click',(e)=>{ e.preventDefault(); alert("VVIP25 — Vancouver Music and Videography Project 2025"); keepMenuOpen(); });
-
-  // 🎵 Favorites view quick-filter
-  const btnFavList=document.createElement('button'); btnFavList.className='btn'; btnFavList.title='Favorites playlist'; btnFavList.textContent='🎵'; row.appendChild(btnFavList);
-  btnFavList.addEventListener('click',(e)=>{ e.preventDefault(); state.searchQuery='#favorites'; applyFilterSort(false); keepMenuOpen(); });
-
-  // ⚙️ Settings (gear)
-  const btnUtils=document.createElement('button'); btnUtils.className='btn'; btnUtils.title='Settings'; btnUtils.textContent='⚙️'; row.appendChild(btnUtils);
-  const util=document.createElement('div'); util.className='panel'; util.style.display='none';
-  util.innerHTML = `<div class="row-links" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-    <button class="tog ${state.hideNameless?'on':''}" id="togTitles"   title="Hide untitled/date-only">📝</button>
-    <button class="tog ${state.showWavButtons?'on':''}" id="togWav"    title="Show WAV buttons">🎚️</button>
-    <button class="tog ${state.showMovButtons?'on':''}" id="togMov"    title="Show MOV buttons">🎬</button>
-    <button class="tog ${state.showTrinketButtons?'on':''}" id="togTrk" title="Show Trinkets button">💎</button>
-    <button class="tog ${state.lightMode?'on':''}" id="togLight"  title="Light mode">🌞</button>
-  </div>`;
-  tb.appendChild(util);
-
-  // 🔗 Links
-  const btnLinks=document.createElement('button'); btnLinks.className='btn'; btnLinks.title='Links'; btnLinks.textContent='🔗'; row.appendChild(btnLinks);
-  const links=document.createElement('div'); links.className='panel'; links.style.display='none';
-  links.innerHTML = `<div class="row-links" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-    <a class="btn icon-only" href="https://www.youtube.com/@VVVVIIPP25" target="_blank" rel="noopener" title="YouTube">📺</a>
-    <a class="btn icon-only" href="https://virtualvip.bandcamp.com/" target="_blank" rel="noopener" title="Bandcamp">🎧</a>
-    <a class="btn icon-only" href="https://www.instagram.com/virtualvip24/" target="_blank" rel="noopener" title="Instagram">📷</a>
-    <a class="btn icon-only" href="https://substack.com/home/post/p-170664918?source=queue" target="_blank" rel="noopener" title="Newsletter">📰</a>
-  </div>`;
-  tb.appendChild(links);
-
-  // Only one panel open at a time
-  const togglePanel = (panelToShow)=>{
-    [util,links].forEach(p=>{ if(p!==panelToShow) p.style.display='none'; });
-    panelToShow.style.display = (panelToShow.style.display==='none'||!panelToShow.style.display)?'block':'none';
-  };
-  btnUtils.addEventListener('click',(e)=>{ e.preventDefault(); togglePanel(util); keepMenuOpen(); });
-  btnLinks.addEventListener('click',(e)=>{ e.preventDefault(); togglePanel(links); keepMenuOpen(); });
-
-  // 🛍️ Shop → /shoppe/ (folder)
-  const aShop=document.createElement('a'); aShop.className='btn'; aShop.title='Shoppe'; aShop.textContent='🛍️'; aShop.href='/shoppe/'; aShop.target='_self'; row.appendChild(aShop);
-
-  // Sort
-  const sortSel=document.createElement('select'); sortSel.id='sort'; sortSel.title='Sort';
-  sortSel.innerHTML=`<option value="date_desc">Newest</option><option value="date_asc">Oldest</option><option value="bpm_desc">BPM ↓</option><option value="bpm_asc">BPM ↑</option><option value="len_desc">Longest</option><option value="len_asc">Shortest</option>`;
-  row.appendChild(sortSel); els.sort=sortSel;
-
-  // Search
-  const btnSearch=document.createElement('button'); btnSearch.className='btn'; btnSearch.title='Search'; btnSearch.textContent='🔍'; row.appendChild(btnSearch);
-  const searchWrap=document.createElement('div'); searchWrap.className='panel'; searchWrap.style.display='none';
-  searchWrap.innerHTML=`<div class="row-links" style="display:flex;gap:8px;align-items:center;width:100%"><input id="searchInput" placeholder="Search… use #tags in details (e.g. #mbv)" inputmode="search" style="flex:1;min-width:160px;background:var(--card);color:var(--fg);border:1px solid var(--border);border-radius:10px;padding:8px 10px"></div>`;
-  tb.appendChild(searchWrap);
-  const searchInput=searchWrap.querySelector('#searchInput');
-  btnSearch.addEventListener('click',(e)=>{ e.preventDefault(); togglePanel(searchWrap); if(searchWrap.style.display==='block'){ searchInput.value=state.searchQuery; searchInput.focus(); } keepMenuOpen(); });
-  searchInput.addEventListener('input', debounce(()=>{ state.searchQuery=searchInput.value||''; applyFilterSort(false,true); },150));
-
-  // Wire toggles
-  util.querySelector('#togTitles').addEventListener('click',(e)=>{ e.preventDefault(); state.hideNameless=!state.hideNameless; localStorage.setItem('vvip25:hideNameless', state.hideNameless?'1':'0'); e.currentTarget.classList.toggle('on',state.hideNameless); applyFilterSort(false,true); keepMenuOpen(); });
-  util.querySelector('#togWav').addEventListener('click',(e)=>{ e.preventDefault(); state.showWavButtons=!state.showWavButtons; localStorage.setItem('vvip25:showWav', state.showWavButtons?'1':'0'); e.currentTarget.classList.toggle('on',state.showWavButtons); rerenderVisibleRowsBadges(); keepMenuOpen(); });
-  util.querySelector('#togMov').addEventListener('click',(e)=>{ e.preventDefault(); state.showMovButtons=!state.showMovButtons; localStorage.setItem('vvip25:showMov', state.showMovButtons?'1':'0'); e.currentTarget.classList.toggle('on',state.showMovButtons); rerenderVisibleRowsBadges(); keepMenuOpen(); });
-  util.querySelector('#togTrk').addEventListener('click',(e)=>{ e.preventDefault(); state.showTrinketButtons=!state.showTrinketButtons; localStorage.setItem('vvip25:showTrinkets', state.showTrinketButtons?'1':'0'); e.currentTarget.classList.toggle('on',state.showTrinketButtons); rerenderVisibleRowsBadges(); keepMenuOpen(); });
-  util.querySelector('#togLight').addEventListener('click',(e)=>{ e.preventDefault(); state.lightMode=!state.lightMode; document.body.classList.toggle('light',state.lightMode); localStorage.setItem('vvip25:light', state.lightMode?'1':'0'); e.currentTarget.classList.toggle('on',state.lightMode); keepMenuOpen(); });
-}
-function keepMenuOpen(){ if (!els.menu) return; els.menu.open=true; }
-
-/* ---- Events ---- */
 document.addEventListener('click',(e)=>{
-  const favBtn=e.target.closest?.('.btn[data-fav]');
-  if (favBtn){
-    const key=favBtn.getAttribute('data-fav'); const wasFav=state.favorites.has(key);
-    if (wasFav){ state.favorites.delete(key); state.favOrder=state.favOrder.filter(n=>n!==key); }
-    else { state.favorites.add(key); if(!state.favOrder.includes(key)) state.favOrder.push(key); }
-    localStorage.setItem('vvip25:favs', JSON.stringify(Array.from(state.favorites)));
-    localStorage.setItem('vvip25:favOrder', JSON.stringify(state.favOrder));
-    favBtn.classList.toggle('is-on', !wasFav);
-    e.preventDefault(); return;
-  }
   const row=e.target.closest?.('.row');
-  if(row && !e.target.closest('a')){
-    const id=Number(row.getAttribute('data-id')); const idx=state.filtered.findIndex(t=>t.id===id);
-    if(idx>=0){ select(idx); play(); }
-  }
-}, { passive:false });
+  if(row && !e.target.closest('a')){ const id=+row.getAttribute('data-id'); const idx=state.filtered.findIndex(t=>t.id===id); if(idx>=0){ select(idx); els.audio.play().catch(()=>{}); state.playing=true; setIcons(); } }
+});
 
-document.addEventListener('change',(e)=>{ if (e.target && e.target.id==='sort'){ applyFilterSort(false,true); keepMenuOpen(); } }, { passive:true });
-
-$('#toggle')?.addEventListener('click', ()=>{ if (state.i<0 && state.filtered.length) select(0); state.playing?pause():play(); }, { passive:true });
-$('#prev')?.addEventListener('click', ()=> jump(-1), { passive:true });
-$('#next')?.addEventListener('click', ()=> jump(1), { passive:true });
-
-els.audio.addEventListener('timeupdate', ()=>{ const a=els.audio; if(!isFinite(a.duration)) return; els.seek.max=Math.floor(a.duration); els.seek.value=Math.floor(a.currentTime); $('#tcur').textContent=fmtDur(a.currentTime); $('#tdur').textContent=isFinite(a.duration)?fmtDur(a.duration):'0:00'; });
-els.seek.addEventListener('input', ()=>{ els.audio.currentTime=Number(els.seek.value); });
-els.vol.addEventListener('input', ()=>{ els.audio.volume=parseFloat(els.vol.value); localStorage.setItem('vvip25:vol', els.vol.value); });
-els.audio.addEventListener('ended', ()=> jump(1));
+function fillViewport(){ /* simple */ }
+function refreshTitles(){ renderList(); if(state.i>=0) updateNow(); }
 </script>
-</body>
-</html>
 </body>
 </html>
