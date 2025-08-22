@@ -137,10 +137,157 @@
 
   <audio id="audio" preload="metadata"></audio>
 
-<script>
-/* ===== VVIP25 — Settings gear, Trinkets toggle + gem button, hand-wired MOV ===== */
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>VVIP25</title>
+  <link rel="icon" type="image/png" sizes="64x64" href="/favicon-64.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="icon" href="/favicon.ico?v=3">
+  <meta name="theme-color" content="#0b0b0c"/>
+  <style>
+    :root{--bg:#0b0b0c;--fg:#eceff4;--muted:#9aa0a6;--card:#141416;--border:#26272b;--accent:#6ee7b7}
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 -apple-system,BlinkMacSystemFont,"Helvetica Neue",Helvetica,Arial,"Segoe UI",Roboto,Inter,system-ui,sans-serif}
+    .wrap{max-width:920px;margin:0 auto;padding:16px}
 
-const ASSET_VERSION = 18;             // bump when JSON or JS changes
+    html{-webkit-text-size-adjust:100%}
+    input,select,button{font-size:16px}
+    @media (max-width:560px){
+      body{font-size:15px}
+      header{gap:8px}
+      #site-title{font-size:44px;-webkit-text-stroke:1.5px #fdf6d0}
+      .wrap{padding:12px}
+      .row{grid-template-columns:auto 1fr auto;padding:8px 10px;min-height:64px}
+      .badge .pill{padding:3px 8px;font-size:11px}
+    }
+
+    header{display:flex;align-items:center;justify-content:space-between;gap:12px;position:relative}
+    #site-title{margin:0;font-size:56px;font-weight:bold;font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;color:transparent;-webkit-text-fill-color:transparent;-webkit-text-stroke:2px #fdf6d0}
+
+    .player{position:sticky;top:0;z-index:10;background:linear-gradient(180deg,rgba(11,11,12,.97),rgba(11,11,12,.92));backdrop-filter:saturate(120%) blur(8px);border-bottom:1px solid var(--border)}
+    .now{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:12px 0}
+    .cover{width:56px;height:56px;border-radius:8px;background:#1e1f24;display:grid;place-items:center;color:var(--muted);font-weight:700;border:1px solid var(--border)}
+    .meta{min-width:0}
+    .title{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .sub{color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .controls{display:flex;align-items:center;gap:8px}
+    button{appearance:none;background:var(--card);color:var(--fg);border:1px solid var(--border);border-radius:10px;padding:8px 12px;cursor:pointer}
+    button:disabled{opacity:.55;cursor:not-allowed}
+    .range{display:flex;align-items:center;gap:8px}
+    input[type="range"]{width:160px}
+    .list{margin:12px 0 40px;border:1px solid var(--border);border-radius:14px;overflow:hidden}
+    .row{display:grid;grid-template-columns:56px 1fr auto;gap:12px;align-items:center;padding:10px 12px;border-top:1px solid var(--border);background:var(--card);min-height:78px}
+    .row:first-child{border-top:0}
+    .row:hover{background:#17171b}
+    .badge{display:flex;gap:10px;align-items:center;font-size:12px;justify-self:end}
+    .badge a{color:var(--fg);text-decoration:none;border:1px solid var(--border);padding:4px 8px;border-radius:8px}
+    .badge .muted{color:var(--muted)}
+    .kbd{font:12px/1.2 ui-monospace,Menlo,Consolas;background:#1b1c20;border:1px solid #2a2b30;border-radius:6px;padding:2px 6px;color:#d7dae0}
+
+    .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    select{background:var(--card);color:var(--fg);border:1px solid var(--border);border-radius:10px;padding:8px 10px}
+    .tog,.btn{
+      display:inline-flex;align-items:center;justify-content:center;
+      height:36px;min-width:36px;padding:0 10px;
+      border-radius:10px;border:1px solid var(--border);background:var(--card);
+      text-decoration:none;color:var(--fg);line-height:1
+    }
+    .tog{opacity:.6;transition:opacity .15s, box-shadow .15s}
+    .tog.on{opacity:1;box-shadow:0 0 0 2px var(--accent) inset}
+
+    details.menu{position:static}
+    details.menu>summary{cursor:pointer;list-style:none;background:var(--card);border:1px solid var(--border);padding:8px 12px;border-radius:10px;user-select:none}
+    .sheet{position:absolute;top:calc(100% + 8px);right:0;z-index:20;width:min(420px,calc(100vw - 32px));background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px;display:none;box-shadow:0 10px 24px rgba(0,0,0,.35)}
+    details.menu[open]>.sheet{display:block}
+    details.menu[open]>summary{border-bottom-left-radius:10px;border-bottom-right-radius:10px}
+
+    @supports (-webkit-touch-callout:none){.range[title="Volume"]{display:none !important}}
+
+    /* Light mode theme */
+    body.light{--bg:#f7f7f8;--fg:#111;--muted:#4b5563;--card:#ffffff;--border:#d1d5db;--accent:#2563eb}
+    body.light .player{background:linear-gradient(180deg,rgba(255,255,255,.96),rgba(255,255,255,.92))}
+    body.light #site-title{-webkit-text-stroke:2px #111}
+
+    @media (max-width:560px){
+      .now{grid-template-columns:1fr;gap:8px}
+      .cover{display:none}
+      .controls{flex-wrap:wrap}
+      .range input[type="range"]{width:120px}
+      .row{grid-template-columns:1fr auto}
+    }
+  </style>
+</head>
+<body>
+  <div class="player">
+    <div class="wrap">
+      <header>
+        <h1 id="site-title">VVIP25</h1>
+        <details class="menu" id="menu">
+          <summary>☰ Menu</summary>
+          <div class="sheet">
+            <div class="toolbar" id="toolbar">
+              <select id="sort" title="Sort">
+                <option value="date_desc">Newest</option>
+                <option value="date_asc">Oldest</option>
+                <option value="bpm_desc">BPM ↓</option>
+                <option value="bpm_asc">BPM ↑</option>
+                <option value="len_desc">Longest</option>
+                <option value="len_asc">Shortest</option>
+              </select>
+              <button class="tog on" id="togTitles" title="Song Titles (on/off)">📝</button>
+              <button class="tog" id="togWav" title="Show WAV buttons">🎚️</button>
+              <button class="tog" id="togMov" title="Show MOV buttons">🎬</button>
+              <button class="tog" id="togTrk" title="Show Trinkets button">💎</button>
+              <button class="tog" id="togLight" title="Light mode">🌞</button>
+              <button class="btn" id="btnAbout" title="About">ℹ️</button>
+              <!-- Shoppe lives in /shoppe/ (shoppe.html + shoppe.json inside that folder) -->
+              <a class="btn" id="btnShop" href="/shoppe/" data-nav title="Shop">🛍️</a>
+            </div>
+          </div>
+        </details>
+      </header>
+
+      <div class="now">
+        <div class="cover" id="cover">V25</div>
+        <div class="meta">
+          <div class="title" id="now-title">—</div>
+          <div class="sub" id="now-sub">Ready</div>
+        </div>
+        <div class="controls">
+          <button id="prev" aria-label="Previous">⏮️</button>
+          <button id="toggle" aria-label="Play/Pause">▶️</button>
+          <button id="next" aria-label="Next">⏭️</button>
+          <div class="range">
+            <span id="tcur">0:00</span>
+            <input id="seek" type="range" min="0" max="100" value="0" step="1" aria-label="Seek" />
+            <span id="tdur">0:00</span>
+          </div>
+          <div class="range" title="Volume">
+            <span>🔊</span>
+            <input id="vol" type="range" min="0" max="1" step="0.01" />
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <main id="page-root" data-page="home">
+    <div class="wrap">
+      <div id="list" class="list" role="list"></div>
+    </div>
+  </main>
+
+  <audio id="audio" preload="metadata"></audio>
+
+<script>
+/* ===== VVIP25 — Preload “Gone Jotti”, light-mode solid, shoppe folder routing, trinkets, hand-wired MOV ===== */
+
+const ASSET_VERSION = 19;             // bump when JSON or JS changes
 const LOGO_COLOR    = '#fdf6d0';      // bespoke icon color
 
 /* ---- Config ---- */
@@ -197,6 +344,9 @@ const state={
   hideNameless:   localStorage.getItem('vvip25:hideNameless')==='1'
 };
 
+/* ---- Apply light mode on boot ---- */
+if (state.lightMode) document.body.classList.add('light');
+
 /* ---- Bespoke control icons ---- */
 function iconPlay(){return `<svg viewBox="0 0 24 24" width="20" height="20"><polygon fill="${LOGO_COLOR}" points="8,5 20,12 8,19"/></svg>`;}
 function iconPause(){return `<svg viewBox="0 0 24 24" width="20" height="20"><rect fill="${LOGO_COLOR}" x="6" y="5" width="4" height="14" rx="1"/><rect fill="${LOGO_COLOR}" x="14" y="5" width="4" height="14" rx="1"/></svg>`;}
@@ -208,13 +358,19 @@ function setupBespokeControls(){ if($('#prev'))$('#prev').innerHTML=iconPrev(); 
 els.vol.value = localStorage.getItem('vvip25:vol') ?? '0.9';
 els.audio.volume = parseFloat(els.vol.value);
 
+/* ---- Preload helper for "Gone Jotti" ---- */
+function preloadByTitleOrName(q){
+  const needle = String(q||'').toLowerCase();
+  let idx = state.tracks.findIndex(t => (t.title||'').toLowerCase().includes(needle));
+  if (idx < 0) idx = state.tracks.findIndex(t => (t.name||'').toLowerCase().includes(needle));
+  return idx;
+}
+
 /* ---- Boot ---- */
 init();
 async function init(){
   buildMenuUI();
   setupBespokeControls();
-
-  if (state.lightMode) document.body.classList.add('light');
 
   // Load manifest (root then relative as fallback)
   let mres = await fetch(`/manifest.json?v=${ASSET_VERSION}`, { cache:'no-store' });
@@ -250,17 +406,27 @@ async function init(){
     };
   });
 
+  // Ensure titles are in place before first paint (so "Gone Jotti" can be found by title)
+  await fetchTitles();
+  await fetchThumbs().catch(()=>{});
+
+  // Preselect "Gone Jotti" if present
+  let jottiTrackIdx = preloadByTitleOrName('Gone Jotti');
+
   applyFilterSort(true);
-  computeThumbCascade();
   renderList();
   fillViewport();
-  if (state.filtered.length && state.i === -1) { select(0); }
 
-  queueMicrotask(fetchTitles);
-  setTimeout(fetchThumbs, 60);
+  if (jottiTrackIdx >= 0) {
+    const filteredIdx = state.filtered.findIndex(t => t.id === state.tracks[jottiTrackIdx].id);
+    if (filteredIdx >= 0) select(filteredIdx);
+    else if (state.filtered.length && state.i === -1) select(0);
+  } else if (state.filtered.length && state.i === -1) {
+    select(0);
+  }
 }
 
-/* ---- Titles / Thumbs (same behavior you had) ---- */
+/* ---- Titles / Thumbs ---- */
 function buildTitleLookup(json){
   const map=new Map();
   const add=(k,titleRaw)=>{ if(!k||!titleRaw) return; const title=primaryOnly(titleRaw);
@@ -356,7 +522,6 @@ function imgHTML(src){ const esc=s=>s.replace(/"/g,'&quot;');
 }
 function favHTML(t){ const on=state.favorites.has(t.name)?'is-on':''; const title=state.favorites.has(t.name)?'Remove from favorites':'Add to favorites'; return `<button class="btn icon-only ${on}" data-fav="${escapeHTML(t.name)}" title="${title}">★</button>`; }
 function gemHTML(t){
-  // Only render if toggle is on AND we have a link (hand-wired or derived)
   if (!state.showTrinketButtons) return '';
   if (!t.trinkets) return `<span class="btn icon-only" title="No trinkets" style="opacity:.45;cursor:not-allowed">💎</span>`;
   return `<a class="btn icon-only" href="${escapeHTML(t.trinkets)}" target="_blank" rel="noopener" title="Trinkets">💎</a>`;
@@ -365,7 +530,6 @@ function badgeHTML(t){
   const parts=[favHTML(t), `<a class="btn" href="${t.src}" download title="Download MP3">MP3</a>`];
   if (state.showWavButtons) parts.push(`<a class="btn" href="${t.wav}" download title="Download WAV">WAV</a>`);
   if (state.showMovButtons) parts.push(t.video ? `<a class="btn" href="${t.video}" target="_blank" rel="noopener" title="Open MOV">🎬</a>` : `<span class="btn" title="No MOV" style="opacity:.45;cursor:not-allowed">🎬</span>`);
-  // 💎 Trinkets (after media buttons)
   const gem = gemHTML(t); if (gem) parts.push(gem);
   return `<div class="badge" style="display:flex;gap:10px;align-items:center">${parts.join('')}</div>`;
 }
@@ -374,7 +538,7 @@ function rowHTML(t,active){
   const subBits=[ t.name ];
   if (bpmTxt) subBits.push(bpmTxt);
   if (t.length) subBits.push(fmtDur(t.length));
-  if (t.details && /#[^\s]/.test(t.details)===false) subBits.push(t.details); // hide #tags
+  if (t.details && /#[^\s]/.test(t.details)===false) subBits.push(t.details);
   const subline=subBits.join(' · ');
 
   return `<div class="row" role="listitem" data-id="${t.id}">
@@ -478,7 +642,7 @@ function buildMenuUI(){
   const btnFavList=document.createElement('button'); btnFavList.className='btn'; btnFavList.title='Favorites playlist'; btnFavList.textContent='🎵'; row.appendChild(btnFavList);
   btnFavList.addEventListener('click',(e)=>{ e.preventDefault(); state.searchQuery='#favorites'; applyFilterSort(false); keepMenuOpen(); });
 
-  // ⚙️ Settings (gear) — replaces “Utilities”
+  // ⚙️ Settings (gear)
   const btnUtils=document.createElement('button'); btnUtils.className='btn'; btnUtils.title='Settings'; btnUtils.textContent='⚙️'; row.appendChild(btnUtils);
   const util=document.createElement('div'); util.className='panel'; util.style.display='none';
   util.innerHTML = `<div class="row-links" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
@@ -509,8 +673,8 @@ function buildMenuUI(){
   btnUtils.addEventListener('click',(e)=>{ e.preventDefault(); togglePanel(util); keepMenuOpen(); });
   btnLinks.addEventListener('click',(e)=>{ e.preventDefault(); togglePanel(links); keepMenuOpen(); });
 
-  // 🛍️ Shop → /shoppe
-  const aShop=document.createElement('a'); aShop.className='btn'; aShop.title='Shoppe'; aShop.textContent='🛍️'; aShop.href='/shoppe'; aShop.target='_self'; row.appendChild(aShop);
+  // 🛍️ Shop → /shoppe/ (folder)
+  const aShop=document.createElement('a'); aShop.className='btn'; aShop.title='Shoppe'; aShop.textContent='🛍️'; aShop.href='/shoppe/'; aShop.target='_self'; row.appendChild(aShop);
 
   // Sort
   const sortSel=document.createElement('select'); sortSel.id='sort'; sortSel.title='Sort';
@@ -537,7 +701,6 @@ function keepMenuOpen(){ if (!els.menu) return; els.menu.open=true; }
 
 /* ---- Events ---- */
 document.addEventListener('click',(e)=>{
-  // Favorites star
   const favBtn=e.target.closest?.('.btn[data-fav]');
   if (favBtn){
     const key=favBtn.getAttribute('data-fav'); const wasFav=state.favorites.has(key);
@@ -548,7 +711,6 @@ document.addEventListener('click',(e)=>{
     favBtn.classList.toggle('is-on', !wasFav);
     e.preventDefault(); return;
   }
-  // Row select (ignore anchor clicks)
   const row=e.target.closest?.('.row');
   if(row && !e.target.closest('a')){
     const id=Number(row.getAttribute('data-id')); const idx=state.filtered.findIndex(t=>t.id===id);
@@ -567,5 +729,7 @@ els.seek.addEventListener('input', ()=>{ els.audio.currentTime=Number(els.seek.v
 els.vol.addEventListener('input', ()=>{ els.audio.volume=parseFloat(els.vol.value); localStorage.setItem('vvip25:vol', els.vol.value); });
 els.audio.addEventListener('ended', ()=> jump(1));
 </script>
+</body>
+</html>
 </body>
 </html>
