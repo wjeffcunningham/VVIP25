@@ -1,0 +1,32 @@
+[
+  {
+    "title": "VVIP Tee — Black",
+    "image": "/shoppe/assets/tee-black.jpg",
+    "description": "Heavyweight cotton tee with front logo.",
+    "price": 30,
+    "currency": "USD",
+    "url": "https://your-checkout.example/tee-black",
+    "available": true,
+    "tags": ["#tee", "#apparel"]
+  },
+  {
+    "title": "Poster — 18×24",
+    "image": "/shoppe/assets/poster-18x24.jpg",
+    "description": "Full-bleed print on satin paper.",
+    "price": 20,
+    "currency": "USD",
+    "url": "https://your-checkout.example/poster",
+    "available": true,
+    "tags": ["#poster", "#print"]
+  },
+  {
+    "title": "Cassette — Limited",
+    "image": "/shoppe/assets/cassette.jpg",
+    "description": "Edition of 100. Includes download code.",
+    "price": 12,
+    "currency": "USD",
+    "url": "https://your-checkout.example/cassette",
+    "available": false,
+    "tags": ["#cassette", "#audio"]
+  }
+]
