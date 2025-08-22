@@ -16,16 +16,16 @@
     body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 -apple-system,BlinkMacSystemFont,"Helvetica Neue",Helvetica,Arial,"Segoe UI",Roboto,Inter,system-ui,sans-serif}
     .wrap{max-width:920px;margin:0 auto;padding:16px}
 
-    html{-webkit-text-size-adjust:100%}        /* stop iOS auto-zooming text */
-input,select,button{font-size:16px}        /* prevent tap-to-zoom on controls */
-@media (max-width:560px){
-  body{font-size:15px}                      /* slightly smaller base on small screens */
-  header{gap:8px}
-  #site-title{font-size:44px;-webkit-text-stroke:1.5px #fdf6d0}
-  .wrap{padding:12px}
-  .row{grid-template-columns:auto 1fr auto;padding:8px 10px;min-height:64px}
-  .badge .pill{padding:3px 8px;font-size:11px}
-}
+    html{-webkit-text-size-adjust:100%}
+    input,select,button{font-size:16px}
+    @media (max-width:560px){
+      body{font-size:15px}
+      header{gap:8px}
+      #site-title{font-size:44px;-webkit-text-stroke:1.5px #fdf6d0}
+      .wrap{padding:12px}
+      .row{grid-template-columns:auto 1fr auto;padding:8px 10px;min-height:64px}
+      .badge .pill{padding:3px 8px;font-size:11px}
+    }
 
     header{display:flex;align-items:center;justify-content:space-between;gap:12px;position:relative}
     #site-title{margin:0;font-size:56px;font-weight:bold;font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;color:transparent;-webkit-text-fill-color:transparent;-webkit-text-stroke:2px #fdf6d0}
@@ -50,7 +50,6 @@ input,select,button{font-size:16px}        /* prevent tap-to-zoom on controls */
     .badge .muted{color:var(--muted)}
     .kbd{font:12px/1.2 ui-monospace,Menlo,Consolas;background:#1b1c20;border:1px solid #2a2b30;border-radius:6px;padding:2px 6px;color:#d7dae0}
 
-    /* Toolbar + toggles */
     .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
     select{background:var(--card);color:var(--fg);border:1px solid var(--border);border-radius:10px;padding:8px 10px}
     .tog,.btn{
@@ -60,16 +59,14 @@ input,select,button{font-size:16px}        /* prevent tap-to-zoom on controls */
       text-decoration:none;color:var(--fg);line-height:1
     }
     .tog{opacity:.6;transition:opacity .15s, box-shadow .15s}
-    .tog.on{opacity:1;box-shadow:0 0 0 2px var(--accent) inset}
+    .og.on{opacity:1;box-shadow:0 0 0 2px var(--accent) inset}
 
-    /* Hamburger (overlay) */
     details.menu{position:static}
     details.menu>summary{cursor:pointer;list-style:none;background:var(--card);border:1px solid var(--border);padding:8px 12px;border-radius:10px;user-select:none}
     .sheet{position:absolute;top:calc(100% + 8px);right:0;z-index:20;width:min(420px,calc(100vw - 32px));background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px;display:none;box-shadow:0 10px 24px rgba(0,0,0,.35)}
     details.menu[open]>.sheet{display:block}
     details.menu[open]>summary{border-bottom-left-radius:10px;border-bottom-right-radius:10px}
 
-    /* Hide the volume control on iOS Safari */
     @supports (-webkit-touch-callout:none){.range[title="Volume"]{display:none !important}}
 
     @media (max-width:560px){
@@ -102,7 +99,7 @@ input,select,button{font-size:16px}        /* prevent tap-to-zoom on controls */
               <button class="tog" id="togWav" title="Show WAV buttons">🎚️</button>
               <button class="tog" id="togMov" title="Show MOV buttons">🎬</button>
               <button class="btn" id="btnAbout" title="About">ℹ️</button>
-              <a class="btn" id="btnShop" href="/shoppe/" title="Shop">🛍️</a>
+              <a class="btn" id="btnShop" href="/shoppe/" data-nav title="Shop">🛍️</a>
             </div>
           </div>
         </details>
@@ -132,17 +129,19 @@ input,select,button{font-size:16px}        /* prevent tap-to-zoom on controls */
     </div>
   </div>
 
-  <div class="wrap">
-    <div id="list" class="list" role="list"></div>
-  </div>
+  <main id="page-root" data-page="home">
+    <div class="wrap">
+      <div id="list" class="list" role="list"></div>
+    </div>
+  </main>
 
   <audio id="audio" preload="metadata"></audio>
 
 <script>
 /* ========= VVIPMEDIA — Phase 7 core player ========= */
 
-const ASSET_VERSION = 18;            // bump when JSON/JS changes
-const PREFERRED_TITLE = 'gone jotti';// pre-load this track if found (case-insensitive)
+const ASSET_VERSION = 18;
+const PREFERRED_TITLE = 'gone jotti';
 
 /* ---------- Config ---------- */
 const BASE_MP3   = 'https://media.vvipmedia.net/ACCESS/';
@@ -157,7 +156,7 @@ const DEFAULT_THUMB = BASE_THUMB + 'default_thumb.jpg';
   document.head.appendChild(m);
 } catch(_){} })();
 
-/* ---------- CSS polish (logo-colored icons etc.) ---------- */
+/* ---------- CSS polish ---------- */
 (() => {
   const css = `
     :root{--logo:#fdf6d0}
@@ -332,7 +331,6 @@ function applyFilterSort(firstPaint=false, keepIndex=false){
   const tokens=q? q.split(/\s+/).filter(Boolean):[];
   let out=[...state.tracks];
 
-  // Sort
   switch(els.sort?.value||'date_desc'){
     case 'date_desc': out.sort((a,b)=>{ const da=a.date?.getTime()||0, db=b.date?.getTime()||0;
       if (db!==da) return db-da; return withinDayIndexFromName(b.name)-withinDayIndexFromName(a.name) || b.name.localeCompare(a.name); }); break;
@@ -344,10 +342,7 @@ function applyFilterSort(firstPaint=false, keepIndex=false){
     case 'len_asc':   out.sort((a,b)=> (a.length||0)-(b.length||0)); break;
   }
 
-  // Hide nameless when titles are shown and not searching
   if (state.showTitles && !tokens.length) out = out.filter(t=>!isNameless(t));
-
-  // Search
   out = out.filter(t=>matchesSearchTokens(t,tokens));
 
   state.filtered=out;
@@ -392,6 +387,16 @@ function renderList(){
   els.list.innerHTML = slice.map(t=>rowHTML(t,(state.i>=0 && state.filtered[state.i]?.id===t.id))).join('') + `<div id="sentinel" style="height:1px"></div>`;
 }
 function rerenderVisibleRowsThumbs(){ els.list.querySelectorAll('.row').forEach(row=>{ const id=+row.getAttribute('data-id'); const t=state.tracks.find(x=>x.id===id); if(!t) return; const img=row.querySelector('.cover img'); if(img) img.src=getResolvedThumb(t); }); }
+/* Added: used by WAV/MOV toggles */
+function rerenderVisibleRowsBadges(){
+  document.querySelectorAll('.row').forEach(row=>{
+    const id = +row.getAttribute('data-id');
+    const t  = state.tracks.find(x=>x.id===id);
+    if(!t) return;
+    const badge = row.querySelector('.badge');
+    if (badge) badge.outerHTML = badgeHTML(t);
+  });
+}
 function refreshTitlesOnly(){
   document.querySelectorAll('.row').forEach(row=>{
     const id=+row.getAttribute('data-id'); const t=state.tracks.find(x=>x.id===id); if(!t) return;
@@ -448,7 +453,6 @@ function select(indexInFiltered){
 function preselectPreferred(titleLike){
   const want = String(titleLike||'').toLowerCase();
   if (!want) { if (state.filtered.length && state.i===-1) select(0); return; }
-  // Try by title first, then filename
   let idx = state.filtered.findIndex(t => (t.title||'').toLowerCase().includes(want));
   if (idx < 0) idx = state.filtered.findIndex(t => (t.name||'').toLowerCase().includes(want));
   if (idx >= 0) select(idx);
@@ -483,11 +487,9 @@ function buildMenuUI(){
   const tb=els.toolbar; if(!tb) return; tb.innerHTML='';
   const row=document.createElement('div'); row.style.display='flex'; row.style.gap='8px'; row.style.flexWrap='wrap'; row.style.alignItems='center'; tb.appendChild(row);
 
-  // About
   const btnAbout=document.createElement('button'); btnAbout.className='btn'; btnAbout.title='About'; btnAbout.textContent='📜'; row.appendChild(btnAbout);
   btnAbout.addEventListener('click',(e)=>{ e.preventDefault(); alert("VVIPMEDIA — 2025"); keepMenuOpen(); });
 
-  // Utilities panel (titles/wav/mov/light)
   const btnUtils=document.createElement('button'); btnUtils.className='btn'; btnUtils.title='Utilities'; btnUtils.textContent='🛠️'; row.appendChild(btnUtils);
   const util=document.createElement('div'); util.className='panel';
   util.innerHTML = `<div class="row-links">
@@ -498,7 +500,6 @@ function buildMenuUI(){
   </div>`;
   tb.appendChild(util);
 
-  // Links panel
   const btnLinks=document.createElement('button'); btnLinks.className='btn'; btnLinks.title='Links'; btnLinks.textContent='🔗'; row.appendChild(btnLinks);
   const links=document.createElement('div'); links.className='panel'; links.innerHTML = `
     <div class="row-links">
@@ -509,20 +510,16 @@ function buildMenuUI(){
     </div>`;
   tb.appendChild(links);
 
-  // Shoppe
   const aShop=document.createElement('a'); aShop.className='btn'; aShop.title='Shoppe'; aShop.textContent='🛍️'; aShop.href='/shoppe/'; aShop.target='_self'; row.appendChild(aShop);
 
-  // Sort
   const sortSel=document.createElement('select'); sortSel.id='sort'; sortSel.title='Sort';
   sortSel.innerHTML=`<option value="date_desc">Newest</option><option value="date_asc">Oldest</option><option value="bpm_desc">BPM ↓</option><option value="bpm_asc">BPM ↑</option><option value="len_desc">Longest</option><option value="len_asc">Shortest</option>`;
   row.appendChild(sortSel); els.sort=sortSel;
 
-  // Search
   const btnSearch=document.createElement('button'); btnSearch.className='btn'; btnSearch.title='Search'; btnSearch.textContent='🔍'; row.appendChild(btnSearch);
   const searchWrap=document.createElement('div'); searchWrap.className='search-wrap'; searchWrap.innerHTML=`<input id="searchInput" placeholder="Search… use #tags (e.g. #mbv)" inputmode="search" />`; tb.appendChild(searchWrap);
   const searchInput=searchWrap.querySelector('#searchInput');
 
-  // Wire: exclusive panels
   btnUtils.addEventListener('click',(e)=>{ e.preventDefault();
     const show = util.style.display!=='block'; util.style.display = show?'block':'none'; if(show) links.style.display='none'; keepMenuOpen();
   });
@@ -530,13 +527,11 @@ function buildMenuUI(){
     const show = links.style.display!=='block'; links.style.display = show?'block':'none'; if(show) util.style.display='none'; keepMenuOpen();
   });
 
-  // Toggles
   util.querySelector('#togTitles').addEventListener('click', (e)=>{ state.showTitles=!state.showTitles; e.currentTarget.classList.toggle('on',state.showTitles); refreshTitlesOnly(); keepMenuOpen(); });
   util.querySelector('#togWav').addEventListener('click', (e)=>{ state.showWavButtons=!state.showWavButtons; e.currentTarget.classList.toggle('on',state.showWavButtons); rerenderVisibleRowsBadges(); keepMenuOpen(); });
   util.querySelector('#togMov').addEventListener('click', (e)=>{ state.showMovButtons=!state.showMovButtons; e.currentTarget.classList.toggle('on',state.showMovButtons); rerenderVisibleRowsBadges(); keepMenuOpen(); });
   util.querySelector('#togLight').addEventListener('click', (e)=>{ state.light=!state.light; document.body.classList.toggle('light',state.light); localStorage.setItem('vvip25:light', state.light?'1':'0'); e.currentTarget.classList.toggle('on',state.light); keepMenuOpen(); });
 
-  // Search input
   btnSearch.addEventListener('click', ()=>{ const show=searchWrap.style.display!=='flex'; searchWrap.style.display=show?'flex':'none'; if(show){ searchInput.value=state.searchQuery; searchInput.focus(); } keepMenuOpen(); });
   searchInput.addEventListener('input', debounce(()=>{ state.searchQuery=searchInput.value||''; applyFilterSort(false,true); },150));
 }
@@ -544,7 +539,6 @@ function keepMenuOpen(){ if (els.menu) els.menu.open = true; }
 
 /* ---------- Events ---------- */
 document.addEventListener('click',(e)=>{
-  // Favorite star
   const favBtn=e.target.closest?.('.star');
   if (favBtn && favBtn.hasAttribute('data-fav')){
     const key=favBtn.getAttribute('data-fav'); const was=state.favorites.has(key);
@@ -555,7 +549,6 @@ document.addEventListener('click',(e)=>{
     favBtn.classList.toggle('on', !was);
     e.preventDefault(); return;
   }
-  // Row select
   const row=e.target.closest?.('.row');
   if(row && !e.target.closest('a')){
     const id=Number(row.getAttribute('data-id')); const idx=state.filtered.findIndex(t=>t.id===id);
@@ -573,6 +566,67 @@ els.audio.addEventListener('timeupdate', ()=>{ const a=els.audio; if(!isFinite(a
 els.seek.addEventListener('input', ()=>{ els.audio.currentTime=Number(els.seek.value); });
 els.vol.addEventListener('input', ()=>{ els.audio.volume=parseFloat(els.vol.value); localStorage.setItem('vvip25:vol', els.vol.value); });
 els.audio.addEventListener('ended', ()=> jump(1));
+</script> <!-- ✅ CLOSE the big player script -->
+
+<!-- ========= VVIP25 SPA-lite Router ========= -->
+<script>
+(() => {
+  const ROOT_SELECTOR = 'main#page-root';
+
+  async function swapTo(url, push = true) {
+    try {
+      const res = await fetch(url, { credentials: 'same-origin' });
+      if (!res.ok) throw new Error(res.status);
+      const html = await res.text();
+      const doc  = new DOMParser().parseFromString(html, 'text/html');
+      const nextMain = doc.querySelector(ROOT_SELECTOR);
+      const curMain  = document.querySelector(ROOT_SELECTOR);
+      if (!nextMain || !curMain) return;
+      curMain.replaceWith(nextMain);
+      if (doc.title) document.title = doc.title;
+      if (push) history.pushState(null, '', new URL(url, location.origin).pathname);
+      setActiveNav(url);
+      if (typeof window.initPage === 'function') window.initPage(nextMain);
+    } catch {
+      location.href = url; // fallback hard reload
+    }
+  }
+
+  function setActiveNav(url) {
+    const path = new URL(url, location.origin).pathname.replace(/\/+$/, '') || '/';
+    document.querySelectorAll('a[data-nav]').forEach(a => {
+      const p = a.pathname.replace(/\/+$/, '') || '/';
+      a.classList.toggle('active', p === path);
+    });
+  }
+
+  document.addEventListener('click', e => {
+    const a = e.target.closest('a[data-nav]');
+    if (!a) return;
+    if (a.origin !== location.origin) return;
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    swapTo(a.href);
+  });
+
+  window.addEventListener('popstate', () => swapTo(location.href, false));
+
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('a[href="/shoppe"], a[href="/shoppe/"]').forEach(a => a.setAttribute('data-nav',''));
+    setActiveNav(location.href);
+    if (typeof window.initPage === 'function') {
+      const root = document.querySelector(ROOT_SELECTOR);
+      window.initPage(root);
+    }
+  });
+
+  window.vvipNav = (toPath) => swapTo(toPath, true);
+})();
+
+// per-page hook
+window.initPage = window.initPage || function initPage(rootEl) {
+  // later: if (rootEl.dataset.page === 'shoppe') { …populate grid… }
+};
 </script>
 </body>
 </html>
