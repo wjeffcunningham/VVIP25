@@ -59,7 +59,7 @@
       text-decoration:none;color:var(--fg);line-height:1
     }
     .tog{opacity:.6;transition:opacity .15s, box-shadow .15s}
-    .og.on{opacity:1;box-shadow:0 0 0 2px var(--accent) inset}
+    .tog.on{opacity:1;box-shadow:0 0 0 2px var(--accent) inset}
 
     details.menu{position:static}
     details.menu>summary{cursor:pointer;list-style:none;background:var(--card);border:1px solid var(--border);padding:8px 12px;border-radius:10px;user-select:none}
@@ -627,6 +627,62 @@ els.audio.addEventListener('ended', ()=> jump(1));
 window.initPage = window.initPage || function initPage(rootEl) {
   // later: if (rootEl.dataset.page === 'shoppe') { …populate grid… }
 };
+
+async function loadShoppe(rootEl){
+  const grid = rootEl.querySelector('[data-shoppe-grid]');
+  if (!grid) return;
+
+  // simple skeleton
+  grid.innerHTML = `<div class="shop-item"><div class="desc">Loading…</div></div>`;
+
+  try {
+    const res = await fetch(`/shoppe/shoppe.json?v=${ASSET_VERSION}`, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const items = await res.json();
+
+    if (!Array.isArray(items) || items.length === 0) {
+      grid.innerHTML = `<div class="shop-item"><div class="desc">Nothing here yet — check back soon.</div></div>`;
+      return;
+    }
+
+    const html = items.map(it => {
+      const img = it.image || it.img || '';
+      const title = it.title || it.name || 'Untitled';
+      const desc = it.desc || it.description || '';
+      const price = (it.price != null) ? it.price : '';
+      const href  = it.url || it.link || '#';
+      const btn   = href === '#'
+        ? `<span class="btn" aria-disabled="true">Coming soon</span>`
+        : `<a class="btn" href="${href}" target="_blank" rel="noopener">Buy</a>`;
+
+      return `
+        <article class="shop-item">
+          ${img ? `<img src="${img}" alt="">` : ''}
+          <h3>${title}</h3>
+          ${desc ? `<div class="desc">${desc}</div>` : ''}
+          <div class="buy">
+            <span class="price">${price ? `$${price}` : ''}</span>
+            ${btn}
+          </div>
+        </article>
+      `;
+    }).join('');
+
+    grid.innerHTML = html;
+  } catch (err) {
+    grid.innerHTML = `<div class="shop-item"><div class="desc">Failed to load shop items.</div></div>`;
+    console.error('Shoppe load error:', err);
+  }
+}
+
+/* augment your existing initPage hook */
+(function attachShoppeInit(){
+  const prevInit = window.initPage;
+  window.initPage = function(nextRoot){
+    if (typeof prevInit === 'function') prevInit(nextRoot);
+    if (nextRoot && nextRoot.dataset.page === 'shoppe') loadShoppe(nextRoot);
+  };
+})();
 </script>
 </body>
 </html>
