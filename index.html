@@ -115,16 +115,19 @@
   <audio id="audio" preload="metadata"></audio>
 
 <script>
-/* ========= VVIPMEDIA — Core Player (Unified List) + SPA Router ========= */
+/* ========= VVIPMEDIA — Core Player (Unified list: Music / Favorites / Search) ========= */
+/* Works with your existing manifest format exactly as-is. Optional extras supported:
+   - t.video: string (single movie link)
+   - t.videos: [{label, url}, ...] (multiple movie links)
+*/
 
-const ASSET_VERSION = 18;
+const ASSET_VERSION = 19;
 const PREFERRED_TITLE = 'gone jotti';
 
 /* ---------- Config ---------- */
 const BASE_MP3   = 'https://media.vvipmedia.net/ACCESS/';
 const BASE_WAV   = 'https://media.vvipmedia.net/WAV/';
 const BASE_THUMB = 'https://media.vvipmedia.net/ACCESS/';
-const BASE_VIDEO = 'https://media.vvipmedia.net/VIDEOS/';
 const DEFAULT_THUMB = BASE_THUMB + 'default_thumb.jpg';
 
 /* ---------- Cache hint ---------- */
@@ -147,11 +150,11 @@ const DEFAULT_THUMB = BASE_THUMB + 'default_thumb.jpg';
     .star{cursor:pointer}
     .star.on{filter:drop-shadow(0 0 2px var(--accent)) brightness(1.2)}
     .controls button svg{width:18px;height:18px;fill:var(--logo)}
-    /* Favorites/Search bar */
-    .favbar{display:none;margin:10px 0 8px;gap:10px;align-items:center;flex-wrap:wrap}
-    .favbar .mode{font-size:14px;color:var(--muted)}
-    .favbar input[type="search"]{flex:1;min-width:200px;background:var(--card);color:var(--fg);
-      border:1px solid var(--border);border-radius:10px;padding:8px 10px}
+    /* Inline Favorites/Search toolbar (in the page, not in the menu) */
+    .inline-tools{display:none;margin:12px 0 0;padding:8px;border:1px solid var(--border);border-radius:10px;background:var(--card)}
+    .inline-tools .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .inline-tools input[type="search"]{flex:1;min-width:180px;background:var(--card);color:var(--fg);border:1px solid var(--border);border-radius:10px;padding:8px 10px}
+    .inline-tools .tag{font-size:12px;opacity:.8}
     body.light{--bg:#f7f7f8;--fg:#111;--muted:#4b5563;--card:#ffffff;--border:#d1d5db;--accent:#2563eb}
     body.light .player{background:linear-gradient(180deg,rgba(255,255,255,.96),rgba(255,255,255,.92))}
     body.light #site-title{-webkit-text-stroke:2px #111}
@@ -181,28 +184,16 @@ function fallbackDateFromName(name){
 function withinDayIndexFromName(name){ const m=String(name).match(WITHIN_DAY_RX); return m&&m[1]?parseInt(m[1],10):0; }
 function bpmSortValue(t){ if(t.bpm!=null) return t.bpm; if(t.bpm_min!=null&&t.bpm_max!=null) return (t.bpm_min+t.bpm_max)/2; return 0; }
 function bpmLabel(t){ if(t.bpm!=null) return `${t.bpm} BPM`; if(t.bpm_min!=null&&t.bpm_max!=null) return `${t.bpm_min}–${t.bpm_max} BPM`; return ''; }
-function matchesTokens(t,tokens){
-  if(!tokens.length) return true;
-  const hayName=(t.name||'').toLowerCase();
-  const hayTitle=(t.title||'').toLowerCase();
-  const hayDetails=(t.details||'').toLowerCase();
-  return tokens.every(tok=>{
-    if (tok.startsWith('#')) return hayDetails.includes(tok);
-    return hayName.includes(tok) || hayTitle.includes(tok) || hayDetails.includes(tok);
-  });
-}
 
 /* ---------- Elements & State ---------- */
 const els = {
-  audio:$('#audio'), list:$('#list'), sort:$('#sort'),
+  audio:$('#audio'), list:$('#list'),
   toggle:$('#toggle'), prev:$('#prev'), next:$('#next'),
   seek:$('#seek'), vol:$('#vol'),
   nowTitle:$('#now-title'), nowSub:$('#now-sub'), cover:$('#cover'),
   tcur:$('#tcur'), tdur:$('#tdur'),
-  menu:$('#menu'), toolbar:$('#toolbar'),
-  favbar:null, favInput:null, favModeLabel:null, wrap:null
+  menu:$('#menu'), toolbar:$('#toolbar')
 };
-
 const state = {
   tracks:[], filtered:[], i:-1, playing:false,
   pageSize:60, renderCount:0,
@@ -210,11 +201,9 @@ const state = {
   showTitles:true, showWavButtons:false, showMovButtons:false,
   favorites:new Set(JSON.parse(localStorage.getItem('vvip25:favs')||'[]')),
   favOrder: JSON.parse(localStorage.getItem('vvip25:favOrder')||'[]'),
-  searchQuery:'',
-  viewMode:'all', /* 'all' | 'favorites' | 'search' */
+  searchQuery:'', favoritesOnly:false,
   light: localStorage.getItem('vvip25:light')==='1'
 };
-
 els.vol.value = localStorage.getItem('vvip25:vol') ?? '0.9';
 els.audio.volume = parseFloat(els.vol.value);
 if (state.light) document.body.classList.add('light');
@@ -223,7 +212,7 @@ if (state.light) document.body.classList.add('light');
 init();
 async function init(){
   buildMenuUI();
-  buildFavBar();              // single search lives here
+  ensureInlineTools(); // inject the Favorites/Search toolbar in-page
   setControlIcons();
 
   let res = await fetch(`/manifest.json?v=${ASSET_VERSION}`, {cache:'no-store'});
@@ -236,112 +225,44 @@ async function init(){
     const base = stripExt(name), baseLower=base.toLowerCase();
     const dateObj = t.date ? new Date(t.date) : fallbackDateFromName(name);
     const mp3 = t.src || (BASE_MP3 + encodeURIComponent(name));
-    const wav = BASE_WAV + encodeURIComponent(base + '.wav');
-    const mov = t.has_mov ? (BASE_VIDEO + encodeURIComponent(base + '.mov')) : null;
+    // Optional video links (hard-wired):
+    // - t.video: string
+    // - t.videos: [{label,url}, ...]
+    let videos = [];
+    if (typeof t.video === 'string' && t.video.trim()) {
+      videos.push({ label:'MOV', url: t.video.trim() });
+    }
+    if (Array.isArray(t.videos)) {
+      for (const v of t.videos) {
+        if (v && typeof v.url === 'string' && v.url.trim()) {
+          videos.push({ label: v.label ? String(v.label) : 'MOV', url: v.url.trim() });
+        }
+      }
+    }
+
     const thumbCandidate = BASE_THUMB + encodeURIComponent(baseLower + 'thumb.jpg');
     const details = t.details || '';
-    return { id:idx, name, base, baseLower, title: t.title?String(t.title):'',
+    return {
+      id:idx, name, base, baseLower,
+      title: t.title?String(t.title):'',
       bpm:t.bpm??null, bpm_min:t.bpm_min??null, bpm_max:t.bpm_max??null,
-      details, length:t.length||0, date:dateObj||null, src:mp3, wav, video:mov, thumbCandidate };
+      details, length:t.length||0, date:dateObj||null,
+      src:mp3, wav: BASE_WAV + encodeURIComponent(base + '.wav'),
+      videos, // array of {label,url}
+      thumbCandidate
+    };
   });
 
   await fetchTitles().catch(()=>{});
   await fetchThumbs().catch(()=>{});
 
-  setView('all'); // initial
-  preselectPreferred(PREFERRED_TITLE);
-}
-
-/* ---------- View / Filter logic ---------- */
-function setView(mode){
-  // mode: 'all' | 'favorites' | 'search'
-  state.viewMode = mode;
-  if (mode === 'all'){
-    state.searchQuery='';
-    if (els.favInput) els.favInput.value='';
-    hideFavBar();
-  } else {
-    showFavBar();
-  }
   applyFilterSort(true);
   renderList();
   fillViewport();
-  if (els.menu) els.menu.open = false;
-  updateFavModeLabel();
+
+  preselectPreferred(PREFERRED_TITLE);
+  updateInlineToolsVisibility();
 }
-
-function updateFavModeLabel(){
-  if(!els.favModeLabel) return;
-  let label='All';
-  if (state.viewMode==='favorites') label='Favorites';
-  if (state.viewMode==='search') label=`Search${state.searchQuery ? `: “${state.searchQuery}”` : ''}`;
-  els.favModeLabel.textContent = label;
-}
-
-function buildFavBar(){
-  const wrap = document.querySelector('main#page-root .wrap');
-  els.wrap = wrap;
-  const bar = document.createElement('div');
-  bar.className='favbar';
-  bar.innerHTML = `
-    <span class="mode" id="favMode">Favorites</span>
-    <input id="favSearch" type="search" placeholder="Filter with #tags or text" autocomplete="off" />
-  `;
-  wrap.insertBefore(bar, wrap.firstElementChild.nextElementSibling); // before the list
-  els.favbar = bar;
-  els.favInput = bar.querySelector('#favSearch');
-  els.favModeLabel = bar.querySelector('#favMode');
-
-  // Search behavior: typing triggers search mode, clearing returns to favorites
-  els.favInput.addEventListener('input', debounce(()=>{
-    const q = (els.favInput.value||'').trim();
-    state.searchQuery = q.toLowerCase();
-    setView(q ? 'search' : 'favorites');
-  }, 120));
-}
-
-function showFavBar(){ if(els.favbar) els.favbar.style.display='flex'; }
-function hideFavBar(){ if(els.favbar) els.favbar.style.display='none'; }
-
-function isNameless(t){ const derived=deriveTitleFromFilename(t.name); return !t.title || t.title===derived; }
-
-function applyFilterSort(firstPaint=false, keepIndex=false){
-  const tokens=(state.searchQuery||'').trim().toLowerCase().split(/\s+/).filter(Boolean);
-  let out=[...state.tracks];
-
-  // Sort
-  switch(els.sort?.value||'date_desc'){
-    case 'date_desc': out.sort((a,b)=>{ const da=a.date?.getTime()||0, db=b.date?.getTime()||0;
-      if (db!==da) return db-da; return withinDayIndexFromName(b.name)-withinDayIndexFromName(a.name) || b.name.localeCompare(a.name); }); break;
-    case 'date_asc':  out.sort((a,b)=>{ const da=a.date?.getTime()||0, db=b.date?.getTime()||0;
-      if (da!==db) return da-db; return withinDayIndexFromName(a.name)-withinDayIndexFromName(b.name) || a.name.localeCompare(b.name); }); break;
-    case 'bpm_desc':  out.sort((a,b)=> bpmSortValue(b)-bpmSortValue(a)); break;
-    case 'bpm_asc':   out.sort((a,b)=> bpmSortValue(a)-bpmSortValue(b)); break;
-    case 'len_desc':  out.sort((a,b)=> (b.length||0)-(a.length||0)); break;
-    case 'len_asc':   out.sort((a,b)=> (a.length||0)-(b.length||0)); break;
-  }
-
-  // Mode filters
-  if (state.viewMode === 'favorites' && !tokens.length){
-    out = out.filter(t=>state.favorites.has(t.name));
-  } else if (state.viewMode === 'search' && tokens.length){
-    out = out.filter(t=>matchesTokens(t,tokens));
-  }
-
-  // Hide nameless when not searching (your original behavior)
-  if (state.showTitles && (state.viewMode!=='search' || !tokens.length)){
-    out = out.filter(t=>!isNameless(t));
-  }
-
-  state.filtered=out;
-  const initialChunk=firstPaint ? Math.max(60,state.pageSize) : state.pageSize;
-  state.renderCount=Math.min(state.filtered.length, initialChunk);
-  if (!keepIndex) state.i=Math.min(state.i, state.renderCount-1);
-  renderList(); setupInfiniteScroll(); fillViewport();
-  updateFavModeLabel();
-}
-
-const displayName=t=> (state.showTitles && t.title) ? t.title : t.name;
 
 /* ---------- Titles / Thumbs ---------- */
 function buildTitleLookup(json){
@@ -392,6 +313,58 @@ function computeThumbCascade(){
 }
 const getResolvedThumb=t=>state.resolvedThumb.get(t.id)||DEFAULT_THUMB;
 
+/* ---------- Filter / sort ---------- */
+function isNameless(t){ const derived=deriveTitleFromFilename(t.name); return !t.title || t.title===derived; }
+function matchesSearchTokens(t,tokens){
+  if(!tokens.length) return true;
+  const hayName=(t.name||'').toLowerCase();
+  const hayTitle=(t.title||'').toLowerCase();
+  const hayDetails=(t.details||'').toLowerCase();
+  return tokens.every(tok=>{
+    if (tok.startsWith('#')) return hayDetails.includes(tok);
+    return hayName.includes(tok) || hayTitle.includes(tok) || hayDetails.includes(tok);
+  });
+}
+function applyFilterSort(firstPaint=false, keepIndex=false){
+  const q=(state.searchQuery||'').trim().toLowerCase();
+  const tokens=q? q.split(/\s+/).filter(Boolean):[];
+  let out=[...state.tracks];
+
+  // Sort (control is inside menu)
+  const sortSel = $('#sort');
+  switch(sortSel?.value||'date_desc'){
+    case 'date_desc': out.sort((a,b)=>{ const da=a.date?.getTime()||0, db=b.date?.getTime()||0;
+      if (db!==da) return db-da; return withinDayIndexFromName(b.name)-withinDayIndexFromName(a.name) || b.name.localeCompare(a.name); }); break;
+    case 'date_asc':  out.sort((a,b)=>{ const da=a.date?.getTime()||0, db=b.date?.getTime()||0;
+      if (da!==db) return da-db; return withinDayIndexFromName(a.name)-withinDayIndexFromName(b.name) || a.name.localeCompare(b.name); }); break;
+    case 'bpm_desc':  out.sort((a,b)=> bpmSortValue(b)-bpmSortValue(a)); break;
+    case 'bpm_asc':   out.sort((a,b)=> bpmSortValue(a)-bpmSortValue(b)); break;
+    case 'len_desc':  out.sort((a,b)=> (b.length||0)-(a.length||0)); break;
+    case 'len_asc':   out.sort((a,b)=> (a.length||0)-(b.length||0)); break;
+  }
+
+  // Favorites-only view
+  if (state.favoritesOnly) {
+    out = out.filter(t => state.favorites.has(t.name));
+  }
+
+  // Hide nameless only when no search and not filtering favorites
+  if (!state.favoritesOnly && !tokens.length && state.showTitles) {
+    out = out.filter(t=>!isNameless(t));
+  }
+
+  // Search tokens
+  out = out.filter(t=>matchesSearchTokens(t,tokens));
+
+  state.filtered=out;
+  const initialChunk=firstPaint ? Math.max(60,state.pageSize) : state.pageSize;
+  state.renderCount=Math.min(state.filtered.length, initialChunk);
+  if (!keepIndex) state.i=Math.min(state.i, state.renderCount-1);
+  renderList(); setupInfiniteScroll(); fillViewport();
+  updateInlineToolsVisibility();
+}
+const displayName=t=> (state.showTitles && t.title) ? t.title : t.name;
+
 /* ---------- Render ---------- */
 function imgHTML(src){ const esc=s=>s.replace(/"/g,'&quot;');
   return `<img src="${esc(src)}" alt="" loading="lazy" style="width:56px;height:56px;border-radius:8px;object-fit:cover;" onerror="if(this.dataset.fbk!=='1'){this.dataset.fbk='1';this.onerror=null;this.src='${DEFAULT_THUMB}';}">`;
@@ -401,11 +374,17 @@ function favHTML(t){
   const title=state.favorites.has(t.name)?'Remove from favorites':'Add to favorites';
   return `<button class="star ${on}" data-fav="${escapeHTML(t.name)}" title="${title}">★</button>`;
 }
+function videoPillsHTML(t){
+  if (!state.showMovButtons) return ''; // gated by toggle
+  if (Array.isArray(t.videos) && t.videos.length){
+    return t.videos.map(v => `<a class="pill" href="${v.url}" target="_blank" rel="noopener" title="Open ${escapeHTML(v.label||'MOV')}">${escapeHTML(v.label||'MOV')}</a>`).join('');
+  }
+  return '<span class="pill muted">MOV</span>'; // if toggled on but nothing defined
+}
 function badgeHTML(t){
   const parts=[favHTML(t), `<a class="pill" href="${t.src}" download title="Download MP3">MP3</a>`];
   if (state.showWavButtons) parts.push(`<a class="pill" href="${BASE_WAV+encodeURIComponent(t.base+'.wav')}" download title="Download Lossless">WAV</a>`);
-  if (state.showMovButtons && t.video) parts.push(`<a class="pill" href="${t.video}" target="_blank" rel="noopener" title="Open Video">MOV</a>`);
-  if (state.showMovButtons && !t.video) parts.push('<span class="pill muted">MOV</span>');
+  if (state.showMovButtons) parts.push(videoPillsHTML(t));
   return `<div class="badge">${parts.join('')}</div>`;
 }
 function rowHTML(t,active){
@@ -535,7 +514,7 @@ function buildMenuUI(){
   util.innerHTML = `<div class="row-links">
     <button class="tog ${state.showTitles?'on':''}" id="togTitles" title="Song Titles (on/off)">📝</button>
     <button class="tog ${state.showWavButtons?'on':''}" id="togWav" title="Show WAV buttons">🎚️</button>
-    <button class="tog ${state.showMovButtons?'on':''}" id="togMov" title="Show MOV buttons">🎬</button>
+    <button class="tog ${state.showMovButtons?'on':''}" id="togMov" title="Show movie buttons">🎬</button>
     <button class="tog ${state.light?'on':''}" id="togLight" title="Light mode">🌞</button>
   </div>`;
   tb.appendChild(util);
@@ -550,19 +529,17 @@ function buildMenuUI(){
   </div>`;
   tb.appendChild(links);
 
-  // Main controls (no page shift for Music/Playlist)
-  const btnMusic=document.createElement('button'); btnMusic.className='btn'; btnMusic.title='Music'; btnMusic.textContent='🎵'; row.appendChild(btnMusic);
-  const btnPlaylist=document.createElement('button'); btnPlaylist.className='btn'; btnPlaylist.title='Playlist'; btnPlaylist.textContent='⭐'; row.appendChild(btnPlaylist);
+  // Main nav — Music (resets), Playlist (favorites view), Shoppe (separate page)
+  const btnMusic=document.createElement('a'); btnMusic.className='btn'; btnMusic.title='Music'; btnMusic.textContent='🎵'; btnMusic.href='/'; btnMusic.setAttribute('data-nav',''); row.appendChild(btnMusic);
+  const btnFavs=document.createElement('a');  btnFavs.className='btn';  btnFavs.title='Playlist'; btnFavs.textContent='⭐'; btnFavs.href='#favorites'; row.appendChild(btnFavs);
   const aShop=document.createElement('a'); aShop.className='btn'; aShop.title='Shoppe'; aShop.textContent='🛍️'; aShop.href='/shoppe/'; aShop.setAttribute('data-nav',''); row.appendChild(aShop);
 
-  btnMusic.addEventListener('click',(e)=>{ e.preventDefault(); setView('all'); });
-  btnPlaylist.addEventListener('click',(e)=>{ e.preventDefault(); if(!els.favbar) buildFavBar(); setView('favorites'); });
-
-  // Sort (shared across modes)
+  // Sort (kept in menu)
   const sortSel=document.createElement('select'); sortSel.id='sort'; sortSel.title='Sort';
   sortSel.innerHTML=`<option value="date_desc">Newest</option><option value="date_asc">Oldest</option><option value="bpm_desc">BPM ↓</option><option value="bpm_asc">BPM ↑</option><option value="len_desc">Longest</option><option value="len_asc">Shortest</option>`;
-  row.appendChild(sortSel); els.sort=sortSel;
+  row.appendChild(sortSel);
 
+  // Toggle panels
   btnUtils.addEventListener('click',(e)=>{ e.preventDefault();
     const show = util.style.display!=='block'; util.style.display = show?'block':'none'; if(show) links.style.display='none'; keepMenuOpen();
   });
@@ -570,12 +547,74 @@ function buildMenuUI(){
     const show = links.style.display!=='block'; links.style.display = show?'block':'none'; if(show) util.style.display='none'; keepMenuOpen();
   });
 
+  // Utility toggles
   util.querySelector('#togTitles').addEventListener('click', (e)=>{ state.showTitles=!state.showTitles; e.currentTarget.classList.toggle('on',state.showTitles); refreshTitlesOnly(); keepMenuOpen(); });
   util.querySelector('#togWav').addEventListener('click', (e)=>{ state.showWavButtons=!state.showWavButtons; e.currentTarget.classList.toggle('on',state.showWavButtons); rerenderVisibleRowsBadges(); keepMenuOpen(); });
   util.querySelector('#togMov').addEventListener('click', (e)=>{ state.showMovButtons=!state.showMovButtons; e.currentTarget.classList.toggle('on',state.showMovButtons); rerenderVisibleRowsBadges(); keepMenuOpen(); });
   util.querySelector('#togLight').addEventListener('click', (e)=>{ state.light=!state.light; document.body.classList.toggle('light',state.light); localStorage.setItem('vvip25:light', state.light?'1':'0'); e.currentTarget.classList.toggle('on',state.light); keepMenuOpen(); });
+
+  // Menu actions (close menu)
+  const closeMenu=()=>{ if (els.menu) els.menu.open=false; };
+
+  btnMusic.addEventListener('click',(e)=>{ e.preventDefault();
+    // Reset to "all" view; clear search; rebuild
+    state.favoritesOnly=false; state.searchQuery=''; applyFilterSort(false,false);
+    updateInlineToolsVisibility();
+    closeMenu();
+    // keep URL as-is (no sub-banner / no SPA swap)
+  });
+
+  btnFavs.addEventListener('click',(e)=>{ e.preventDefault();
+    // Enter "favorites" view; leave search as-is but show inline tools
+    state.favoritesOnly=true; applyFilterSort(false,false);
+    updateInlineToolsVisibility(true); // force open
+    closeMenu();
+  });
+
+  aShop.addEventListener('click',(e)=>{ // SPA navigate to /shoppe/
+    e.preventDefault();
+    closeMenu();
+    vvipNav('/shoppe/');
+  });
+
+  els.sort = sortSel;
 }
-function keepMenuOpen(){ if (els.menu) els.menu.open = true; }
+
+/* ---------- Inline Favorites/Search toolbar (in-page, not menu) ---------- */
+let inlineToolsEl, inlineSearchEl, inlineResetEl, inlineFavTagEl;
+function ensureInlineTools(){
+  const wrap = document.querySelector('main#page-root .wrap');
+  if (!wrap) return;
+  inlineToolsEl = document.createElement('div');
+  inlineToolsEl.className = 'inline-tools';
+  inlineToolsEl.innerHTML = `
+    <div class="bar">
+      <span class="tag" id="favTag" title="Filtering favorites">⭐ Favorites only</span>
+      <input id="inlineSearch" type="search" placeholder="Search favorites… use #tags (e.g. #mbv)" inputmode="search" />
+      <button class="btn" id="inlineReset" title="Show all music">🎵 Music</button>
+    </div>
+  `;
+  wrap.insertBefore(inlineToolsEl, wrap.firstChild); // above the list
+  inlineSearchEl = inlineToolsEl.querySelector('#inlineSearch');
+  inlineResetEl  = inlineToolsEl.querySelector('#inlineReset');
+  inlineFavTagEl = inlineToolsEl.querySelector('#favTag');
+
+  inlineSearchEl.addEventListener('input', debounce(()=>{ state.searchQuery=inlineSearchEl.value||''; applyFilterSort(false,true); },150));
+  inlineResetEl.addEventListener('click', ()=>{
+    state.favoritesOnly=false; state.searchQuery=''; applyFilterSort(false,false);
+    updateInlineToolsVisibility();
+  });
+}
+function updateInlineToolsVisibility(forceOpen=false){
+  if (!inlineToolsEl) return;
+  const show = state.favoritesOnly || (state.searchQuery||'').trim().length>0;
+  inlineToolsEl.style.display = show ? 'block' : 'none';
+  inlineFavTagEl.style.display = state.favoritesOnly ? 'inline' : 'none';
+  if (show) {
+    inlineSearchEl.value = state.searchQuery;
+    if (forceOpen) inlineSearchEl.focus();
+  }
+}
 
 /* ---------- Events ---------- */
 document.addEventListener('click',(e)=>{
@@ -587,8 +626,8 @@ document.addEventListener('click',(e)=>{
     localStorage.setItem('vvip25:favs', JSON.stringify([...state.favorites]));
     localStorage.setItem('vvip25:favOrder', JSON.stringify(state.favOrder));
     favBtn.classList.toggle('on', !was);
-    // If we're in favorites or search, refresh the list view to reflect the change
-    if (state.viewMode!=='all') applyFilterSort(false,true);
+    // If we’re in favorites-only view, update the list immediately
+    if (state.favoritesOnly) applyFilterSort(false,false);
     e.preventDefault(); return;
   }
   const row=e.target.closest?.('.row');
@@ -609,7 +648,7 @@ els.seek.addEventListener('input', ()=>{ els.audio.currentTime=Number(els.seek.v
 els.vol.addEventListener('input', ()=>{ els.audio.volume=parseFloat(els.vol.value); localStorage.setItem('vvip25:vol', els.vol.value); });
 els.audio.addEventListener('ended', ()=> jump(1));
 
-/* ---------- SPA-lite Router (Shoppe only) ---------- */
+/* ---------- Minimal SPA for Shoppe only ---------- */
 (() => {
   const ROOT_SELECTOR = 'main#page-root';
 
@@ -625,27 +664,41 @@ els.audio.addEventListener('ended', ()=> jump(1));
       curMain.replaceWith(nextMain);
       if (doc.title) document.title = doc.title;
       if (push) history.pushState(null, '', new URL(url, location.origin).pathname);
-      // No per-page init required other than shoppe
-      if (nextMain?.dataset?.page === 'shoppe') loadShoppe(nextMain);
+      if (typeof window.initPage === 'function') window.initPage(nextMain);
     } catch {
-      location.href = url; // fallback hard reload
+      location.href = url; // fallback
     }
   }
 
+  // Only intercept SPA nav for /shoppe/
   document.addEventListener('click', e => {
     const a = e.target.closest('a[data-nav]');
     if (!a) return;
     if (a.origin !== location.origin) return;
     if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-    e.preventDefault();
-    if (els.menu) els.menu.open = false;
-    swapTo(a.href);
+    const p = (a.pathname||'/').replace(/\/+$/,'');
+    if (p === '/shoppe') { e.preventDefault(); swapTo(a.href); }
   });
 
   window.addEventListener('popstate', () => swapTo(location.href, false));
+  window.vvipNav = (toPath) => swapTo(toPath, true);
+
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('a[href="/shoppe"], a[href="/shoppe/"]').forEach(a => a.setAttribute('data-nav',''));
+    if (typeof window.initPage === 'function') {
+      const root = document.querySelector(ROOT_SELECTOR);
+      window.initPage(root);
+    }
+  });
 })();
 
-/* Shoppe loader */
+/* Per-page hook (Shoppe only) */
+window.initPage = window.initPage || function initPage(rootEl) {
+  if (!rootEl) return;
+  if (rootEl.dataset.page === 'shoppe') loadShoppe(rootEl);
+};
+
+/* Shoppe loader (unchanged) */
 async function loadShoppe(rootEl){
   const grid = rootEl.querySelector('[data-shoppe-grid]');
   if (!grid) return;
@@ -691,6 +744,9 @@ async function loadShoppe(rootEl){
     console.error('Shoppe load error:', err);
   }
 }
+
+/* ---------- Tiny helpers ---------- */
+function keepMenuOpen(){ if (els.menu) els.menu.open = true; }
 </script>
 </body>
 </html>
