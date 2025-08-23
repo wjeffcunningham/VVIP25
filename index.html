@@ -115,7 +115,7 @@
   <audio id="audio" preload="metadata"></audio>
 
 <script>
-/* ========= VVIPMEDIA — Core Player + SPA Router (Playlist integrated) ========= */
+/* ========= VVIPMEDIA — Core Player + SPA Router ========= */
 
 const ASSET_VERSION = 18;
 const PREFERRED_TITLE = 'gone jotti';
@@ -166,11 +166,9 @@ const stripExt=s=>String(s).replace(/\.[a-z0-9]+$/i,'');
 const softNorm=s=>stripExt(s).toLowerCase().replace(/[ _]+/g,'-').replace(/-+/g,'-');
 function deriveTitleFromFilename(name){ const b=stripExt(rawFile(name)).replace(/^[\d._-]+/,'').replace(/[_-]+/g,' ').trim(); return b || stripExt(rawFile(name)); }
 const primaryOnly = t => String(t||'').split('//')[0].trim();
-
 const DATE_RX_YYYY=/^\s*(\d{4})[.\-_](\d{2})[.\-_](\d{2})(?=\D|$)/;
 const DATE_RX_YY=/^\s*(\d{2})[.\-_](\d{2})[.\-_](\d{2})(?=\D|$)/;
 const WITHIN_DAY_RX=/^\s*(?:\d{4}|\d{2})[.\-_]\d{2}[.\-_]\d{2}(?:[.\-_](\d+))?/;
-
 function fallbackDateFromName(name){
   const s=String(name); let m=s.match(DATE_RX_YYYY);
   if(m){return new Date(Date.UTC(+m[1],+m[2]-1,+m[3]));}
@@ -190,20 +188,15 @@ const els = {
   tcur:$('#tcur'), tdur:$('#tdur'),
   menu:$('#menu'), toolbar:$('#toolbar')
 };
-
 const state = {
   tracks:[], filtered:[], i:-1, playing:false,
   pageSize:60, renderCount:0,
   titlesLookup:new Map(), thumbBases:new Set(), resolvedThumb:new Map(),
-  showTitles:true,
-  showWavButtons:false, showMovButtons:false,
+  showTitles:true, showWavButtons:false, showMovButtons:false,
   favorites:new Set(JSON.parse(localStorage.getItem('vvip25:favs')||'[]')),
   favOrder: JSON.parse(localStorage.getItem('vvip25:favOrder')||'[]'),
-  searchQuery:'',
-  light: localStorage.getItem('vvip25:light')==='1',
-  playlistMode: false   // <— integrated playlist mode
+  searchQuery:'', light: localStorage.getItem('vvip25:light')==='1'
 };
-
 els.vol.value = localStorage.getItem('vvip25:vol') ?? '0.9';
 els.audio.volume = parseFloat(els.vol.value);
 if (state.light) document.body.classList.add('light');
@@ -214,7 +207,6 @@ async function init(){
   buildMenuUI();
   setControlIcons();
 
-  // Load manifest (root or relative)
   let res = await fetch(`/manifest.json?v=${ASSET_VERSION}`, {cache:'no-store'});
   if(!res.ok) res = await fetch(`./manifest.json?v=${ASSET_VERSION}`, {cache:'no-store'});
   if(!res.ok){ els.list && (els.list.innerHTML='<div class="row"><div></div><div>manifest.json missing</div></div>'); return; }
@@ -237,14 +229,10 @@ async function init(){
   await fetchTitles().catch(()=>{});
   await fetchThumbs().catch(()=>{});
 
-  // Initial mode from URL
-  state.playlistMode = location.pathname.replace(/\/+$/,'') === '/playlist';
-
   applyFilterSort(true);
   renderList();
   fillViewport();
 
-  // Preselect preferred or first
   preselectPreferred(PREFERRED_TITLE);
 }
 
@@ -297,10 +285,8 @@ function computeThumbCascade(){
 }
 const getResolvedThumb=t=>state.resolvedThumb.get(t.id)||DEFAULT_THUMB;
 
-/* ---------- Filter / sort (integrates playlistMode) ---------- */
+/* ---------- Filter / sort ---------- */
 function isNameless(t){ const derived=deriveTitleFromFilename(t.name); return !t.title || t.title===derived; }
-const hasHashtag = tokens => tokens.some(tok => tok.startsWith('#'));
-
 function matchesSearchTokens(t,tokens){
   if(!tokens.length) return true;
   const hayName=(t.name||'').toLowerCase();
@@ -311,20 +297,12 @@ function matchesSearchTokens(t,tokens){
     return hayName.includes(tok) || hayTitle.includes(tok) || hayDetails.includes(tok);
   });
 }
-
 function applyFilterSort(firstPaint=false, keepIndex=false){
   const q=(state.searchQuery||'').trim().toLowerCase();
   const tokens=q? q.split(/\s+/).filter(Boolean):[];
-  const inPlaylist = state.playlistMode && !hasHashtag(tokens);
+  let out=[...state.tracks];
 
-  // Base set
-  let out = inPlaylist
-    ? state.tracks.filter(t => state.favorites.has(t.name))
-    : [...state.tracks];
-
-  // Sort
-  const sortVal = els.sort?.value || 'date_desc';
-  switch(sortVal){
+  switch(els.sort?.value||'date_desc'){
     case 'date_desc': out.sort((a,b)=>{ const da=a.date?.getTime()||0, db=b.date?.getTime()||0;
       if (db!==da) return db-da; return withinDayIndexFromName(b.name)-withinDayIndexFromName(a.name) || b.name.localeCompare(a.name); }); break;
     case 'date_asc':  out.sort((a,b)=>{ const da=a.date?.getTime()||0, db=b.date?.getTime()||0;
@@ -333,21 +311,9 @@ function applyFilterSort(firstPaint=false, keepIndex=false){
     case 'bpm_asc':   out.sort((a,b)=> bpmSortValue(a)-bpmSortValue(b)); break;
     case 'len_desc':  out.sort((a,b)=> (b.length||0)-(a.length||0)); break;
     case 'len_asc':   out.sort((a,b)=> (a.length||0)-(b.length||0)); break;
-    case 'custom':
-      if (inPlaylist && Array.isArray(state.favOrder) && state.favOrder.length){
-        const idx = new Map(state.favOrder.map((n,i)=>[n,i]));
-        out.sort((a,b)=> (idx.get(a.name)??1e9) - (idx.get(b.name)??1e9));
-      } else {
-        // fallback
-        out.sort((a,b)=> (a.title||a.name).localeCompare(b.title||b.name));
-      }
-      break;
   }
 
-  // Name/title display guard
-  if (!inPlaylist && state.showTitles && !tokens.length) out = out.filter(t=>!isNameless(t));
-
-  // Search filter (applied to the chosen base set)
+  if (state.showTitles && !tokens.length) out = out.filter(t=>!isNameless(t));
   out = out.filter(t=>matchesSearchTokens(t,tokens));
 
   state.filtered=out;
@@ -355,21 +321,8 @@ function applyFilterSort(firstPaint=false, keepIndex=false){
   state.renderCount=Math.min(state.filtered.length, initialChunk);
   if (!keepIndex) state.i=Math.min(state.i, state.renderCount-1);
   renderList(); setupInfiniteScroll(); fillViewport();
-
-  updateModeTitle();
 }
-
 const displayName=t=> (state.showTitles && t.title) ? t.title : t.name;
-
-function updateModeTitle(){
-  // Optionally tweak page title for playlist mode
-  const base = 'VVIP25';
-  if (state.playlistMode){
-    document.title = 'Playlist — ' + base;
-  } else {
-    document.title = base;
-  }
-}
 
 /* ---------- Render ---------- */
 function imgHTML(src){ const esc=s=>s.replace(/"/g,'&quot;');
@@ -491,10 +444,10 @@ function jump(dir){ if(!state.filtered.length) return; let i=state.i+dir; if(i<0
 
 /* ---------- Bespoke SVG icons ---------- */
 function setControlIcons(){
-  const svgPrev = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h2v14H6zM20 6v12L9 12z"/></svg>';
-  const svgNext = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 5h2v14h-2zM4 6v12l11-6z"/></svg>';
-  const svgPlay = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
-  const svgPause= '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg>';
+  const svgPrev='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M7 5a1 1 0 0 1 1 1v12a1 1 0 1 1-2 0V6a1 1 0 0 1 1-1zm11.4 1.2a1 1 0 0 1 .6.9v9.8a1 1 0 0 1-1.6.8l-8.2-4.9a1 1 0 0 1 0-1.7l8.2-4.9a1 1 0 0 1 1-.1z"/></svg>';
+  const svgNext='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 5a1 1 0 0 1 1 1v12a1 1 0 1 1-2 0V6a1 1 0 0 1 1-1zM5.6 6.2a1 1 0 0 1 1 .1l8.2 4.9a1 1 0 0 1 0 1.7l-8.2 4.9A1 1 0 0 1 5 17V7.2a1 1 0 0 1 .6-.9z"/></svg>';
+  const svgPlay='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M8.7 6.3a1 1 0 0 1 1.1-.1l8 4.8a1.3 1.3 0 0 1 0 2.2l-8 4.8a1 1 0 0 1-1.5-.9V7.3a1 1 0 0 1 .4-.9z"/></svg>';
+  const svgPause='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M8 6a1 1 0 0 1 1 1v10a1 1 0 1 1-2 0V7a1 1 0 0 1 1-1zm8 0a1 1 0 0 1 1 1v10a1 1 0 1 1-2 0V7a1 1 0 0 1 1-1z"/></svg>';
   if (els.prev)   els.prev.innerHTML = svgPrev;
   if (els.next)   els.next.innerHTML = svgNext;
   if (els.toggle) els.toggle.innerHTML = (state.playing ? svgPause : svgPlay);
@@ -505,6 +458,7 @@ function buildMenuUI(){
   const tb=els.toolbar; if(!tb) return; tb.innerHTML='';
   const row=document.createElement('div'); row.style.display='flex'; row.style.gap='8px'; row.style.flexWrap='wrap'; row.style.alignItems='center'; tb.appendChild(row);
 
+  // About + Utils + Links
   const btnAbout=document.createElement('button'); btnAbout.className='btn'; btnAbout.title='About'; btnAbout.textContent='📜'; row.appendChild(btnAbout);
   btnAbout.addEventListener('click',(e)=>{ e.preventDefault(); alert("VVIPMEDIA — 2025"); keepMenuOpen(); });
 
@@ -519,25 +473,32 @@ function buildMenuUI(){
   tb.appendChild(util);
 
   const btnLinks=document.createElement('button'); btnLinks.className='btn'; btnLinks.title='Links'; btnLinks.textContent='🔗'; row.appendChild(btnLinks);
-  const links=document.createElement('div'); links.className='panel'; links.innerHTML = `
-    <div class="row-links">
-      <a class="btn" href="https://www.youtube.com/@VVVVIIPP25" target="_blank" rel="noopener" title="YouTube">📺</a>
-      <a class="btn" href="https://virtualvip.bandcamp.com/" target="_blank" rel="noopener" title="Bandcamp">🎧</a>
-      <a class="btn" href="https://www.instagram.com/virtualvip24/" target="_blank" rel="noopener" title="Instagram">📷</a>
-      <a class="btn" href="https://substack.com/home/post/p-170664918?source=queue" target="_blank" rel="noopener" title="Newsletter">📰</a>
-    </div>`;
+  const links=document.createElement('div'); links.className='panel';
+  links.innerHTML = `<div class="row-links">
+    <a class="btn" href="https://www.youtube.com/@VVVVIIPP25" target="_blank" rel="noopener" title="YouTube">📺</a>
+    <a class="btn" href="https://virtualvip.bandcamp.com/" target="_blank" rel="noopener" title="Bandcamp">🎧</a>
+    <a class="btn" href="https://www.instagram.com/virtualvip24/" target="_blank" rel="noopener" title="Instagram">📷</a>
+    <a class="btn" href="https://substack.com/home/post/p-170664918?source=queue" target="_blank" rel="noopener" title="Newsletter">📰</a>
+  </div>`;
   tb.appendChild(links);
 
-  // Primary menu: SPA links
-  const aShop=document.createElement('a'); aShop.className='btn'; aShop.title='Shoppe'; aShop.textContent='🛍️'; aShop.href='/shoppe/'; aShop.target='_self'; aShop.setAttribute('data-nav',''); row.appendChild(aShop);
-  const aPlaylist=document.createElement('a'); aPlaylist.className='btn'; aPlaylist.title='Playlist'; aPlaylist.textContent='⭐'; aPlaylist.href='/playlist/'; aPlaylist.target='_self'; aPlaylist.setAttribute('data-nav',''); row.appendChild(aPlaylist);
+  // Main nav
+  const aHome=document.createElement('a'); aHome.className='btn'; aHome.title='Music'; aHome.textContent='🎵'; aHome.href='/'; aHome.setAttribute('data-nav',''); row.appendChild(aHome);
+  const aPlaylist=document.createElement('a'); aPlaylist.className='btn'; aPlaylist.title='Playlist'; aPlaylist.textContent='⭐'; aPlaylist.href='/playlist/'; aPlaylist.setAttribute('data-nav',''); row.appendChild(aPlaylist);
+  const aShop=document.createElement('a'); aShop.className='btn'; aShop.title='Shoppe'; aShop.textContent='🛍️'; aShop.href='/shoppe/'; aShop.setAttribute('data-nav',''); row.appendChild(aShop);
 
-  // Sort (added Custom for playlist mode)
+  const closeMenuAndNavigate = (e) => {
+    e.preventDefault();
+    if (els.menu) els.menu.open = false;
+    window.vvipNav(e.currentTarget.getAttribute('href'));
+  };
+  [aHome,aPlaylist,aShop].forEach(a => a.addEventListener('click', closeMenuAndNavigate));
+
+  // Sort + Search
   const sortSel=document.createElement('select'); sortSel.id='sort'; sortSel.title='Sort';
-  sortSel.innerHTML=`<option value="date_desc">Newest</option><option value="date_asc">Oldest</option><option value="bpm_desc">BPM ↓</option><option value="bpm_asc">BPM ↑</option><option value="len_desc">Longest</option><option value="len_asc">Shortest</option><option value="custom">Custom (drag)</option>`;
+  sortSel.innerHTML=`<option value="date_desc">Newest</option><option value="date_asc">Oldest</option><option value="bpm_desc">BPM ↓</option><option value="bpm_asc">BPM ↑</option><option value="len_desc">Longest</option><option value="len_asc">Shortest</option>`;
   row.appendChild(sortSel); els.sort=sortSel;
 
-  // Unified search (primary)
   const btnSearch=document.createElement('button'); btnSearch.className='btn'; btnSearch.title='Search'; btnSearch.textContent='🔍'; row.appendChild(btnSearch);
   const searchWrap=document.createElement('div'); searchWrap.className='search-wrap'; searchWrap.innerHTML=`<input id="searchInput" placeholder="Search… use #tags (e.g. #mbv)" inputmode="search" />`; tb.appendChild(searchWrap);
   const searchInput=searchWrap.querySelector('#searchInput');
@@ -569,10 +530,8 @@ document.addEventListener('click',(e)=>{
     localStorage.setItem('vvip25:favs', JSON.stringify([...state.favorites]));
     localStorage.setItem('vvip25:favOrder', JSON.stringify(state.favOrder));
     favBtn.classList.toggle('on', !was);
-
-    // Live-sync playlist mode
+    // Let playlist view know (if open)
     window.dispatchEvent(new CustomEvent('vvip:favorites-changed'));
-
     e.preventDefault(); return;
   }
   const row=e.target.closest?.('.row');
@@ -593,7 +552,7 @@ els.seek.addEventListener('input', ()=>{ els.audio.currentTime=Number(els.seek.v
 els.vol.addEventListener('input', ()=>{ els.audio.volume=parseFloat(els.vol.value); localStorage.setItem('vvip25:vol', els.vol.value); });
 els.audio.addEventListener('ended', ()=> jump(1));
 
-/* ========= SPA-lite Router ========= */
+/* ---------- SPA Router ---------- */
 (() => {
   const ROOT_SELECTOR = 'main#page-root';
 
@@ -624,27 +583,23 @@ els.audio.addEventListener('ended', ()=> jump(1));
     });
   }
 
+  // Close the menu for any SPA nav click
   document.addEventListener('click', e => {
     const a = e.target.closest('a[data-nav]');
     if (!a) return;
     if (a.origin !== location.origin) return;
     if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     e.preventDefault();
-    // Normal SPA swap
+    if (els.menu) els.menu.open = false;
     swapTo(a.href);
   });
 
-  window.addEventListener('popstate', () => {
-    // Update playlistMode from URL on back/forward
-    state.playlistMode = location.pathname.replace(/\/+$/,'') === '/playlist';
-    // If we're on "home" HTML but in playlist URL, re-attach list and re-render
-    const root = document.querySelector(ROOT_SELECTOR);
-    if (root) window.initPage(root);
-  });
+  window.addEventListener('popstate', () => swapTo(location.href, false));
 
   document.addEventListener('DOMContentLoaded', () => {
+    // Mark SPA-eligible links (home already on base page)
     document.querySelectorAll(
-      'a[href="/shoppe"], a[href="/shoppe/"], a[href="/playlist"], a[href="/playlist/"]'
+      'a[href="/shoppe"], a[href="/shoppe/"], a[href="/playlist"], a[href="/playlist/"], a[href="/"], a[href="/index.html"]'
     ).forEach(a => a.setAttribute('data-nav',''));
     setActiveNav(location.href);
     if (typeof window.initPage === 'function') {
@@ -653,70 +608,13 @@ els.audio.addEventListener('ended', ()=> jump(1));
     }
   });
 
-  window.vvipNav = (toPath) => {
-    history.pushState(null, '', toPath);
-    setActiveNav(toPath);
-    state.playlistMode = toPath.replace(/\/+$/,'') === '/playlist';
-    const root = document.querySelector(ROOT_SELECTOR);
-    if (root) window.initPage(root);
-  };
+  window.vvipNav = (toPath) => swapTo(toPath, true);
 })();
 
-/* Per-page hook:
-   - /shoppe: loads shop grid
-   - /playlist: replaces stub with the same Home list and enables playlistMode
-   - / (home): renders normal list
-*/
+/* Per-page hook (Shoppe only; Playlist has its own page) */
 window.initPage = window.initPage || function initPage(rootEl) {
   if (!rootEl) return;
-
-  // Make SPA links sticky after swaps
-  rootEl.querySelectorAll('a[href="/shoppe"], a[href="/shoppe/"], a[href="/playlist"], a[href="/playlist/"], a[href="/"]')
-    .forEach(a => a.setAttribute('data-nav',''));
-
-  const page = rootEl.dataset.page;
-
-  if (page === 'shoppe') {
-    state.playlistMode = false;
-    loadShoppe(rootEl);
-    updateModeTitle();
-    return;
-  }
-
-  if (page === 'playlist') {
-    // Replace stub with Home-style list
-    const homeMain = document.createElement('main');
-    homeMain.id = 'page-root';
-    homeMain.dataset.page = 'home';
-    homeMain.innerHTML = `<div class="wrap"><div id="list" class="list" role="list"></div></div>`;
-    rootEl.replaceWith(homeMain);
-
-    // enable playlist mode and render against the unified list
-    state.playlistMode = true;
-    els.list = homeMain.querySelector('#list');
-    applyFilterSort(false,true);
-    renderList();
-    fillViewport();
-    updateModeTitle();
-
-    // listen for external favorites updates while in playlist
-    window.addEventListener('vvip:favorites-changed', () => {
-      if (state.playlistMode) { applyFilterSort(false,true); renderList(); }
-    }, { once:false });
-
-    return;
-  }
-
-  // HOME
-  state.playlistMode = location.pathname.replace(/\/+$/,'') === '/playlist' ? true : false;
-  const newList = rootEl.querySelector('#list');
-  if (newList) {
-    els.list = newList;
-    applyFilterSort(false,true);
-    renderList();
-    fillViewport();
-    updateModeTitle();
-  }
+  if (rootEl.dataset.page === 'shoppe') loadShoppe(rootEl);
 };
 
 /* Shoppe loader */
