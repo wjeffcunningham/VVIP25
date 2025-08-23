@@ -115,8 +115,7 @@
   <audio id="audio" preload="metadata"></audio>
 
 <script>
-/* ========= VVIPMEDIA — Core Player + SPA Router (Phase 9 compatible) ========= */
-/* Exposes globals used by /assets/playlist.js */
+/* ========= VVIPMEDIA — Core Player + SPA Router (Playlist integrated) ========= */
 
 const ASSET_VERSION = 18;
 const PREFERRED_TITLE = 'gone jotti';
@@ -201,7 +200,8 @@ const state = {
   favorites:new Set(JSON.parse(localStorage.getItem('vvip25:favs')||'[]')),
   favOrder: JSON.parse(localStorage.getItem('vvip25:favOrder')||'[]'),
   searchQuery:'',
-  light: localStorage.getItem('vvip25:light')==='1'
+  light: localStorage.getItem('vvip25:light')==='1',
+  playlistMode: false   // <— integrated playlist mode
 };
 
 els.vol.value = localStorage.getItem('vvip25:vol') ?? '0.9';
@@ -236,6 +236,9 @@ async function init(){
 
   await fetchTitles().catch(()=>{});
   await fetchThumbs().catch(()=>{});
+
+  // Initial mode from URL
+  state.playlistMode = location.pathname.replace(/\/+$/,'') === '/playlist';
 
   applyFilterSort(true);
   renderList();
@@ -294,8 +297,10 @@ function computeThumbCascade(){
 }
 const getResolvedThumb=t=>state.resolvedThumb.get(t.id)||DEFAULT_THUMB;
 
-/* ---------- Filter / sort ---------- */
+/* ---------- Filter / sort (integrates playlistMode) ---------- */
 function isNameless(t){ const derived=deriveTitleFromFilename(t.name); return !t.title || t.title===derived; }
+const hasHashtag = tokens => tokens.some(tok => tok.startsWith('#'));
+
 function matchesSearchTokens(t,tokens){
   if(!tokens.length) return true;
   const hayName=(t.name||'').toLowerCase();
@@ -306,12 +311,20 @@ function matchesSearchTokens(t,tokens){
     return hayName.includes(tok) || hayTitle.includes(tok) || hayDetails.includes(tok);
   });
 }
+
 function applyFilterSort(firstPaint=false, keepIndex=false){
   const q=(state.searchQuery||'').trim().toLowerCase();
   const tokens=q? q.split(/\s+/).filter(Boolean):[];
-  let out=[...state.tracks];
+  const inPlaylist = state.playlistMode && !hasHashtag(tokens);
 
-  switch(els.sort?.value||'date_desc'){
+  // Base set
+  let out = inPlaylist
+    ? state.tracks.filter(t => state.favorites.has(t.name))
+    : [...state.tracks];
+
+  // Sort
+  const sortVal = els.sort?.value || 'date_desc';
+  switch(sortVal){
     case 'date_desc': out.sort((a,b)=>{ const da=a.date?.getTime()||0, db=b.date?.getTime()||0;
       if (db!==da) return db-da; return withinDayIndexFromName(b.name)-withinDayIndexFromName(a.name) || b.name.localeCompare(a.name); }); break;
     case 'date_asc':  out.sort((a,b)=>{ const da=a.date?.getTime()||0, db=b.date?.getTime()||0;
@@ -320,9 +333,21 @@ function applyFilterSort(firstPaint=false, keepIndex=false){
     case 'bpm_asc':   out.sort((a,b)=> bpmSortValue(a)-bpmSortValue(b)); break;
     case 'len_desc':  out.sort((a,b)=> (b.length||0)-(a.length||0)); break;
     case 'len_asc':   out.sort((a,b)=> (a.length||0)-(b.length||0)); break;
+    case 'custom':
+      if (inPlaylist && Array.isArray(state.favOrder) && state.favOrder.length){
+        const idx = new Map(state.favOrder.map((n,i)=>[n,i]));
+        out.sort((a,b)=> (idx.get(a.name)??1e9) - (idx.get(b.name)??1e9));
+      } else {
+        // fallback
+        out.sort((a,b)=> (a.title||a.name).localeCompare(b.title||b.name));
+      }
+      break;
   }
 
-  if (state.showTitles && !tokens.length) out = out.filter(t=>!isNameless(t));
+  // Name/title display guard
+  if (!inPlaylist && state.showTitles && !tokens.length) out = out.filter(t=>!isNameless(t));
+
+  // Search filter (applied to the chosen base set)
   out = out.filter(t=>matchesSearchTokens(t,tokens));
 
   state.filtered=out;
@@ -330,8 +355,21 @@ function applyFilterSort(firstPaint=false, keepIndex=false){
   state.renderCount=Math.min(state.filtered.length, initialChunk);
   if (!keepIndex) state.i=Math.min(state.i, state.renderCount-1);
   renderList(); setupInfiniteScroll(); fillViewport();
+
+  updateModeTitle();
 }
+
 const displayName=t=> (state.showTitles && t.title) ? t.title : t.name;
+
+function updateModeTitle(){
+  // Optionally tweak page title for playlist mode
+  const base = 'VVIP25';
+  if (state.playlistMode){
+    document.title = 'Playlist — ' + base;
+  } else {
+    document.title = base;
+  }
+}
 
 /* ---------- Render ---------- */
 function imgHTML(src){ const esc=s=>s.replace(/"/g,'&quot;');
@@ -368,7 +406,6 @@ function renderList(){
   els.list.innerHTML = slice.map(t=>rowHTML(t,(state.i>=0 && state.filtered[state.i]?.id===t.id))).join('') + `<div id="sentinel" style="height:1px"></div>`;
 }
 function rerenderVisibleRowsThumbs(){ els.list?.querySelectorAll('.row').forEach(row=>{ const id=+row.getAttribute('data-id'); const t=state.tracks.find(x=>x.id===id); if(!t) return; const img=row.querySelector('.cover img'); if(img) img.src=getResolvedThumb(t); }); }
-/* Added: used by WAV/MOV toggles */
 function rerenderVisibleRowsBadges(){
   document.querySelectorAll('.row').forEach(row=>{
     const id = +row.getAttribute('data-id');
@@ -491,14 +528,16 @@ function buildMenuUI(){
     </div>`;
   tb.appendChild(links);
 
-  // Primary menu: SPA links to Shoppe and Playlist
+  // Primary menu: SPA links
   const aShop=document.createElement('a'); aShop.className='btn'; aShop.title='Shoppe'; aShop.textContent='🛍️'; aShop.href='/shoppe/'; aShop.target='_self'; aShop.setAttribute('data-nav',''); row.appendChild(aShop);
   const aPlaylist=document.createElement('a'); aPlaylist.className='btn'; aPlaylist.title='Playlist'; aPlaylist.textContent='⭐'; aPlaylist.href='/playlist/'; aPlaylist.target='_self'; aPlaylist.setAttribute('data-nav',''); row.appendChild(aPlaylist);
 
+  // Sort (added Custom for playlist mode)
   const sortSel=document.createElement('select'); sortSel.id='sort'; sortSel.title='Sort';
-  sortSel.innerHTML=`<option value="date_desc">Newest</option><option value="date_asc">Oldest</option><option value="bpm_desc">BPM ↓</option><option value="bpm_asc">BPM ↑</option><option value="len_desc">Longest</option><option value="len_asc">Shortest</option>`;
+  sortSel.innerHTML=`<option value="date_desc">Newest</option><option value="date_asc">Oldest</option><option value="bpm_desc">BPM ↓</option><option value="bpm_asc">BPM ↑</option><option value="len_desc">Longest</option><option value="len_asc">Shortest</option><option value="custom">Custom (drag)</option>`;
   row.appendChild(sortSel); els.sort=sortSel;
 
+  // Unified search (primary)
   const btnSearch=document.createElement('button'); btnSearch.className='btn'; btnSearch.title='Search'; btnSearch.textContent='🔍'; row.appendChild(btnSearch);
   const searchWrap=document.createElement('div'); searchWrap.className='search-wrap'; searchWrap.innerHTML=`<input id="searchInput" placeholder="Search… use #tags (e.g. #mbv)" inputmode="search" />`; tb.appendChild(searchWrap);
   const searchInput=searchWrap.querySelector('#searchInput');
@@ -531,7 +570,7 @@ document.addEventListener('click',(e)=>{
     localStorage.setItem('vvip25:favOrder', JSON.stringify(state.favOrder));
     favBtn.classList.toggle('on', !was);
 
-    // Notify other pages (e.g., /playlist/) to refresh live
+    // Live-sync playlist mode
     window.dispatchEvent(new CustomEvent('vvip:favorites-changed'));
 
     e.preventDefault(); return;
@@ -591,13 +630,19 @@ els.audio.addEventListener('ended', ()=> jump(1));
     if (a.origin !== location.origin) return;
     if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     e.preventDefault();
+    // Normal SPA swap
     swapTo(a.href);
   });
 
-  window.addEventListener('popstate', () => swapTo(location.href, false));
+  window.addEventListener('popstate', () => {
+    // Update playlistMode from URL on back/forward
+    state.playlistMode = location.pathname.replace(/\/+$/,'') === '/playlist';
+    // If we're on "home" HTML but in playlist URL, re-attach list and re-render
+    const root = document.querySelector(ROOT_SELECTOR);
+    if (root) window.initPage(root);
+  });
 
   document.addEventListener('DOMContentLoaded', () => {
-    // Mark SPA-eligible links in primary menu
     document.querySelectorAll(
       'a[href="/shoppe"], a[href="/shoppe/"], a[href="/playlist"], a[href="/playlist/"]'
     ).forEach(a => a.setAttribute('data-nav',''));
@@ -608,38 +653,69 @@ els.audio.addEventListener('ended', ()=> jump(1));
     }
   });
 
-  window.vvipNav = (toPath) => swapTo(toPath, true);
+  window.vvipNav = (toPath) => {
+    history.pushState(null, '', toPath);
+    setActiveNav(toPath);
+    state.playlistMode = toPath.replace(/\/+$/,'') === '/playlist';
+    const root = document.querySelector(ROOT_SELECTOR);
+    if (root) window.initPage(root);
+  };
 })();
 
-/* Per-page hook (Shoppe handled here; Playlist handled by /assets/playlist.js) */
+/* Per-page hook:
+   - /shoppe: loads shop grid
+   - /playlist: replaces stub with the same Home list and enables playlistMode
+   - / (home): renders normal list
+*/
 window.initPage = window.initPage || function initPage(rootEl) {
   if (!rootEl) return;
 
-  // Ensure SPA-eligible links stay bound after swaps
+  // Make SPA links sticky after swaps
   rootEl.querySelectorAll('a[href="/shoppe"], a[href="/shoppe/"], a[href="/playlist"], a[href="/playlist/"], a[href="/"]')
     .forEach(a => a.setAttribute('data-nav',''));
 
   const page = rootEl.dataset.page;
 
   if (page === 'shoppe') {
+    state.playlistMode = false;
     loadShoppe(rootEl);
+    updateModeTitle();
     return;
   }
 
   if (page === 'playlist') {
-    // Nothing here; /assets/playlist.js attaches its own initPage hook
+    // Replace stub with Home-style list
+    const homeMain = document.createElement('main');
+    homeMain.id = 'page-root';
+    homeMain.dataset.page = 'home';
+    homeMain.innerHTML = `<div class="wrap"><div id="list" class="list" role="list"></div></div>`;
+    rootEl.replaceWith(homeMain);
+
+    // enable playlist mode and render against the unified list
+    state.playlistMode = true;
+    els.list = homeMain.querySelector('#list');
+    applyFilterSort(false,true);
+    renderList();
+    fillViewport();
+    updateModeTitle();
+
+    // listen for external favorites updates while in playlist
+    window.addEventListener('vvip:favorites-changed', () => {
+      if (state.playlistMode) { applyFilterSort(false,true); renderList(); }
+    }, { once:false });
+
     return;
   }
 
-  // HOME: rebind list and re-render after navigating back
-  if (page === 'home' || page === '' || !page) {
-    const newList = rootEl.querySelector('#list');
-    if (newList) {
-      els.list = newList;
-      renderList();
-      rerenderVisibleRowsThumbs();
-      fillViewport();
-    }
+  // HOME
+  state.playlistMode = location.pathname.replace(/\/+$/,'') === '/playlist' ? true : false;
+  const newList = rootEl.querySelector('#list');
+  if (newList) {
+    els.list = newList;
+    applyFilterSort(false,true);
+    renderList();
+    fillViewport();
+    updateModeTitle();
   }
 };
 
