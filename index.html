@@ -48,20 +48,11 @@
     .badge{display:flex;gap:10px;align-items:center;font-size:12px;justify-self:end}
     .badge a{color:var(--fg);text-decoration:none;border:1px solid var(--border);padding:4px 8px;border-radius:8px}
     .badge .muted{color:var(--muted)}
-    .kbd{font:12px/1.2 ui-monospace,Menlo,Consolas;background:#1b1c20;border:1px solid #2a2b30;border-radius:6px;padding:2px 6px;color:#d7dae0}
-
     .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
     select{background:var(--card);color:var(--fg);border:1px solid var(--border);border-radius:10px;padding:8px 10px}
-    .tog,.btn{
-      display:inline-flex;align-items:center;justify-content:center;
-      height:36px;min-width:36px;padding:0 10px;
-      border-radius:10px;border:1px solid var(--border);background:var(--card);
-      text-decoration:none;color:var(--fg);line-height:1
-    }
+    .tog,.btn{display:inline-flex;align-items:center;justify-content:center;height:36px;min-width:36px;padding:0 10px;border-radius:10px;border:1px solid var(--border);background:var(--card);text-decoration:none;color:var(--fg);line-height:1}
     .tog{opacity:.6;transition:opacity .15s, box-shadow .15s}
     .tog.on{opacity:1;box-shadow:0 0 0 2px var(--accent) inset}
-
-    details.menu{position:static}
     details.menu>summary{cursor:pointer;list-style:none;background:var(--card);border:1px solid var(--border);padding:8px 12px;border-radius:10px;user-select:none}
     .sheet{position:absolute;top:calc(100% + 8px);right:0;z-index:20;width:min(420px,calc(100vw - 32px));background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px;display:none;box-shadow:0 10px 24px rgba(0,0,0,.35)}
     details.menu[open]>.sheet{display:block}
@@ -86,21 +77,7 @@
         <details class="menu" id="menu">
           <summary>☰ Menu</summary>
           <div class="sheet">
-            <div class="toolbar" id="toolbar">
-              <select id="sort" title="Sort">
-                <option value="date_desc">Newest</option>
-                <option value="date_asc">Oldest</option>
-                <option value="bpm_desc">BPM ↓</option>
-                <option value="bpm_asc">BPM ↑</option>
-                <option value="len_desc">Longest</option>
-                <option value="len_asc">Shortest</option>
-              </select>
-              <button class="tog on" id="togTitles" title="Song Titles (on/off)">📝</button>
-              <button class="tog" id="togWav" title="Show WAV buttons">🎚️</button>
-              <button class="tog" id="togMov" title="Show MOV buttons">🎬</button>
-              <button class="btn" id="btnAbout" title="About">ℹ️</button>
-              <a class="btn" id="btnShop" href="/shoppe/" data-nav title="Shop">🛍️</a>
-            </div>
+            <div class="toolbar" id="toolbar"></div>
           </div>
         </details>
       </header>
@@ -139,10 +116,7 @@
 
 <script>
 /* ========= VVIPMEDIA — Core Player + SPA Router (Phase 9 compatible) ========= */
-/* This file exposes globals used by /assets/playlist.js:
-   - state, els, rowHTML, matchesSearchTokens, bpmSortValue, withinDayIndexFromName,
-     debounce, renderRowsInto (not needed externally), etc.
-*/
+/* Exposes globals used by /assets/playlist.js */
 
 const ASSET_VERSION = 18;
 const PREFERRED_TITLE = 'gone jotti';
@@ -160,7 +134,7 @@ const DEFAULT_THUMB = BASE_THUMB + 'default_thumb.jpg';
   document.head.appendChild(m);
 } catch(_){} })();
 
-/* ---------- CSS polish injected via JS (safe to keep inline) ---------- */
+/* ---------- CSS polish injected via JS ---------- */
 (() => {
   const css = `
     :root{--logo:#fdf6d0}
@@ -183,7 +157,7 @@ const DEFAULT_THUMB = BASE_THUMB + 'default_thumb.jpg';
   const style=document.createElement('style'); style.textContent=css; document.head.appendChild(style);
 })();
 
-/* ---------- Helpers (shared with /assets/playlist.js) ---------- */
+/* ---------- Helpers ---------- */
 const $=s=>document.querySelector(s);
 function fmtDur(sec){ sec=Number(sec||0); const m=Math.floor(sec/60), s=Math.floor(sec%60); return `${m}:${String(s).padStart(2,'0')}`; }
 function debounce(fn,ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); } }
@@ -394,6 +368,7 @@ function renderList(){
   els.list.innerHTML = slice.map(t=>rowHTML(t,(state.i>=0 && state.filtered[state.i]?.id===t.id))).join('') + `<div id="sentinel" style="height:1px"></div>`;
 }
 function rerenderVisibleRowsThumbs(){ els.list?.querySelectorAll('.row').forEach(row=>{ const id=+row.getAttribute('data-id'); const t=state.tracks.find(x=>x.id===id); if(!t) return; const img=row.querySelector('.cover img'); if(img) img.src=getResolvedThumb(t); }); }
+/* Added: used by WAV/MOV toggles */
 function rerenderVisibleRowsBadges(){
   document.querySelectorAll('.row').forEach(row=>{
     const id = +row.getAttribute('data-id');
@@ -516,7 +491,7 @@ function buildMenuUI(){
     </div>`;
   tb.appendChild(links);
 
-  // Shop + Playlist (SPA-nav). Safe even if /playlist/ exists separately.
+  // Primary menu: SPA links to Shoppe and Playlist
   const aShop=document.createElement('a'); aShop.className='btn'; aShop.title='Shoppe'; aShop.textContent='🛍️'; aShop.href='/shoppe/'; aShop.target='_self'; aShop.setAttribute('data-nav',''); row.appendChild(aShop);
   const aPlaylist=document.createElement('a'); aPlaylist.className='btn'; aPlaylist.title='Playlist'; aPlaylist.textContent='⭐'; aPlaylist.href='/playlist/'; aPlaylist.target='_self'; aPlaylist.setAttribute('data-nav',''); row.appendChild(aPlaylist);
 
@@ -555,6 +530,10 @@ document.addEventListener('click',(e)=>{
     localStorage.setItem('vvip25:favs', JSON.stringify([...state.favorites]));
     localStorage.setItem('vvip25:favOrder', JSON.stringify(state.favOrder));
     favBtn.classList.toggle('on', !was);
+
+    // Notify other pages (e.g., /playlist/) to refresh live
+    window.dispatchEvent(new CustomEvent('vvip:favorites-changed'));
+
     e.preventDefault(); return;
   }
   const row=e.target.closest?.('.row');
@@ -618,7 +597,7 @@ els.audio.addEventListener('ended', ()=> jump(1));
   window.addEventListener('popstate', () => swapTo(location.href, false));
 
   document.addEventListener('DOMContentLoaded', () => {
-    // Mark SPA-eligible links (home already on base page)
+    // Mark SPA-eligible links in primary menu
     document.querySelectorAll(
       'a[href="/shoppe"], a[href="/shoppe/"], a[href="/playlist"], a[href="/playlist/"]'
     ).forEach(a => a.setAttribute('data-nav',''));
@@ -632,13 +611,39 @@ els.audio.addEventListener('ended', ()=> jump(1));
   window.vvipNav = (toPath) => swapTo(toPath, true);
 })();
 
-/* Per-page hook (Shoppe only; Playlist handled by /assets/playlist.js) */
+/* Per-page hook (Shoppe handled here; Playlist handled by /assets/playlist.js) */
 window.initPage = window.initPage || function initPage(rootEl) {
   if (!rootEl) return;
-  if (rootEl.dataset.page === 'shoppe') loadShoppe(rootEl);
+
+  // Ensure SPA-eligible links stay bound after swaps
+  rootEl.querySelectorAll('a[href="/shoppe"], a[href="/shoppe/"], a[href="/playlist"], a[href="/playlist/"], a[href="/"]')
+    .forEach(a => a.setAttribute('data-nav',''));
+
+  const page = rootEl.dataset.page;
+
+  if (page === 'shoppe') {
+    loadShoppe(rootEl);
+    return;
+  }
+
+  if (page === 'playlist') {
+    // Nothing here; /assets/playlist.js attaches its own initPage hook
+    return;
+  }
+
+  // HOME: rebind list and re-render after navigating back
+  if (page === 'home' || page === '' || !page) {
+    const newList = rootEl.querySelector('#list');
+    if (newList) {
+      els.list = newList;
+      renderList();
+      rerenderVisibleRowsThumbs();
+      fillViewport();
+    }
+  }
 };
 
-/* Shoppe loader (unchanged) */
+/* Shoppe loader */
 async function loadShoppe(rootEl){
   const grid = rootEl.querySelector('[data-shoppe-grid]');
   if (!grid) return;

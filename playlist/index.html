@@ -34,7 +34,6 @@
     <div class="wrap">
       <div class="toolbar">
         <a class="btn" href="/" data-nav>← Home</a>
-        <a class="btn" href="/shoppe/" data-nav>🛍️ Shoppe</a>
 
         <select id="playlistSort" title="Sort">
           <option value="date_desc">Newest</option>
@@ -61,17 +60,11 @@
     </div>
   </main>
 
-  <!-- Lightweight guard: if loaded directly (no base player), kick to home then SPA back here -->
+  <!-- Guard: if opened without base player, send to Home -->
   <script>
-    (function(){
-      if (!window.initPage) {
-        // Hard navigate to home; base SPA will handle subsequent navs
-        location.replace('/');
-      }
-    })();
+    (function(){ if (!window.initPage) location.replace('/'); })();
   </script>
 
-  <!-- Playlist logic (depends on globals from base) -->
   <script src="/assets/playlist.js"></script>
 </body>
 </html>

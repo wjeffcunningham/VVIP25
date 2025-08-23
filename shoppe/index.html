@@ -28,17 +28,16 @@
   </style>
 </head>
 <body>
-<main id="page-root" data-page="shoppe">
-  <div class="wrap">
-    <div class="toolbar" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0">
-      <a class="btn" href="/" data-nav>← Home</a>
-      <a class="btn" href="/playlist/" data-nav>⭐ Playlist</a>
+  <main id="page-root" data-page="shoppe">
+    <div class="wrap">
+      <div class="toolbar" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0">
+        <a class="btn" href="/" data-nav>← Home</a>
+      </div>
+      <h1>Shoppe</h1>
+      <section class="grid" data-shoppe-grid>
+        <!-- Populated dynamically from /shoppe/shoppe.json -->
+      </section>
     </div>
-    <h1>Shoppe</h1>
-    <section class="grid" data-shoppe-grid>
-      <!-- Populated dynamically from /shoppe/shoppe.json -->
-    </section>
-  </div>
-</main>
+  </main>
 </body>
 </html>
