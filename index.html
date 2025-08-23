@@ -138,7 +138,11 @@
   <audio id="audio" preload="metadata"></audio>
 
 <script>
-/* ========= VVIPMEDIA — Phase 7 core player ========= */
+/* ========= VVIPMEDIA — Core Player + SPA Router (Phase 9 compatible) ========= */
+/* This file exposes globals used by /assets/playlist.js:
+   - state, els, rowHTML, matchesSearchTokens, bpmSortValue, withinDayIndexFromName,
+     debounce, renderRowsInto (not needed externally), etc.
+*/
 
 const ASSET_VERSION = 18;
 const PREFERRED_TITLE = 'gone jotti';
@@ -156,7 +160,7 @@ const DEFAULT_THUMB = BASE_THUMB + 'default_thumb.jpg';
   document.head.appendChild(m);
 } catch(_){} })();
 
-/* ---------- CSS polish ---------- */
+/* ---------- CSS polish injected via JS (safe to keep inline) ---------- */
 (() => {
   const css = `
     :root{--logo:#fdf6d0}
@@ -179,7 +183,7 @@ const DEFAULT_THUMB = BASE_THUMB + 'default_thumb.jpg';
   const style=document.createElement('style'); style.textContent=css; document.head.appendChild(style);
 })();
 
-/* ---------- Helpers ---------- */
+/* ---------- Helpers (shared with /assets/playlist.js) ---------- */
 const $=s=>document.querySelector(s);
 function fmtDur(sec){ sec=Number(sec||0); const m=Math.floor(sec/60), s=Math.floor(sec%60); return `${m}:${String(s).padStart(2,'0')}`; }
 function debounce(fn,ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); } }
@@ -189,9 +193,11 @@ const stripExt=s=>String(s).replace(/\.[a-z0-9]+$/i,'');
 const softNorm=s=>stripExt(s).toLowerCase().replace(/[ _]+/g,'-').replace(/-+/g,'-');
 function deriveTitleFromFilename(name){ const b=stripExt(rawFile(name)).replace(/^[\d._-]+/,'').replace(/[_-]+/g,' ').trim(); return b || stripExt(rawFile(name)); }
 const primaryOnly = t => String(t||'').split('//')[0].trim();
+
 const DATE_RX_YYYY=/^\s*(\d{4})[.\-_](\d{2})[.\-_](\d{2})(?=\D|$)/;
 const DATE_RX_YY=/^\s*(\d{2})[.\-_](\d{2})[.\-_](\d{2})(?=\D|$)/;
 const WITHIN_DAY_RX=/^\s*(?:\d{4}|\d{2})[.\-_]\d{2}[.\-_]\d{2}(?:[.\-_](\d+))?/;
+
 function fallbackDateFromName(name){
   const s=String(name); let m=s.match(DATE_RX_YYYY);
   if(m){return new Date(Date.UTC(+m[1],+m[2]-1,+m[3]));}
@@ -237,7 +243,7 @@ async function init(){
   // Load manifest (root or relative)
   let res = await fetch(`/manifest.json?v=${ASSET_VERSION}`, {cache:'no-store'});
   if(!res.ok) res = await fetch(`./manifest.json?v=${ASSET_VERSION}`, {cache:'no-store'});
-  if(!res.ok){ els.list.innerHTML='<div class="row"><div></div><div>manifest.json missing</div></div>'; return; }
+  if(!res.ok){ els.list && (els.list.innerHTML='<div class="row"><div></div><div>manifest.json missing</div></div>'); return; }
 
   const data = await res.json();
   state.tracks = data.map((t,idx)=>{
@@ -261,7 +267,7 @@ async function init(){
   renderList();
   fillViewport();
 
-  // Preselect "Gone Jotti" if present; else first result
+  // Preselect preferred or first
   preselectPreferred(PREFERRED_TITLE);
 }
 
@@ -382,12 +388,12 @@ function rowHTML(t,active){
   </div>`;
 }
 function renderList(){
-  if(!state.filtered.length){ els.list.innerHTML='<div class="row"><div></div><div>No results.</div></div>'; return; }
+  if(!state.filtered.length){ if(els.list) els.list.innerHTML='<div class="row"><div></div><div>No results.</div></div>'; return; }
+  if(!els.list) return;
   const slice=state.filtered.slice(0,state.renderCount);
   els.list.innerHTML = slice.map(t=>rowHTML(t,(state.i>=0 && state.filtered[state.i]?.id===t.id))).join('') + `<div id="sentinel" style="height:1px"></div>`;
 }
-function rerenderVisibleRowsThumbs(){ els.list.querySelectorAll('.row').forEach(row=>{ const id=+row.getAttribute('data-id'); const t=state.tracks.find(x=>x.id===id); if(!t) return; const img=row.querySelector('.cover img'); if(img) img.src=getResolvedThumb(t); }); }
-/* Added: used by WAV/MOV toggles */
+function rerenderVisibleRowsThumbs(){ els.list?.querySelectorAll('.row').forEach(row=>{ const id=+row.getAttribute('data-id'); const t=state.tracks.find(x=>x.id===id); if(!t) return; const img=row.querySelector('.cover img'); if(img) img.src=getResolvedThumb(t); }); }
 function rerenderVisibleRowsBadges(){
   document.querySelectorAll('.row').forEach(row=>{
     const id = +row.getAttribute('data-id');
@@ -443,7 +449,7 @@ function select(indexInFiltered){
   state.i=indexInFiltered;
   const t=state.filtered[indexInFiltered]; if(!t) return;
   els.audio.src=t.src; updateNowbar(); state.playing=false; updateToggle(); setControlIcons();
-  els.list.querySelectorAll('.row').forEach(row=>{
+  els.list?.querySelectorAll('.row').forEach(row=>{
     const id=+row.getAttribute('data-id'); const titleEl=row.querySelector('.title'); if(!titleEl) return;
     const isActive=(state.filtered[state.i]?.id===id);
     const tr=state.tracks.find(x=>x.id===id)||t;
@@ -510,7 +516,9 @@ function buildMenuUI(){
     </div>`;
   tb.appendChild(links);
 
-  const aShop=document.createElement('a'); aShop.className='btn'; aShop.title='Shoppe'; aShop.textContent='🛍️'; aShop.href='/shoppe/'; aShop.target='_self'; row.appendChild(aShop);
+  // Shop + Playlist (SPA-nav). Safe even if /playlist/ exists separately.
+  const aShop=document.createElement('a'); aShop.className='btn'; aShop.title='Shoppe'; aShop.textContent='🛍️'; aShop.href='/shoppe/'; aShop.target='_self'; aShop.setAttribute('data-nav',''); row.appendChild(aShop);
+  const aPlaylist=document.createElement('a'); aPlaylist.className='btn'; aPlaylist.title='Playlist'; aPlaylist.textContent='⭐'; aPlaylist.href='/playlist/'; aPlaylist.target='_self'; aPlaylist.setAttribute('data-nav',''); row.appendChild(aPlaylist);
 
   const sortSel=document.createElement('select'); sortSel.id='sort'; sortSel.title='Sort';
   sortSel.innerHTML=`<option value="date_desc">Newest</option><option value="date_asc">Oldest</option><option value="bpm_desc">BPM ↓</option><option value="bpm_asc">BPM ↑</option><option value="len_desc">Longest</option><option value="len_asc">Shortest</option>`;
@@ -566,10 +574,8 @@ els.audio.addEventListener('timeupdate', ()=>{ const a=els.audio; if(!isFinite(a
 els.seek.addEventListener('input', ()=>{ els.audio.currentTime=Number(els.seek.value); });
 els.vol.addEventListener('input', ()=>{ els.audio.volume=parseFloat(els.vol.value); localStorage.setItem('vvip25:vol', els.vol.value); });
 els.audio.addEventListener('ended', ()=> jump(1));
-</script> <!-- ✅ CLOSE the big player script -->
 
-<!-- ========= VVIP25 SPA-lite Router ========= -->
-<script>
+/* ========= SPA-lite Router ========= */
 (() => {
   const ROOT_SELECTOR = 'main#page-root';
 
@@ -612,7 +618,10 @@ els.audio.addEventListener('ended', ()=> jump(1));
   window.addEventListener('popstate', () => swapTo(location.href, false));
 
   document.addEventListener('DOMContentLoaded', () => {
-    document.querySelectorAll('a[href="/shoppe"], a[href="/shoppe/"]').forEach(a => a.setAttribute('data-nav',''));
+    // Mark SPA-eligible links (home already on base page)
+    document.querySelectorAll(
+      'a[href="/shoppe"], a[href="/shoppe/"], a[href="/playlist"], a[href="/playlist/"]'
+    ).forEach(a => a.setAttribute('data-nav',''));
     setActiveNav(location.href);
     if (typeof window.initPage === 'function') {
       const root = document.querySelector(ROOT_SELECTOR);
@@ -623,16 +632,17 @@ els.audio.addEventListener('ended', ()=> jump(1));
   window.vvipNav = (toPath) => swapTo(toPath, true);
 })();
 
-// per-page hook
+/* Per-page hook (Shoppe only; Playlist handled by /assets/playlist.js) */
 window.initPage = window.initPage || function initPage(rootEl) {
-  // later: if (rootEl.dataset.page === 'shoppe') { …populate grid… }
+  if (!rootEl) return;
+  if (rootEl.dataset.page === 'shoppe') loadShoppe(rootEl);
 };
 
+/* Shoppe loader (unchanged) */
 async function loadShoppe(rootEl){
   const grid = rootEl.querySelector('[data-shoppe-grid]');
   if (!grid) return;
 
-  // simple skeleton
   grid.innerHTML = `<div class="shop-item"><div class="desc">Loading…</div></div>`;
 
   try {
@@ -674,15 +684,6 @@ async function loadShoppe(rootEl){
     console.error('Shoppe load error:', err);
   }
 }
-
-/* augment your existing initPage hook */
-(function attachShoppeInit(){
-  const prevInit = window.initPage;
-  window.initPage = function(nextRoot){
-    if (typeof prevInit === 'function') prevInit(nextRoot);
-    if (nextRoot && nextRoot.dataset.page === 'shoppe') loadShoppe(nextRoot);
-  };
-})();
 </script>
 </body>
 </html>
