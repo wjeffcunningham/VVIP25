@@ -10,9 +10,9 @@
     "tags": ["#tee", "#apparel"]
   },
   {
-    "title": "Poster — 18×24",
-    "image": "/shoppe/assets/poster-18x24.jpg",
-    "description": "Full-bleed print on satin paper.",
+    "title": "Sticker Pack (15)",
+    "image": "/shoppe/assets/stickers.jpg",
+    "description": "Advertise your VVIP.",
     "price": 20,
     "currency": "USD",
     "url": "https://your-checkout.example/poster",
@@ -20,7 +20,7 @@
     "tags": ["#poster", "#print"]
   },
   {
-    "title": "Cassette — Limited",
+    "title": "Cassette — Unlimited",
     "image": "/shoppe/assets/cassette.jpg",
     "description": "Edition of 100. Includes download code.",
     "price": 12,
