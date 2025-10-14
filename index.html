@@ -248,7 +248,8 @@ async function init(){
   // ===== Group multiple versions (v1, v2, etc.) =====
 (() => {
   // helper: strip trailing v# from base name
-  const baseKey = n => n.toLowerCase().replace(/v\d+$/,'');
+  const baseKey = n =>
+  n.toLowerCase().replace(/[\s\-_]*(v\d+)?$/,'');
   const groups = new Map();
 
   // group tracks by versionless base name
