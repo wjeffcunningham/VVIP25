@@ -245,6 +245,40 @@ async function init(){
       details, length:t.length||0, date:dateObj||null, src:mp3, wav, video:mov, thumbCandidate };
   });
 
+  // ===== Group multiple versions (v1, v2, etc.) =====
+(() => {
+  // helper: strip trailing v# from base name
+  const baseKey = n => n.toLowerCase().replace(/v\d+$/,'');
+  const groups = new Map();
+
+  // group tracks by versionless base name
+  for (const t of state.tracks) {
+    const key = baseKey(t.baseLower);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(t);
+  }
+
+  // replace state.tracks with only the newest per group
+  const merged = [];
+  for (const [key, arr] of groups.entries()) {
+    if (arr.length === 1) {
+      merged.push(arr[0]);
+      continue;
+    }
+    // sort versions descending: v2 > v1 > no v
+    arr.sort((a,b) => {
+      const va = +(a.baseLower.match(/v(\d+)$/)?.[1] || 0);
+      const vb = +(b.baseLower.match(/v(\d+)$/)?.[1] || 0);
+      return vb - va;
+    });
+    const latest = arr[0];
+    latest.versions = arr.slice(1); // keep older ones for buttons later
+    merged.push(latest);
+  }
+
+  state.tracks = merged;
+})();
+
   await fetchTitles().catch(()=>{});
   await fetchThumbs().catch(()=>{});
 
