@@ -1,4 +1,17 @@
 [
+   {
+    "name": "25.10.12.124.mp3",
+    "title": "2025-10-12 · 124 BPM",
+    "bpm": 126,
+    "bpm_min": null,
+    "bpm_max": null,
+    "details": "",
+    "length": 0,
+    "date": "2025-10-12",
+    "year": 2025,
+    "month": 10,
+    "day": 12
+  },
     {
     "name": "25.10.08.114.mp3",
     "title": "2025-10-08 · 114 BPM",
@@ -2758,19 +2771,6 @@
   {
     "name": "25.06.21.133v2.mp3",
     "title": "25.06.21.133v2.mp3",
-    "bpm": null,
-    "bpm_min": null,
-    "bpm_max": null,
-    "details": "",
-    "length": 0,
-    "date": null,
-    "year": null,
-    "month": null,
-    "day": null
-  },
-  {
-    "name": "25.06.26.120-2.mp3",
-    "title": "25.06.26.120-2.mp3",
     "bpm": null,
     "bpm_min": null,
     "bpm_max": null,
