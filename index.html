@@ -235,7 +235,7 @@ async function init(){
     const name = t.name || t.file || t.src?.split('/').pop() || `track-${idx}.mp3`;
     const base = stripExt(name), baseLower=base.toLowerCase();
     const dateObj = t.date ? new Date(t.date) : fallbackDateFromName(name);
-    const mp3 = t.src || (BASE_MP3 + encodeURIComponent(name));
+const mp3 = t.src || (BASE_MP3 + encodeURIComponent(name.toLowerCase()));
     const wav = BASE_WAV + encodeURIComponent(base + '.wav');
     const mov = t.has_mov ? (BASE_VIDEO + encodeURIComponent(base + '.mov')) : null;
     const thumbCandidate = BASE_THUMB + encodeURIComponent(baseLower + 'thumb.jpg');
@@ -245,47 +245,34 @@ async function init(){
       details, length:t.length||0, date:dateObj||null, src:mp3, wav, video:mov, thumbCandidate };
   });
 
-  // ===== Group multiple versions (v1, v2, etc.) =====
+// ===== Group multiple versions (v1, v2, etc.) =====
 (() => {
-  // helper: strip trailing v# from base name
+  // helper: normalize name and strip any v# suffix
   const baseKey = n =>
-  n.toLowerCase().replace(/[\s\-_]*(v\d+)?$/,'');
+    n.toLowerCase().replace(/[\s\-_]?v\d+$/, '');
+
   const groups = new Map();
 
-  // group tracks by versionless base name
   for (const t of state.tracks) {
     const key = baseKey(t.baseLower);
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(t);
   }
 
-  // replace state.tracks with only the newest per group
   const merged = [];
   for (const [key, arr] of groups.entries()) {
-    if (arr.length === 1) {
-      merged.push(arr[0]);
-      continue;
-    }
-    // sort versions descending: v2 > v1 > no v
-    arr.sort((a,b) => {
-      const va = +(a.baseLower.match(/v(\d+)$/)?.[1] || 0);
-      const vb = +(b.baseLower.match(/v(\d+)$/)?.[1] || 0);
+    if (arr.length === 1) { merged.push(arr[0]); continue; }
+    arr.sort((a,b)=>{
+      const va = +(a.baseLower.match(/v(\d+)$/)?.[1]||0);
+      const vb = +(b.baseLower.match(/v(\d+)$/)?.[1]||0);
       return vb - va;
     });
     const latest = arr[0];
-    latest.versions = arr.slice(1); // keep older ones for buttons later
+    latest.versions = arr.slice(1);
     merged.push(latest);
   }
-
   state.tracks = merged;
 })();
-
-  await fetchTitles().catch(()=>{});
-  await fetchThumbs().catch(()=>{});
-
-  setView('all'); // initial
-  preselectPreferred(PREFERRED_TITLE);
-}
 
 /* ---------- View / Filter logic ---------- */
 function setView(mode){
@@ -643,6 +630,84 @@ els.audio.addEventListener('timeupdate', ()=>{ const a=els.audio; if(!isFinite(a
 els.seek.addEventListener('input', ()=>{ els.audio.currentTime=Number(els.seek.value); });
 els.vol.addEventListener('input', ()=>{ els.audio.volume=parseFloat(els.vol.value); localStorage.setItem('vvip25:vol', els.vol.value); });
 els.audio.addEventListener('ended', ()=> jump(1));
+
+/* === PATCH: Version Pill + Extras Drawer (VVIP25, Oct 2025) === */
+
+// --- Extras loader ----------------------------------------------------
+async function fetchExtras(){
+  try {
+    const r = await fetch(`/extras.json?v=${ASSET_VERSION}`, { cache: 'no-store' });
+    if(!r.ok) return;
+    const json = await r.json();
+    state.extras = json; // { baseLower:[files...] }
+  } catch(err){
+    console.warn('extras.json not found', err);
+    state.extras = {};
+  }
+}
+(async()=>{ try{ await fetchExtras(); }catch(_){} })();
+
+// --- Revised badgeHTML() ---------------------------------------------
+const oldBadgeHTML = badgeHTML;
+badgeHTML = function(t){
+  const parts=[ favHTML(t),
+    `<a class="pill" href="${t.src}" download title="Download MP3">MP3</a>` ];
+
+  if (state.showWavButtons)
+    parts.push(`<a class="pill" href="${BASE_WAV+encodeURIComponent(t.base+'.wav')}" download title="Download Lossless">WAV</a>`);
+  if (state.showMovButtons && t.video)
+    parts.push(`<a class="pill" href="${t.video}" target="_blank" rel="noopener" title="Open Video">MOV</a>`);
+  if (state.showMovButtons && !t.video)
+    parts.push('<span class="pill muted">MOV</span>');
+
+  // version pill
+  if (t.versions && t.versions.length){
+    const older = t.versions[0];
+    const vnum  = older.baseLower.match(/v(\d+)$/)?.[1] || '1';
+    const href  = BASE_MP3 + encodeURIComponent(older.name.toLowerCase());
+    parts.push(`<a class="pill muted" href="${href}" title="Earlier version">v${vnum}</a>`);
+  }
+
+  // gem pill
+  const hasExtras = state.extras && state.extras[t.baseLower];
+  if (hasExtras)
+    parts.push(`<button class="pill gem" data-gem="${t.baseLower}" title="Extras">💎</button>`);
+
+  return `<div class="badge">${parts.join('')}</div>`;
+};
+
+// --- Gem click listener + drawer toggle -------------------------------
+document.addEventListener('click', e=>{
+  const gem = e.target.closest('.gem');
+  if(!gem) return;
+  e.preventDefault();
+  const key = gem.dataset.gem;
+  const files = state.extras?.[key];
+  if(!files?.length) return;
+
+  const row = gem.closest('.row');
+  const existing = row.nextElementSibling;
+  if (existing && existing.classList.contains('extras-drawer')){
+    existing.remove();
+    return;
+  }
+
+  const drawer = document.createElement('div');
+  drawer.className = 'extras-drawer';
+  drawer.style.cssText = `
+    display:flex;flex-wrap:wrap;gap:8px;padding:8px 12px;
+    background:var(--card);border-top:1px solid var(--border);
+  `;
+  drawer.innerHTML = files.map(f=>{
+    const url = `${BASE_MP3}${encodeURIComponent(key)}/${encodeURIComponent(f)}`;
+    const isImg = /\.(jpg|jpeg|png|gif|webp)$/i.test(f);
+    return isImg
+      ? `<a href="${url}" target="_blank"><img src="${url}" style="width:64px;height:64px;object-fit:cover;border-radius:8px"></a>`
+      : `<a href="${url}" target="_blank" class="pill">${f}</a>`;
+  }).join('');
+
+  row.after(drawer);
+});
 
 /* ---------- SPA-lite Router (Shoppe only) ---------- */
 (() => {
