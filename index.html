@@ -212,7 +212,8 @@ const state = {
   favOrder: JSON.parse(localStorage.getItem('vvip25:favOrder')||'[]'),
   searchQuery:'',
   viewMode:'all', /* 'all' | 'favorites' | 'search' */
-  light: localStorage.getItem('vvip25:light')==='1'
+  light: localStorage.getItem('vvip25:light')==='1',
+  extras:{}   // <-- ensure defined
 };
 
 els.vol.value = localStorage.getItem('vvip25:vol') ?? '0.9';
@@ -235,7 +236,7 @@ async function init(){
     const name = t.name || t.file || t.src?.split('/').pop() || `track-${idx}.mp3`;
     const base = stripExt(name), baseLower=base.toLowerCase();
     const dateObj = t.date ? new Date(t.date) : fallbackDateFromName(name);
-const mp3 = t.src || (BASE_MP3 + encodeURIComponent(name.toLowerCase()));
+    const mp3 = t.src || (BASE_MP3 + encodeURIComponent(name.toLowerCase()));
     const wav = BASE_WAV + encodeURIComponent(base + '.wav');
     const mov = t.has_mov ? (BASE_VIDEO + encodeURIComponent(base + '.mov')) : null;
     const thumbCandidate = BASE_THUMB + encodeURIComponent(baseLower + 'thumb.jpg');
@@ -245,45 +246,51 @@ const mp3 = t.src || (BASE_MP3 + encodeURIComponent(name.toLowerCase()));
       details, length:t.length||0, date:dateObj||null, src:mp3, wav, video:mov, thumbCandidate };
   });
 
-// ===== Group multiple versions (v1, v2, etc.) =====
-(() => {
-  // helper: normalize name and strip any v# suffix
-  const baseKey = n =>
-    n.toLowerCase().replace(/[\s\-_]?v\d+$/, '');
+  // ===== Group multiple versions (v1, v2, or -2) =====
+  (() => {
+    const baseKey = n => n.toLowerCase().replace(/[\s\-_]?(v\d+|\-\d+)$/, '');
+    const groups = new Map();
+    for (const t of state.tracks) {
+      const key = baseKey(t.baseLower);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(t);
+    }
+    const merged = [];
+    for (const [, arr] of groups.entries()) {
+      if (arr.length === 1) { merged.push(arr[0]); continue; }
+      arr.sort((a,b)=>{
+        const va = +(a.baseLower.match(/(?:v|\-)(\d+)$/)?.[1]||0);
+        const vb = +(b.baseLower.match(/(?:v|\-)(\d+)$/)?.[1]||0);
+        return vb - va;
+      });
+      const latest = arr[0];
+      latest.versions = arr.slice(1);
+      merged.push(latest);
+    }
+    state.tracks = merged;
+  })();
 
-  const groups = new Map();
+  // first render pass after grouping
+  applyFilterSort(true);
 
-  for (const t of state.tracks) {
-    const key = baseKey(t.baseLower);
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(t);
-  }
+  // hydrate titles & thumbs (non-blocking for initial paint)
+  await fetchTitles().catch(()=>{});
+  await fetchThumbs().catch(()=>{});
 
-  const merged = [];
-  for (const [key, arr] of groups.entries()) {
-    if (arr.length === 1) { merged.push(arr[0]); continue; }
-    arr.sort((a,b)=>{
-      const va = +(a.baseLower.match(/v(\d+)$/)?.[1]||0);
-      const vb = +(b.baseLower.match(/v(\d+)$/)?.[1]||0);
-      return vb - va;
-    });
-    const latest = arr[0];
-    latest.versions = arr.slice(1);
-    merged.push(latest);
-  }
-  state.tracks = merged;
-})();
+  // set initial view and try to preselect preferred
+  setView('all');
+  preselectPreferred(PREFERRED_TITLE);
+}
 
 /* ---------- View / Filter logic ---------- */
 function setView(mode){
-  // mode: 'all' | 'favorites' | 'search'
-  state.viewMode = mode;
+  state.viewMode = mode; // 'all' | 'favorites' | 'search'
   if (mode === 'all'){
-    state.searchQuery='';
-    if (els.favInput) els.favInput.value='';
-    hideFavBar();
+      state.searchQuery='';
+      if (els.favInput) els.favInput.value='';
+      hideFavBar();
   } else {
-    showFavBar();
+      showFavBar();
   }
   applyFilterSort(true);
   renderList();
@@ -309,12 +316,11 @@ function buildFavBar(){
     <span class="mode" id="favMode">Search</span>
     <input id="favSearch" type="search" placeholder="Filter with #tags or text" autocomplete="off" />
   `;
-  wrap.insertBefore(bar, wrap.firstElementChild.nextElementSibling); // before the list
+  wrap.insertBefore(bar, wrap.firstElementChild.nextElementSibling);
   els.favbar = bar;
   els.favInput = bar.querySelector('#favSearch');
   els.favModeLabel = bar.querySelector('#favMode');
 
-  // Search behavior: typing triggers search mode, clearing returns to favorites
   els.favInput.addEventListener('input', debounce(()=>{
     const q = (els.favInput.value||'').trim();
     state.searchQuery = q.toLowerCase();
@@ -331,7 +337,6 @@ function applyFilterSort(firstPaint=false, keepIndex=false){
   const tokens=(state.searchQuery||'').trim().toLowerCase().split(/\s+/).filter(Boolean);
   let out=[...state.tracks];
 
-  // Sort
   switch(els.sort?.value||'date_desc'){
     case 'date_desc': out.sort((a,b)=>{ const da=a.date?.getTime()||0, db=b.date?.getTime()||0;
       if (db!==da) return db-da; return withinDayIndexFromName(b.name)-withinDayIndexFromName(a.name) || b.name.localeCompare(a.name); }); break;
@@ -343,14 +348,12 @@ function applyFilterSort(firstPaint=false, keepIndex=false){
     case 'len_asc':   out.sort((a,b)=> (a.length||0)-(b.length||0)); break;
   }
 
-  // Mode filters
   if (state.viewMode === 'favorites' && !tokens.length){
     out = out.filter(t=>state.favorites.has(t.name));
   } else if (state.viewMode === 'search' && tokens.length){
     out = out.filter(t=>matchesTokens(t,tokens));
   }
 
-  // Hide nameless when not searching (your original behavior)
   if (state.showTitles && (state.viewMode!=='search' || !tokens.length)){
     out = out.filter(t=>!isNameless(t));
   }
@@ -572,7 +575,7 @@ function buildMenuUI(){
   </div>`;
   tb.appendChild(links);
 
-  // Main controls (no page shift for Music/Playlist)
+  // Main controls
   const btnMusic=document.createElement('button'); btnMusic.className='btn'; btnMusic.title='Music'; btnMusic.textContent='🎵'; row.appendChild(btnMusic);
   const btnPlaylist=document.createElement('button'); btnPlaylist.className='btn'; btnPlaylist.title='Playlist'; btnPlaylist.textContent='⭐'; row.appendChild(btnPlaylist);
   const aShop=document.createElement('a'); aShop.className='btn'; aShop.title='Shoppe'; aShop.textContent='🛍️'; aShop.href='/shoppe/'; aShop.setAttribute('data-nav',''); row.appendChild(aShop);
@@ -580,7 +583,6 @@ function buildMenuUI(){
   btnMusic.addEventListener('click',(e)=>{ e.preventDefault(); setView('all'); });
   btnPlaylist.addEventListener('click',(e)=>{ e.preventDefault(); if(!els.favbar) buildFavBar(); setView('favorites'); });
 
-  // Sort (shared across modes)
   const sortSel=document.createElement('select'); sortSel.id='sort'; sortSel.title='Sort';
   sortSel.innerHTML=`<option value="date_desc">Newest</option><option value="date_asc">Oldest</option><option value="bpm_desc">BPM ↓</option><option value="bpm_asc">BPM ↑</option><option value="len_desc">Longest</option><option value="len_asc">Shortest</option>`;
   row.appendChild(sortSel); els.sort=sortSel;
@@ -609,7 +611,6 @@ document.addEventListener('click',(e)=>{
     localStorage.setItem('vvip25:favs', JSON.stringify([...state.favorites]));
     localStorage.setItem('vvip25:favOrder', JSON.stringify(state.favOrder));
     favBtn.classList.toggle('on', !was);
-    // If we're in favorites or search, refresh the list view to reflect the change
     if (state.viewMode!=='all') applyFilterSort(false,true);
     e.preventDefault(); return;
   }
@@ -632,14 +633,12 @@ els.vol.addEventListener('input', ()=>{ els.audio.volume=parseFloat(els.vol.valu
 els.audio.addEventListener('ended', ()=> jump(1));
 
 /* === PATCH: Version Pill + Extras Drawer (VVIP25, Oct 2025) === */
-
-// --- Extras loader ----------------------------------------------------
 async function fetchExtras(){
   try {
     const r = await fetch(`/extras.json?v=${ASSET_VERSION}`, { cache: 'no-store' });
     if(!r.ok) return;
     const json = await r.json();
-    state.extras = json; // { baseLower:[files...] }
+    state.extras = json;
   } catch(err){
     console.warn('extras.json not found', err);
     state.extras = {};
@@ -647,12 +646,9 @@ async function fetchExtras(){
 }
 (async()=>{ try{ await fetchExtras(); }catch(_){} })();
 
-// --- Revised badgeHTML() ---------------------------------------------
 const oldBadgeHTML = badgeHTML;
 badgeHTML = function(t){
-  const parts=[ favHTML(t),
-    `<a class="pill" href="${t.src}" download title="Download MP3">MP3</a>` ];
-
+  const parts=[ favHTML(t), `<a class="pill" href="${t.src}" download title="Download MP3">MP3</a>` ];
   if (state.showWavButtons)
     parts.push(`<a class="pill" href="${BASE_WAV+encodeURIComponent(t.base+'.wav')}" download title="Download Lossless">WAV</a>`);
   if (state.showMovButtons && t.video)
@@ -676,7 +672,6 @@ badgeHTML = function(t){
   return `<div class="badge">${parts.join('')}</div>`;
 };
 
-// --- Gem click listener + drawer toggle -------------------------------
 document.addEventListener('click', e=>{
   const gem = e.target.closest('.gem');
   if(!gem) return;
@@ -705,7 +700,6 @@ document.addEventListener('click', e=>{
       ? `<a href="${url}" target="_blank"><img src="${url}" style="width:64px;height:64px;object-fit:cover;border-radius:8px"></a>`
       : `<a href="${url}" target="_blank" class="pill">${f}</a>`;
   }).join('');
-
   row.after(drawer);
 });
 
@@ -725,10 +719,9 @@ document.addEventListener('click', e=>{
       curMain.replaceWith(nextMain);
       if (doc.title) document.title = doc.title;
       if (push) history.pushState(null, '', new URL(url, location.origin).pathname);
-      // No per-page init required other than shoppe
       if (nextMain?.dataset?.page === 'shoppe') loadShoppe(nextMain);
     } catch {
-      location.href = url; // fallback hard reload
+      location.href = url;
     }
   }
 
@@ -749,19 +742,15 @@ document.addEventListener('click', e=>{
 async function loadShoppe(rootEl){
   const grid = rootEl.querySelector('[data-shoppe-grid]');
   if (!grid) return;
-
   grid.innerHTML = `<div class="shop-item"><div class="desc">Loading…</div></div>`;
-
   try {
     const res = await fetch(`/shoppe/shoppe.json?v=${ASSET_VERSION}`, { cache: 'no-store' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const items = await res.json();
-
     if (!Array.isArray(items) || items.length === 0) {
       grid.innerHTML = `<div class="shop-item"><div class="desc">Nothing here yet — check back soon.</div></div>`;
       return;
     }
-
     const html = items.map(it => {
       const img = it.image || it.img || '';
       const title = it.title || it.name || 'Untitled';
@@ -771,7 +760,6 @@ async function loadShoppe(rootEl){
       const btn   = href === '#'
         ? `<span class="btn" aria-disabled="true">Coming soon</span>`
         : `<a class="btn" href="${href}" target="_blank" rel="noopener">Buy</a>`;
-
       return `
         <article class="shop-item">
           ${img ? `<img src="${img}" alt="">` : ''}
@@ -784,7 +772,6 @@ async function loadShoppe(rootEl){
         </article>
       `;
     }).join('');
-
     grid.innerHTML = html;
   } catch (err) {
     grid.innerHTML = `<div class="shop-item"><div class="desc">Failed to load shop items.</div></div>`;
