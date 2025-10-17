@@ -66,6 +66,36 @@
       .controls{flex-wrap:wrap}
       .range input[type="range"]{width:120px}
       .row{grid-template-columns:1fr auto}
+
+.version-buttons {
+  display: inline-flex;
+  gap: 0.25em;
+  margin-right: 0.5em;
+  vertical-align: middle;
+}
+
+.version-button {
+  background: transparent;
+  border: 1px solid #999;
+  border-radius: 4px;
+  font-size: 0.75em;
+  padding: 0 0.3em;
+  cursor: pointer;
+  color: #555;
+  transition: all 0.2s;
+}
+
+.version-button:hover {
+  border-color: var(--accent, #000);
+  color: var(--accent, #000);
+}
+
+.version-button.active {
+  background: var(--accent, #000);
+  color: #fff;
+  border-color: var(--accent, #000);
+}
+
     }
   </style>
 </head>
@@ -433,17 +463,43 @@ function badgeHTML(t){
   if (state.showMovButtons && !t.video) parts.push('<span class="pill muted">MOV</span>');
   return `<div class="badge">${parts.join('')}</div>`;
 }
-function rowHTML(t,active){
-  const bpmTxt=bpmLabel(t), thumbURL=getResolvedThumb(t);
-  const subline=[ bpmTxt, t.length?fmtDur(t.length):'', t.date? t.date.toISOString().slice(0,10):'' ].filter(Boolean).join(' · ');
-  return `<div class="row" role="listitem" data-id="${t.id}">
-    <div class="cover" aria-hidden="true">${imgHTML(thumbURL)}</div>
-    <div>
-      <div class="title">${active?'▶︎ ':''}${escapeHTML(displayName(t))}</div>
-      <div class="sub">${escapeHTML(subline)}</div>
+function rowHTML(t, active) {
+  const bpmTxt = bpmLabel(t);
+  const thumbURL = getResolvedThumb(t);
+  const subline = [bpmTxt, t.length ? fmtDur(t.length) : '', t.date ? t.date.toISOString().slice(0,10) : '']
+    .filter(Boolean).join(' · ');
+
+  const versionButtons = t.versions && t.versions.length
+    ? `<span class="version-buttons">${t.versions.map(v =>
+        `<button class="version-button ${v===t.version ? 'active' : ''}" onclick="setVersion('${t.id}','${v}')">${v}</button>`
+      ).join('')}</span>`
+    : '';
+
+  return `
+    <div class="row ${active ? 'active' : ''}" data-id="${t.id}">
+      <div class="left">
+        <img class="thumb" src="${thumbURL}" alt="">
+      </div>
+      <div class="middle">
+        <div class="track-title">
+          ${versionButtons}
+          <span class="title">${t.title}</span>
+        </div>
+        <div class="subline">${subline}</div>
+      </div>
+      <div class="right">
+        ${badgeHTML(t)}
+      </div>
     </div>
-    ${badgeHTML(t)}
-  </div>`;
+  `;
+}
+function setVersion(id, versionName) {
+  const t = state.tracks.find(x => String(x.id) === String(id));
+  if (!t) return;
+  t.version = versionName;
+  const match = t.versions?.find(v => v.name === versionName);
+  if (match) t.src = BASE_MP3 + encodeURIComponent(match.name.toLowerCase());
+  renderList();
 }
 function renderList(){
   if(!state.filtered.length){ if(els.list) els.list.innerHTML='<div class="row"><div></div><div>No results.</div></div>'; return; }
