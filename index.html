@@ -96,6 +96,33 @@
   border-color: var(--accent, #000);
 }
 
+/* --- VVIP25: thumbnail readability patch (Oct 2025) --- */
+@media (max-width: 560px) {
+  .row {
+    grid-template-columns: 72px 1fr; /* slightly larger thumb, tighter layout */
+    gap: 8px;
+    padding: 8px 10px;
+  }
+
+  .thumb {
+    width: 72px;
+    height: 72px;
+    border-radius: 8px;
+  }
+
+  .title {
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.2;
+    white-space: normal;
+    overflow: hidden;
+  }
+
+  .subline {
+    font-size: 11px;
+    color: var(--muted);
+  }
+}
     }
   </style>
 </head>
