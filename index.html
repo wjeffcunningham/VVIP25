@@ -178,10 +178,10 @@ const ASSET_VERSION = 18;
 const PREFERRED_TITLE = 'washed sand';
 
 /* ---------- Config ---------- */
-const BASE_MP3   = 'https://media.vvipmedia.net/ACCESS/';
-const BASE_WAV   = 'https://media.vvipmedia.net/WAV/';
-const BASE_THUMB = 'https://media.vvipmedia.net/ACCESS/';
-const BASE_VIDEO = 'https://media.vvipmedia.net/VIDEOS/';
+const BASE_MP3   = 'https://cdn.vvipmedia.net/ACCESS/';
+const BASE_WAV   = 'https://cdn.vvipmedia.net/WAV/';
+const BASE_THUMB = 'https://cdn.vvipmedia.net/ACCESS/';
+const BASE_VIDEO = 'https://cdn.vvipmedia.net/VIDEOS/';
 const DEFAULT_THUMB = BASE_THUMB + 'default_thumb.jpg';
 
 /* ---------- Cache hint ---------- */
@@ -204,7 +204,6 @@ const DEFAULT_THUMB = BASE_THUMB + 'default_thumb.jpg';
     .star{cursor:pointer}
     .star.on{filter:drop-shadow(0 0 2px var(--accent)) brightness(1.2)}
     .controls button svg{width:18px;height:18px;fill:var(--logo)}
-    /* Favorites/Search bar */
     .favbar{display:none;margin:10px 0 8px;gap:10px;align-items:center;flex-wrap:wrap}
     .favbar .mode{font-size:14px;color:var(--muted)}
     .favbar input[type="search"]{flex:1;min-width:200px;background:var(--card);color:var(--fg);
@@ -215,24 +214,45 @@ const DEFAULT_THUMB = BASE_THUMB + 'default_thumb.jpg';
   `;
   const style=document.createElement('style'); style.textContent=css; document.head.appendChild(style);
 })();
-
 /* ---------- Helpers ---------- */
-const $=s=>document.querySelector(s);
-function fmtDur(sec){ sec=Number(sec||0); const m=Math.floor(sec/60), s=Math.floor(sec%60); return `${m}:${String(s).padStart(2,'0')}`; }
-function debounce(fn,ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); } }
-function escapeHTML(s){ return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-const rawFile=s=>(String(s).split('/').pop()||'');
-const stripExt=s=>String(s).replace(/\.[a-z0-9]+$/i,'');
-const softNorm=s=>stripExt(s).toLowerCase().replace(/[ _]+/g,'-').replace(/-+/g,'-');
-function deriveTitleFromFilename(name){ const b=stripExt(rawFile(name)).replace(/^[\d._-]+/,'').replace(/[_-]+/g,' ').trim(); return b || stripExt(rawFile(name)); }
-const primaryOnly = t => String(t||'').split('//')[0].trim();
-const DATE_RX_YYYY=/^\s*(\d{4})[.\-_](\d{2})[.\-_](\d{2})(?=\D|$)/;
-const DATE_RX_YY=/^\s*(\d{2})[.\-_](\d{2})[.\-_](\d{2})(?=\D|$)/;
-const WITHIN_DAY_RX=/^\s*(?:\d{4}|\d{2})[.\-_]\d{2}[.\-_]\d{2}(?:[.\-_](\d+))?/;
-function fallbackDateFromName(name){
-  const s=String(name); let m=s.match(DATE_RX_YYYY);
-  if(m){return new Date(Date.UTC(+m[1],+m[2]-1,+m[3]));}
-  m=s.match(DATE_RX_YY); if(m){const yy=+m[1];const yyyy=(yy>=70?1900+yy:2000+yy);return new Date(Date.UTC(yyyy,+m[2]-1,+m[3]));}
+const $ = s => document.querySelector(s);
+function fmtDur(sec) {
+  sec = Number(sec || 0);
+  const m = Math.floor(sec / 60), s = Math.floor(sec % 60);
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
+function escapeHTML(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+const rawFile = s => (String(s).split('/').pop() || '');
+const stripExt = s => String(s).replace(/\.[a-z0-9]+$/i, '');
+const softNorm = s => stripExt(s).toLowerCase().replace(/[ _]+/g, '-').replace(/-+/g, '-');
+function deriveTitleFromFilename(name) {
+  const b = stripExt(rawFile(name)).replace(/^[\d._-]+/, '').replace(/[_-]+/g, ' ').trim();
+  return b || stripExt(rawFile(name));
+}
+const primaryOnly = t => String(t || '').split('//')[0].trim();
+
+const DATE_RX_YYYY = /^\s*(\d{4})[.\-_](\d{2})[.\-_](\d{2})(?=\D|$)/;
+const DATE_RX_YY = /^\s*(\d{2})[.\-_](\d{2})[.\-_](\d{2})(?=\D|$)/;
+
+// ✅ Flexible within-day pattern: handles 25.04.25, 25.04.25-2, 25.04.25v2, etc.
+const WITHIN_DAY_RX = /^(\d{2})[.\-_](\d{2})[.\-_](\d{2})(?:[.\-_v]?(\d+))?/;
+
+function withinDayIndexFromName(name) {
+  const m = String(name).match(WITHIN_DAY_RX);
+  return m && m[4] ? parseInt(m[4], 10) : 0;
+}
+
+function fallbackDateFromName(name) {
+  const s = String(name);
+  let m = s.match(DATE_RX_YYYY);
+  if (m) return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  m = s.match(DATE_RX_YY);
+  if (m) {
+    const yy = +m[1];
+    const yyyy = yy >= 70 ? 1900 + yy : 2000 + yy;
+    return new Date(Date.UTC(yyyy, +m[2] - 1, +m[3]));
+  }
   return null;
 }
 function withinDayIndexFromName(name){ const m=String(name).match(WITHIN_DAY_RX); return m&&m[1]?parseInt(m[1],10):0; }
@@ -268,9 +288,9 @@ const state = {
   favorites:new Set(JSON.parse(localStorage.getItem('vvip25:favs')||'[]')),
   favOrder: JSON.parse(localStorage.getItem('vvip25:favOrder')||'[]'),
   searchQuery:'',
-  viewMode:'all', /* 'all' | 'favorites' | 'search' */
+  viewMode:'all',
   light: localStorage.getItem('vvip25:light')==='1',
-  extras:{}   // <-- ensure defined
+  extras:{}
 };
 
 els.vol.value = localStorage.getItem('vvip25:vol') ?? '0.9';
@@ -281,31 +301,54 @@ if (state.light) document.body.classList.add('light');
 init();
 async function init(){
   buildMenuUI();
-  buildFavBar();              // single search lives here
+  buildFavBar();
   setControlIcons();
 
   let res = await fetch(`/manifest.json?v=${ASSET_VERSION}`, {cache:'no-store'});
   if(!res.ok) res = await fetch(`./manifest.json?v=${ASSET_VERSION}`, {cache:'no-store'});
   if(!res.ok){ els.list && (els.list.innerHTML='<div class="row"><div></div><div>manifest.json missing</div></div>'); return; }
 
-  const data = await res.json();
+const raw = await res.json();
+const data = Array.isArray(raw) ? raw : (raw.tracks || []);
+  console.log('manifest content:', data);
+
+  // --- Inject CDN + IJPAUC logic dynamically ---
+  data.forEach(t => {
+    t.src = `https://cdn.vvipmedia.net/ACCESS/${encodeURIComponent(t.name)}`;
+    const isIJ = (t.details || '').toLowerCase().includes('#ij');
+    t.ijpauc = isIJ;
+    t.thumb = isIJ ? 'IJPAUCthumb.png' : null;
+    if (!t.gems) t.gems = [];
+  });
+
   state.tracks = data.map((t,idx)=>{
     const name = t.name || t.file || t.src?.split('/').pop() || `track-${idx}.mp3`;
     const base = stripExt(name), baseLower=base.toLowerCase();
     const dateObj = t.date ? new Date(t.date) : fallbackDateFromName(name);
-    const mp3 = t.src || (BASE_MP3 + encodeURIComponent(name.toLowerCase()));
+    const mp3 = t.src;
     const wav = BASE_WAV + encodeURIComponent(base + '.wav');
     const mov = t.has_mov ? (BASE_VIDEO + encodeURIComponent(base + '.mov')) : null;
-    const thumbCandidate = BASE_THUMB + encodeURIComponent(baseLower + 'thumb.jpg');
+
+    // Use IJPAUC thumb if present, otherwise fallback to date-recent system
+    const thumbCandidate = t.thumb
+      ? BASE_THUMB + encodeURIComponent(t.thumb)
+      : BASE_THUMB + encodeURIComponent(baseLower + 'thumb.jpg');
+
     const details = t.details || '';
-    return { id:idx, name, base, baseLower, title: t.title?String(t.title):'',
+    return { id:idx, name, base, baseLower, title:t.title?String(t.title):'',
       bpm:t.bpm??null, bpm_min:t.bpm_min??null, bpm_max:t.bpm_max??null,
       details, length:t.length||0, date:dateObj||null, src:mp3, wav, video:mov, thumbCandidate };
   });
 
   // ===== Group multiple versions (v1, v2, or -2) =====
   (() => {
-    const baseKey = n => n.toLowerCase().replace(/[\s\-_]?(v\d+|\-\d+)$/, '');
+    
+// Safe version-key stripper: only removes pure suffixes like "-v2" or "-2" at the END of the name
+const baseKey = n => {
+  const m = n.toLowerCase().match(/^(.*?)(?:[-_]?v?\d+)?$/);
+  return m ? m[1] : n.toLowerCase();
+};
+
     const groups = new Map();
     for (const t of state.tracks) {
       const key = baseKey(t.baseLower);
@@ -327,18 +370,12 @@ async function init(){
     state.tracks = merged;
   })();
 
-  // first render pass after grouping
   applyFilterSort(true);
-
-  // hydrate titles & thumbs (non-blocking for initial paint)
   await fetchTitles().catch(()=>{});
   await fetchThumbs().catch(()=>{});
-
-  // set initial view and try to preselect preferred
   setView('all');
   preselectPreferred(PREFERRED_TITLE);
 }
-
 /* ---------- View / Filter logic ---------- */
 function setView(mode){
   state.viewMode = mode; // 'all' | 'favorites' | 'search'
@@ -442,37 +479,81 @@ function bestTitleForTrack(t,lookup){
   for(const c of cands){ if(lookup.has(c)) return lookup.get(c); } return '';
 }
 async function fetchTitles(){
-  let r=await fetch(`/titles.json?v=${ASSET_VERSION}&t=${Date.now()}`,{cache:'no-store'});
-  if(!r.ok) r=await fetch(`./titles.json?v=${ASSET_VERSION}&t=${Date.now()}`,{cache:'no-store'});
-  if(!r.ok) return;
-  const json=await r.json();
-  const lookup=buildTitleLookup(json);
-  let changed=false;
-  for(const t of state.tracks){
-    const from=bestTitleForTrack(t,lookup);
-    const final=from || t.title || deriveTitleFromFilename(t.name);
-    if (final!==t.title){ t.title=final; changed=true; }
+  let r = await fetch(`/titles.json?v=${ASSET_VERSION}&t=${Date.now()}`, {cache:'no-store'});
+  if (!r.ok) r = await fetch(`./titles.json?v=${ASSET_VERSION}&t=${Date.now()}`, {cache:'no-store'});
+  if (!r.ok) return;
+
+  const raw = await r.json();
+  // 🔧 Support either { key:value } or { titles:{...} } or { data:{...} }
+  const json = (raw && typeof raw === 'object' && !Array.isArray(raw))
+    ? (raw.titles || raw.data || raw)
+    : raw;
+
+  console.log('Loaded titles entries:', Object.keys(json || {}).length);
+  const lookup = buildTitleLookup(json);
+
+  let changed = false;
+  for (const t of state.tracks) {
+    const from = bestTitleForTrack(t, lookup);
+    const final = from || t.title || deriveTitleFromFilename(t.name);
+    if (final !== t.title) { t.title = final; changed = true; }
   }
-  if (changed){ applyFilterSort(false,true); refreshTitlesOnly(); }
+
+  if (changed) { applyFilterSort(false, true); refreshTitlesOnly(); }
 }
 async function fetchThumbs(){
-  let r=await fetch(`/thumbs.json?v=${ASSET_VERSION}`,{cache:'no-store'});
-  if(!r.ok) r=await fetch(`./thumbs.json?v=${ASSET_VERSION}`,{cache:'no-store'});
+  let r = await fetch(`/thumbs.json?v=${ASSET_VERSION}`, { cache:'no-store' });
+  if(!r.ok) r = await fetch(`./thumbs.json?v=${ASSET_VERSION}`, { cache:'no-store' });
   if(!r.ok) return;
-  const data=await r.json();
-  const set=new Set();
-  if(Array.isArray(data)) data.forEach(b=>set.add(String(b).toLowerCase()));
-  else if(data && typeof data==='object') Object.keys(data).forEach(b=>{ if(data[b]) set.add(b.toLowerCase()); });
-  state.thumbBases=set; computeThumbCascade(); rerenderVisibleRowsThumbs(); if(state.i>=0) updateNowbar();
+
+  const data = await r.json();
+  const set = new Set();
+  if (Array.isArray(data)) data.forEach(b => set.add(String(b).toLowerCase()));
+  else if (data && typeof data === 'object')
+    Object.keys(data).forEach(b => { if (data[b]) set.add(b.toLowerCase()); });
+
+  state.thumbBases = set;
+  computeThumbCascade();
+  rerenderVisibleRowsThumbs();
+  if (state.i >= 0) updateNowbar();
 }
-function computeThumbCascade(){
-  const asc=[...state.tracks].sort((a,b)=>{ const da=a.date?.getTime()||0, db=b.date?.getTime()||0;
-    if(da!==db) return da-db; return withinDayIndexFromName(a.name)-withinDayIndexFromName(b.name) || a.name.localeCompare(b.name);
+
+function computeThumbCascade() {
+  console.log("🧩 computeThumbCascade start", state.tracks.length);
+  const asc = [...state.tracks].sort((a, b) => {
+    const da = a.date instanceof Date && !isNaN(a.date) ? a.date.getTime() : 0;
+    const db = b.date instanceof Date && !isNaN(b.date) ? b.date.getTime() : 0;
+    if (da !== db) return da - db;
+    const ia = withinDayIndexFromName(a.name) || 0;
+    const ib = withinDayIndexFromName(b.name) || 0;
+    return ia - ib || a.name.localeCompare(b.name);
   });
-  let currentThumb=DEFAULT_THUMB;
-  for(const t of asc){ if(state.thumbBases.has(t.baseLower)) currentThumb=t.thumbCandidate; state.resolvedThumb.set(t.id,currentThumb); }
+
+  let currentThumb = DEFAULT_THUMB;
+  let count = 0;
+  for (const t of asc) {
+    try {
+      if (state.thumbBases.has(t.baseLower)) currentThumb = t.thumbCandidate;
+      state.resolvedThumb.set(t.id, currentThumb);
+      count++;
+    } catch (err) {
+      console.warn("Cascade fail for", t.name, err);
+      state.resolvedThumb.set(t.id, DEFAULT_THUMB);
+    }
+  }
+  console.log("🧩 computeThumbCascade done", count);
 }
-const getResolvedThumb=t=>state.resolvedThumb.get(t.id)||DEFAULT_THUMB;
+
+/* === CUSTOM OVERRIDE for IJPAUC-tagged tracks === */
+function getResolvedThumb(t) {
+  // If #IJ tag present, override with special thumb
+  if ((t.details || '').toLowerCase().includes('#ij')) {
+return 'https://cdn.vvipmedia.net/ACCESS/IJPAUCthumb.png';
+
+  }
+  // Otherwise fall back to cascade logic
+  return state.resolvedThumb.get(t.id) || DEFAULT_THUMB;
+}
 
 /* ---------- Render ---------- */
 function imgHTML(src){ const esc=s=>s.replace(/"/g,'&quot;');
