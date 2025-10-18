@@ -310,6 +310,15 @@ async function init(){
 
 const raw = await res.json();
 const data = Array.isArray(raw) ? raw : (raw.tracks || []);
+
+// Normalize date strings to Date objects
+data.forEach(t => {
+  if (typeof t.date === 'string') {
+    const d = new Date(t.date);
+    if (!isNaN(d)) t.date = d;
+  }
+});
+
   console.log('manifest content:', data);
 
   // --- Inject CDN + IJPAUC logic dynamically ---
