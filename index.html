@@ -319,35 +319,47 @@ data.forEach(t => {
   }
 });
 
-  console.log('manifest content:', data);
+console.log('manifest content:', data);
 
-  // --- Inject CDN + IJPAUC logic dynamically ---
-  data.forEach(t => {
-    t.src = `https://cdn.vvipmedia.net/ACCESS/${encodeURIComponent(t.name)}`;
-    const isIJ = (t.details || '').toLowerCase().includes('#ij');
-    t.ijpauc = isIJ;
-    t.thumb = isIJ ? 'IJPAUCthumb.png' : null;
-    if (!t.gems) t.gems = [];
-  });
+// --- Inject CDN + IJPAUC logic dynamically ---
+data.forEach(t => {
+  t.src = `https://cdn.vvipmedia.net/ACCESS/${encodeURIComponent(t.name)}`;
+  const isIJ = (t.details || '').toLowerCase().includes('#ij');
+  t.ijpauc = isIJ;
+  t.thumb = isIJ ? 'IJPAUCthumb.png' : null;
+  if (!t.gems) t.gems = [];
+});
 
-  state.tracks = data.map((t,idx)=>{
-    const name = t.name || t.file || t.src?.split('/').pop() || `track-${idx}.mp3`;
-    const base = stripExt(name), baseLower=base.toLowerCase();
-    const dateObj = t.date ? new Date(t.date) : fallbackDateFromName(name);
-    const mp3 = t.src;
-    const wav = BASE_WAV + encodeURIComponent(base + '.wav');
-    const mov = t.has_mov ? (BASE_VIDEO + encodeURIComponent(base + '.mov')) : null;
+// ✅ Build state.tracks
+state.tracks = data.map((t, idx) => {
+  const name = t.name || t.file || t.src?.split('/').pop() || `track-${idx}.mp3`;
+  const base = stripExt(name), baseLower = base.toLowerCase();
+  const dateObj = t.date ? new Date(t.date) : fallbackDateFromName(name);
+  const mp3 = t.src;
+  const wav = BASE_WAV + encodeURIComponent(base + '.wav');
+  const mov = t.has_mov ? (BASE_VIDEO + encodeURIComponent(base + '.mov')) : null;
 
-    // Use IJPAUC thumb if present, otherwise fallback to date-recent system
-    const thumbCandidate = t.thumb
-      ? BASE_THUMB + encodeURIComponent(t.thumb)
-      : BASE_THUMB + encodeURIComponent(baseLower + 'thumb.jpg');
+  // Use IJPAUC thumb if present, otherwise fallback to date-recent system
+  const thumbCandidate = t.thumb
+    ? BASE_THUMB + encodeURIComponent(t.thumb)
+    : BASE_THUMB + encodeURIComponent(baseLower + 'thumb.jpg');
 
-    const details = t.details || '';
-    return { id:idx, name, base, baseLower, title:t.title?String(t.title):'',
-      bpm:t.bpm??null, bpm_min:t.bpm_min??null, bpm_max:t.bpm_max??null,
-      details, length:t.length||0, date:dateObj||null, src:mp3, wav, video:mov, thumbCandidate };
-  });
+  const details = t.details || '';
+  return {
+    id: idx, name, base, baseLower, title: t.title ? String(t.title) : '',
+    bpm: t.bpm ?? null, bpm_min: t.bpm_min ?? null, bpm_max: t.bpm_max ?? null,
+    details, length: t.length || 0, date: dateObj || null,
+    src: mp3, wav, video: mov, thumbCandidate
+  };
+});
+
+// ✅ Diagnostic check AFTER map
+console.log('✅ built tracks:', state.tracks.length);
+for (const t of state.tracks) {
+  if (!(t.date instanceof Date) || isNaN(t.date)) {
+    console.warn('⛔ non-Date entry:', t.name, t.date);
+  }
+}
 
   // ===== Group multiple versions (v1, v2, or -2) =====
   (() => {
@@ -382,6 +394,10 @@ const baseKey = n => {
   applyFilterSort(true);
   await fetchTitles().catch(()=>{});
   await fetchThumbs().catch(()=>{});
+
+  // 🔧 Ensure cascade always runs (even if thumbs fetch is skipped)
+  computeThumbCascade();
+
   setView('all');
   preselectPreferred(PREFERRED_TITLE);
 }
@@ -465,6 +481,12 @@ function applyFilterSort(firstPaint=false, keepIndex=false){
   const initialChunk=firstPaint ? Math.max(60,state.pageSize) : state.pageSize;
   state.renderCount=Math.min(state.filtered.length, initialChunk);
   if (!keepIndex) state.i=Math.min(state.i, state.renderCount-1);
+
+console.log("🧭 FilterSort:", state.filtered.length, "tracks after sort");
+state.filtered.forEach((t,i)=>{
+  if (i > 210) console.log(i, t.name, t.date, t.title);
+});
+
   renderList(); setupInfiniteScroll(); fillViewport();
   updateFavModeLabel();
 }
@@ -528,7 +550,8 @@ async function fetchThumbs(){
 }
 
 function computeThumbCascade() {
-  console.log("🧩 computeThumbCascade start", state.tracks.length);
+  console.log("🧩 Starting thumb cascade on", state.tracks.length, "tracks");
+
   const asc = [...state.tracks].sort((a, b) => {
     const da = a.date instanceof Date && !isNaN(a.date) ? a.date.getTime() : 0;
     const db = b.date instanceof Date && !isNaN(b.date) ? b.date.getTime() : 0;
@@ -539,18 +562,24 @@ function computeThumbCascade() {
   });
 
   let currentThumb = DEFAULT_THUMB;
-  let count = 0;
+
   for (const t of asc) {
     try {
-      if (state.thumbBases.has(t.baseLower)) currentThumb = t.thumbCandidate;
+      // When a matching thumb base exists, switch the cascade
+      if (state.thumbBases.has(t.baseLower)) {
+        currentThumb = t.thumbCandidate;
+        console.log("🖼️ thumb switch →", t.name, "→", currentThumb);
+      }
+
+      // Assign resolved thumb
       state.resolvedThumb.set(t.id, currentThumb);
-      count++;
     } catch (err) {
-      console.warn("Cascade fail for", t.name, err);
+      console.warn("💥 Cascade fail for", t.name, err);
       state.resolvedThumb.set(t.id, DEFAULT_THUMB);
     }
   }
-  console.log("🧩 computeThumbCascade done", count);
+
+  console.log("✅ Cascade complete");
 }
 
 /* === CUSTOM OVERRIDE for IJPAUC-tagged tracks === */
@@ -580,36 +609,51 @@ function badgeHTML(t){
   if (state.showMovButtons && !t.video) parts.push('<span class="pill muted">MOV</span>');
   return `<div class="badge">${parts.join('')}</div>`;
 }
+
 function rowHTML(t, active) {
-  const bpmTxt = bpmLabel(t);
-  const thumbURL = getResolvedThumb(t);
-  const subline = [bpmTxt, t.length ? fmtDur(t.length) : '', t.date ? t.date.toISOString().slice(0,10) : '']
-    .filter(Boolean).join(' · ');
+  try {
+    const bpmTxt = bpmLabel(t);
+    const thumbURL = getResolvedThumb(t);
 
-  const versionButtons = t.versions && t.versions.length
-    ? `<span class="version-buttons">${t.versions.map(v =>
-        `<button class="version-button ${v===t.version ? 'active' : ''}" onclick="setVersion('${t.id}','${v}')">${v}</button>`
-      ).join('')}</span>`
-    : '';
+    // Defensive date rendering
+    let dateStr = '';
+    if (t.date instanceof Date && !isNaN(t.date)) {
+      dateStr = t.date.toISOString().slice(0, 10);
+    }
 
-  return `
-    <div class="row ${active ? 'active' : ''}" data-id="${t.id}">
-      <div class="left">
-        <img class="thumb" src="${thumbURL}" alt="">
-      </div>
-      <div class="middle">
-        <div class="track-title">
-          ${versionButtons}
-          <span class="title">${t.title}</span>
+    const subline = [bpmTxt, t.length ? fmtDur(t.length) : '', dateStr]
+      .filter(Boolean)
+      .join(' · ');
+
+    const versionButtons = t.versions && t.versions.length
+      ? `<span class="version-buttons">${t.versions.map(v =>
+          `<button class="version-button ${v===t.version ? 'active' : ''}" onclick="setVersion('${t.id}','${v}')">${v}</button>`
+        ).join('')}</span>`
+      : '';
+
+    return `
+      <div class="row ${active ? 'active' : ''}" data-id="${t.id}">
+        <div class="left">
+          <img class="thumb" src="${thumbURL}" alt="">
         </div>
-        <div class="subline">${subline}</div>
+        <div class="middle">
+          <div class="track-title">
+            ${versionButtons}
+            <span class="title">${t.title}</span>
+          </div>
+          <div class="subline">${subline}</div>
+        </div>
+        <div class="right">
+          ${badgeHTML(t)}
+        </div>
       </div>
-      <div class="right">
-        ${badgeHTML(t)}
-      </div>
-    </div>
-  `;
+    `;
+  } catch (err) {
+    console.error('💥 rowHTML failed for', t.name, err);
+    return `<div class="row error"><div>${t.name}</div><div>${err}</div></div>`;
+  }
 }
+
 function setVersion(id, versionName) {
   const t = state.tracks.find(x => String(x.id) === String(id));
   if (!t) return;
@@ -618,21 +662,35 @@ function setVersion(id, versionName) {
   if (match) t.src = BASE_MP3 + encodeURIComponent(match.name.toLowerCase());
   renderList();
 }
-function renderList(){
-  if(!state.filtered.length){ if(els.list) els.list.innerHTML='<div class="row"><div></div><div>No results.</div></div>'; return; }
-  if(!els.list) return;
-  const slice=state.filtered.slice(0,state.renderCount);
-  els.list.innerHTML = slice.map(t=>rowHTML(t,(state.i>=0 && state.filtered[state.i]?.id===t.id))).join('') + `<div id="sentinel" style="height:1px"></div>`;
-}
-function rerenderVisibleRowsThumbs(){ els.list?.querySelectorAll('.row').forEach(row=>{ const id=+row.getAttribute('data-id'); const t=state.tracks.find(x=>x.id===id); if(!t) return; const img=row.querySelector('.cover img'); if(img) img.src=getResolvedThumb(t); }); }
-function rerenderVisibleRowsBadges(){
-  document.querySelectorAll('.row').forEach(row=>{
-    const id = +row.getAttribute('data-id');
-    const t  = state.tracks.find(x=>x.id===id);
-    if(!t) return;
-    const badge = row.querySelector('.badge');
-    if (badge) badge.outerHTML = badgeHTML(t);
-  });
+
+
+function renderList() {
+  if (!state.filtered.length) {
+    if (els.list) els.list.innerHTML = '<div class="row"><div></div><div>No results.</div></div>';
+    return;
+  }
+  if (!els.list) return;
+
+  console.log("🧱 renderList starting with", state.filtered.length, "tracks");
+
+  try {
+    const slice = state.filtered.slice(0, state.renderCount);
+    els.list.innerHTML =
+      slice
+        .map((t, i) => {
+          try {
+            return rowHTML(t, (state.i >= 0 && state.filtered[state.i]?.id === t.id));
+          } catch (err) {
+            console.error("💥 rowHTML failed for index", i, t.name, err);
+            return `<div class="row error">${t.name} — rowHTML failed</div>`;
+          }
+        })
+        .join('') + `<div id="sentinel" style="height:1px"></div>`;
+
+    console.log("✅ renderList complete");
+  } catch (err) {
+    console.error("💥 renderList crashed", err);
+  }
 }
 function refreshTitlesOnly(){
   document.querySelectorAll('.row').forEach(row=>{
@@ -658,6 +716,7 @@ function setupInfiniteScroll(){
   window.addEventListener('resize', debounce(fillViewport,120), { passive:true });
 }
 function appendChunk(){
+  console.log("📦 appendChunk triggered at", state.renderCount, "/", state.filtered.length);
   if (state.renderCount>=state.filtered.length) return;
   const prev=state.renderCount; state.renderCount=Math.min(state.filtered.length, state.renderCount+state.pageSize);
   const sentinel=$('#sentinel'); if(!sentinel) return;
@@ -669,9 +728,20 @@ function appendChunk(){
 }
 function atBottomBuffer(px=1200){ return (window.scrollY + window.innerHeight + px) >= document.documentElement.scrollHeight; }
 function onScrollMaybeLoad(){ if (atBottomBuffer()) appendChunk(); }
-function fillViewport(){
-  let guard=0; while(guard++<10){ const scrollable=document.documentElement.scrollHeight>window.innerHeight+200;
-    if (scrollable || state.renderCount>=state.filtered.length) break; appendChunk();
+
+function fillViewport() {
+  // Keep appending rows until the list fills the viewport
+  let guard = 0;
+  while (guard++ < 50) {
+    const scrollable = document.documentElement.scrollHeight > window.innerHeight + 200;
+    if (scrollable || state.renderCount >= state.filtered.length) break;
+    appendChunk();
+  }
+
+  // 🪜 Safety: if observer never fires, make sure we at least append one more batch
+  if (state.renderCount < state.filtered.length && !atBottomBuffer()) {
+    console.log("🪜 forcing manual appendChunk()");
+    appendChunk();
   }
 }
 
