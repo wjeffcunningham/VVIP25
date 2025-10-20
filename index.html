@@ -345,13 +345,12 @@ const PREFERRED_TITLE = 'washed sand';
 const BASE_MP3   = 'https://cdn.vvipmedia.net/ACCESS/';
 const BASE_WAV   = 'https://cdn.vvipmedia.net/WAV/';
 
-// ✅ Local thumbs — hosted with site (fast, no CORS)
+// ✅ Local thumbs — hosted inside the repo
 const BASE_THUMB = 'assets/thumbs/';
 const DEFAULT_THUMB = BASE_THUMB + 'default_thumb.jpg';
 
 const BASE_VIDEO = 'https://cdn.vvipmedia.net/VIDEOS/';
 const BASE_EXTRAS= 'https://cdn.vvipmedia.net/MEDIA/extras/';
-
 
 /* ---------- Helpers ---------- */
 const $ = s => document.querySelector(s);
@@ -547,62 +546,64 @@ function applyFilterSort(first=false){
   if(state.viewMode==='favorites'&&!toks.length)out=out.filter(t=>state.favorites.has(t.name));
   else if(state.viewMode==='search')out=out.filter(t=>matchesTokens(t,toks));
   out.sort((a,b)=>(b.date-a.date)||b.name.localeCompare(a.name));
-  state.filtered=out;state.renderCount=Math.min(out.length,first?60:state.pageSize);
-  renderList();
+  
+state.filtered = out;
+state.renderCount = out.length; // <-- render everything
+renderList();
 }
 
 /* ---------- Thumbs + Row Click ---------- */
 async function fetchThumbs() {
   try {
-    // ✅ Local-safe: relative URL works on localhost and in production
-    const url = `https://cdn.vvipmedia.net/ACCESS/thumbs.json?v=${ASSET_VERSION}`;
-    const r = await fetch(url, { cache: 'no-store' });
+    const r = await fetch('assets/thumbs/thumbs.json', { cache: 'no-store' });
     if (!r.ok) throw new Error(`thumbs.json not found (${r.status})`);
-
     const data = await r.json();
-    const items = Array.isArray(data) ? data : Object.keys(data);
-
     state.thumbBases.clear();
-    items.forEach(b => state.thumbBases.add(String(b).toLowerCase()));
-
-    console.log(`✅ Loaded ${state.thumbBases.size} thumbnail names`);
+    data.forEach(f => state.thumbBases.add(f.toLowerCase()));
+    console.log(`✅ Loaded ${state.thumbBases.size} local thumbs`);
   } catch (err) {
-    console.warn('⚠️ fetchThumbs failed:', err);
+    console.warn('⚠️ fetchThumbs failed, using hardcoded fallback');
+    const thumbs = [
+      '24.03.15.105thumb.jpg',
+      '24.09.03.122thumb.jpg',
+      '25.07.17.171thumb.jpg',
+      'IJPAUCthumb.jpg'
+    ];
+    state.thumbBases.clear();
+    thumbs.forEach(f => state.thumbBases.add(f.toLowerCase()));
   }
 }
 
 function computeThumbCascade() {
   console.log('🧩 Computing thumbnail cascade...');
+
+  // Sort oldest → newest by date
   const asc = [...state.tracks].sort((a, b) =>
     (a.date - b.date) || a.name.localeCompare(b.name)
   );
-  let cur = DEFAULT_THUMB;
+
+  let currentThumb = DEFAULT_THUMB;
 
   for (const t of asc) {
     const key = t.baseLower + 'thumb.jpg';
+    // ✅ Check if we have an actual local thumb file
     if (state.thumbBases.has(key)) {
-      cur = BASE_THUMB + encodeURIComponent(key);
-      console.log(`🖼️ thumb switch → ${t.name} → ${cur}`);
+      currentThumb = BASE_THUMB + key;
+      console.log(`🖼️ thumb switch → ${t.name} → ${currentThumb}`);
     }
-    state.resolvedThumb.set(t.id, cur);
-  }
 
-  // Ensure all tracks have a thumb
-  for (const t of state.tracks)
-    if (!state.resolvedThumb.has(t.id))
-      state.resolvedThumb.set(t.id, DEFAULT_THUMB);
+    // ✅ Assign that thumb to this track
+    state.resolvedThumb.set(t.id, currentThumb);
+  }
 
   console.log('✅ Cascade complete:', state.resolvedThumb.size, 'entries');
 }
 
-// ✅ Simple, fast: use the exact-case base name; let onerror fall back.
+// ✅ Special IJ override
 function getResolvedThumb(t) {
-  // If you want the IJ tag override, keep it but use .jpg to match your file
   const details = (t.details || '').toLowerCase();
   if (details.includes('#ij')) return BASE_THUMB + 'IJPAUCthumb.jpg';
-
-  // Build the expected local filename with original case
-  return `${BASE_THUMB}${t.base}thumb.jpg`;
+  return state.resolvedThumb.get(t.id) || DEFAULT_THUMB;
 }
 
 /* ---------- Row click handler ---------- */
