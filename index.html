@@ -344,8 +344,11 @@ const PREFERRED_TITLE = 'washed sand';
 /* ---------- Config ---------- */
 const BASE_MP3   = 'https://cdn.vvipmedia.net/ACCESS/';
 const BASE_WAV   = 'https://cdn.vvipmedia.net/WAV/';
-const BASE_THUMB = 'https://cdn.vvipmedia.net/ACCESS/';
+
+// ✅ Local thumbs — hosted with site (fast, no CORS)
+const BASE_THUMB = 'assets/thumbs/';
 const DEFAULT_THUMB = BASE_THUMB + 'default_thumb.jpg';
+
 const BASE_VIDEO = 'https://cdn.vvipmedia.net/VIDEOS/';
 const BASE_EXTRAS= 'https://cdn.vvipmedia.net/MEDIA/extras/';
 
@@ -592,11 +595,14 @@ function computeThumbCascade() {
   console.log('✅ Cascade complete:', state.resolvedThumb.size, 'entries');
 }
 
-// ✅ IJPAUC override: use special thumb if tagged
+// ✅ Simple, fast: use the exact-case base name; let onerror fall back.
 function getResolvedThumb(t) {
+  // If you want the IJ tag override, keep it but use .jpg to match your file
   const details = (t.details || '').toLowerCase();
-  if (details.includes('#ij')) return BASE_THUMB + 'IJPAUCthumb.png';
-  return state.resolvedThumb.get(t.id) || DEFAULT_THUMB;
+  if (details.includes('#ij')) return BASE_THUMB + 'IJPAUCthumb.jpg';
+
+  // Build the expected local filename with original case
+  return `${BASE_THUMB}${t.base}thumb.jpg`;
 }
 
 /* ---------- Row click handler ---------- */
