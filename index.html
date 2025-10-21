@@ -290,6 +290,32 @@
   fill: none;
   stroke-linecap: round;
 }
+
+/* === FIX 1: Ensure now-playing title visible on desktop === */
+#now-title {
+  font-size: 68px; /* same as site title */
+  font-weight: 800;
+  letter-spacing: .06em;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  -webkit-text-stroke: 2.25px #fdf6d0;
+  -webkit-text-fill-color: transparent;
+  color: #fdf6d0; /* fallback — ensures visible text */
+  text-align: left;
+  line-height: 1.05;
+  margin: 0;
+  opacity: 1 !important;
+  visibility: visible !important;
+  z-index: 2;
+}
+
+/* === FIX 2: Hide search bar until playlist icon clicked === */
+.favbar {
+  display: none; /* hidden by default */
+}
+body.show-search .favbar {
+  display: flex; /* show when toggled */
+}
+
 </style>
 </head>
 <body>
@@ -753,6 +779,17 @@ document.addEventListener('click', e => {
 
   // If viewing favorites-only, refresh
   if (state.viewMode === 'favorites' && wasFav) applyFilterSort();
+});
+
+/* --- Toggle search bar visibility when playlist (⭐/🎵) clicked --- */
+document.addEventListener('click', e => {
+  const favBtn = e.target.closest('.btn');
+  if (!favBtn) return;
+
+  // Check if it's the favorites/playlist toggle
+  if (favBtn.textContent.trim() === '⭐' || favBtn.textContent.trim() === '🎵') {
+    document.body.classList.toggle('show-search');
+  }
 });
 
 </script>
