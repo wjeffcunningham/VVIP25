@@ -384,6 +384,63 @@ body.show-search .favbar {
   margin-bottom: 0.2em;
 }
 
+/* === MOBILE TITLE + HAMBURGER VISIBILITY FIX === */
+
+/* make hamburger visible in all cases */
+#gearBtn svg path {
+  d: path("M3 6h18M3 12h18M3 18h18");
+  stroke: #fdf6d0;
+  stroke-width: 2;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 1 !important;
+  display: block !important;
+}
+
+/* hide desktop title on mobile */
+@media (max-width:560px) {
+  #now-title { display: none !important; }
+
+  /* mobile overlay title on bottom of cover */
+  #now-title-mobile {
+    position: absolute;
+    bottom: 8px;
+    left: 0;
+    width: 100%;
+    text-align: center;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-weight: 800;
+    font-size: clamp(20px, 5vw, 30px);
+    letter-spacing: .04em;
+    color: #fdf6d0;
+    text-shadow: 0 0 6px rgba(0,0,0,0.7), 0 0 12px rgba(0,0,0,0.5);
+    z-index: 3;
+    pointer-events: none;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  /* subtle shimmer effect when playing */
+  .player.playing #now-title-mobile {
+    background: linear-gradient(
+      90deg,
+      rgba(253, 246, 208, 0.5) 0%,
+      rgba(253, 246, 208, 1) 50%,
+      rgba(253, 246, 208, 0.5) 100%
+    );
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: shimmer 3s linear infinite;
+  }
+
+  @keyframes shimmer {
+    0% { background-position: 200% center; }
+    100% { background-position: -200% center; }
+  }
+}
+
 </style>
 </head>
 <body>
@@ -403,8 +460,10 @@ body.show-search .favbar {
 
       <div class="now">
         <div class="cover" id="cover">V25</div>
+  <div id="now-title-mobile"></div>
         <div class="meta">
           <div class="title" id="now-title">—</div>
+
           <div class="sub" id="now-sub">Ready</div>
         </div>
         <div class="controls">
@@ -728,21 +787,59 @@ function rowHTML(t){const sub=[bpmLabel(t),t.length?fmtDur(t.length):'',t.date? 
 function renderList(){els.list.innerHTML=state.filtered.slice(0,state.renderCount).map(rowHTML).join('');}
 
 /* ---------- Player Core ---------- */
-function preselectPreferred(x){if(!x||!state.filtered.length)return;const idx=state.filtered.findIndex(t=>t.title.toLowerCase().includes(x));if(idx>=0)select(idx);}
-function select(i){state.i=i;const t=state.filtered[i];els.audio.src=t.src;updateNowbar();}
-function updateNowbar(){const t=state.filtered[state.i];if(!t)return;els.nowTitle.textContent=t.title;els.nowSub.textContent=[bpmLabel(t),fmtDur(t.length||0)].join(' · ');els.cover.innerHTML=imgHTML(getResolvedThumb(t));}
-function play(){els.audio.play();state.playing=true;setControlIcons();}
-function pause(){els.audio.pause();state.playing=false;setControlIcons();}
+function preselectPreferred(x){
+  if(!x||!state.filtered.length) return;
+  const idx = state.filtered.findIndex(t => t.title.toLowerCase().includes(x));
+  if(idx >= 0) select(idx);
+}
+
+function select(i){
+  state.i = i;
+  const t = state.filtered[i];
+  els.audio.src = t.src;
+  updateNowbar();
+}
+
+function updateNowbar(){
+  const t = state.filtered[state.i];
+  if(!t) return;
+
+  // desktop title
+  els.nowTitle.textContent = t.title;
+
+  // sub info line
+  els.nowSub.textContent = [bpmLabel(t), fmtDur(t.length || 0)].join(' · ');
+
+  // cover image
+  els.cover.innerHTML = imgHTML(getResolvedThumb(t));
+
+  // ✅ also update mobile overlay title
+  els.nowTitleMobile = document.getElementById('now-title-mobile');
+  if (els.nowTitleMobile) els.nowTitleMobile.textContent = t.title;
+}
+
+function play(){
+  els.audio.play();
+  state.playing = true;
+  setControlIcons();
+}
+
+function pause(){
+  els.audio.pause();
+  state.playing = false;
+  setControlIcons();
+}
+
 function setControlIcons(){
   const svgPrev  = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="#fdf6d0" d="M7 5a1 1 0 0 1 1 1v12a1 1 0 1 1-2 0V6a1 1 0 0 1 1-1zm11.4 1.2a1 1 0 0 1 .6.9v9.8a1 1 0 0 1-1.6.8l-8.2-4.9a1 1 0 0 1 0-1.7l8.2-4.9a1 1 0 0 1 1-.1z"/></svg>';
   const svgNext  = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="#fdf6d0" d="M17 5a1 1 0 0 1 1 1v12a1 1 0 1 1-2 0V6a1 1 0 0 1 1-1zM5.6 6.2a1 1 0 0 1 1 .1l8.2 4.9a1 1 0 0 1 0 1.7l-8.2 4.9A1 1 0 0 1 5 17V7.2a1 1 0 0 1 .6-.9z"/></svg>';
   const svgPlay  = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="#fdf6d0" d="M8 5v14l11-7z"/></svg>';
   const svgPause = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="#fdf6d0" d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>';
-  if($('#prev'))   $('#prev').innerHTML = svgPrev;
-  if($('#next'))   $('#next').innerHTML = svgNext;
+
+  if($('#prev'))   $('#prev').innerHTML   = svgPrev;
+  if($('#next'))   $('#next').innerHTML   = svgNext;
   if($('#toggle')) $('#toggle').innerHTML = state.playing ? svgPause : svgPlay;
 }
-
 /* ---------- Gear + Toolbar ---------- */
 function setGearOpen(o){$('#gearwrap')?.classList.toggle('open',!!o);}
 document.addEventListener('click',e=>{
