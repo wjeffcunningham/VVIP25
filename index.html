@@ -231,6 +231,55 @@
     .title{font-size:18px;letter-spacing:.035em;line-height:1.25;white-space:normal;}
     .subline{font-size:11px;color:var(--muted);}
   }
+
+/* === PATCH: Visibility + Layout + Hamburger === */
+
+/* Make sure now-playing title always visible (gold gradient) */
+#now-title {
+  font-weight: 800;
+  font-size: clamp(1.8rem, 4vw, 3rem);
+  background: linear-gradient(90deg,#6e5b2a 0%,#d4af37 35%,#f8e79a 70%,#8c6e2d 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  line-height: 1.1;
+  margin-bottom: 2px;
+  color: #fdf6d0; /* Fallback if gradient unsupported */
+}
+
+/* remove '·' between BPM and duration */
+.sub::before { content: none !important; }
+
+/* playlist flush edges + search bar contained */
+main .wrap { padding: 0; }
+.list { margin: 0; border-radius: 0; border-left: 0; border-right: 0; }
+
+/* search bar placement */
+.favbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 14px;
+}
+.favbar input[type="search"] {
+  flex: 1;
+  background: #0f0f11;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--fg);
+  padding: 6px 10px;
+}
+
+/* hamburger icon for menu */
+#gearBtn svg path {
+  d: path("M3 6h18M3 12h18M3 18h18");
+  stroke: #fdf6d0;
+  stroke-width: 2;
+  fill: none;
+  stroke-linecap: round;
+}
+
 </style>
 </head>
 <body>
@@ -241,7 +290,7 @@
   <div id="gearwrap" class="gearwrap">
     <button id="gearBtn" class="btn" aria-label="Menu">
       <svg viewBox="0 0 24 24" width="20" height="20" fill="#fdf6d0" xmlns="http://www.w3.org/2000/svg">
-        <path d="M12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7zm8.94-3.03l1.38 1.06-1.26 2.18-1.63-.33a7.94 7.94 0 0 1-1.45.84l-.25 1.66h-2.52l-.25-1.66a7.94 7.94 0 0 1-1.45-.84l-1.63.33-1.26-2.18 1.38-1.06a7.94 7.94 0 0 1 0-1.68l-1.38-1.06 1.26-2.18 1.63.33c.46-.34.95-.63 1.45-.84l.25-1.66h2.52l.25 1.66c.5.21.99.5 1.45.84l1.63-.33 1.26 2.18-1.38 1.06c.07.55.07 1.13 0 1.68z"/>
+        <path />
       </svg>
     </button>
     <div class="sheet"><div class="toolbar" id="toolbar"></div></div>
