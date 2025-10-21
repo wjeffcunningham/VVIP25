@@ -316,6 +316,74 @@ body.show-search .favbar {
   display: flex; /* show when toggled */
 }
 
+/* === FINAL NOW-PLAYING TITLE VISIBILITY FIX === */
+#now-title {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 68px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  margin: 0;
+  line-height: 1.05;
+  text-align: left;
+
+  /* identical stroke look as site title but readable */
+  color: #fdf6d0 !important;
+  -webkit-text-stroke: 2.25px #fdf6d0;
+  -webkit-text-fill-color: #fdf6d0;
+  text-shadow: 0 0 4px rgba(0,0,0,0.25);
+
+  position: relative;
+  z-index: 5;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+/* === CRITICAL FIX: visible now-playing title in player === */
+.now .meta {
+  overflow: visible !important;
+  min-width: 0 !important;
+}
+
+#now-title {
+  all: unset; /* clears inherited .title styles */
+  display: block;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 68px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  line-height: 1.05;
+  color: #fdf6d0;
+  -webkit-text-stroke: 2.25px #fdf6d0;
+  -webkit-text-fill-color: #fdf6d0;
+  margin: 0;
+}
+
+/* === LIFT NOW-PLAYING TITLE ABOVE PLAYER CONTROLS === */
+.now {
+  grid-template-areas:
+    "cover meta controls";
+  align-items: start;
+}
+.now .meta {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 0.3em;
+  overflow: visible !important;
+}
+
+#now-title {
+  order: -1; /* place it before other meta elements */
+  display: block;
+  font-size: 68px;
+  font-weight: 800;
+  line-height: 1.05;
+  color: #fdf6d0;
+  -webkit-text-stroke: 2.25px #fdf6d0;
+  -webkit-text-fill-color: #fdf6d0;
+  margin-bottom: 0.2em;
+}
+
 </style>
 </head>
 <body>
