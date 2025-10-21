@@ -231,47 +231,58 @@
     .title{font-size:18px;letter-spacing:.035em;line-height:1.25;white-space:normal;}
     .subline{font-size:11px;color:var(--muted);}
   }
+/* === FINAL STYLE PATCH === */
 
-/* === PATCH: Visibility + Layout + Hamburger === */
-
-/* Make sure now-playing title always visible (gold gradient) */
+/* match site title exactly */
 #now-title {
+  margin: 0;
+  font-size: 68px; /* same as #site-title */
+  letter-spacing: .06em;
   font-weight: 800;
-  font-size: clamp(1.8rem, 4vw, 3rem);
-  background: linear-gradient(90deg,#6e5b2a 0%,#d4af37 35%,#f8e79a 70%,#8c6e2d 100%);
-  -webkit-background-clip: text;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  color: transparent;
   -webkit-text-fill-color: transparent;
-  line-height: 1.1;
-  margin-bottom: 2px;
-  color: #fdf6d0; /* Fallback if gradient unsupported */
+  -webkit-text-stroke: 2.25px #fdf6d0;
+  line-height: 1.05;
+  text-align: left;
 }
 
-/* remove '·' between BPM and duration */
+/* remove shimmer / gradients / dot before time */
+.player.playing #now-title { animation: none !important; background: none !important; }
 .sub::before { content: none !important; }
 
-/* playlist flush edges + search bar contained */
-main .wrap { padding: 0; }
-.list { margin: 0; border-radius: 0; border-left: 0; border-right: 0; }
+/* unified, single-page feel */
+.player, .list, main .wrap {
+  background: var(--bg);
+  border: none;
+  border-bottom: 1px solid var(--border);
+  margin: 0;
+  padding: 0;
+  border-radius: 0;
+  width: 100%;
+  max-width: none;
+}
 
-/* search bar placement */
+/* search bar confined to playlist */
 .favbar {
   display: flex;
   gap: 8px;
   align-items: center;
-  background: var(--card);
+  padding: 12px 14px;
+  background: var(--bg);
   border-bottom: 1px solid var(--border);
-  padding: 10px 14px;
 }
 .favbar input[type="search"] {
   flex: 1;
-  background: #0f0f11;
+  background: #141416;
   border: 1px solid var(--border);
   border-radius: 8px;
   color: var(--fg);
   padding: 6px 10px;
+  font-size: 15px;
 }
 
-/* hamburger icon for menu */
+/* hamburger visible everywhere */
 #gearBtn svg path {
   d: path("M3 6h18M3 12h18M3 18h18");
   stroke: #fdf6d0;
@@ -279,7 +290,6 @@ main .wrap { padding: 0; }
   fill: none;
   stroke-linecap: round;
 }
-
 </style>
 </head>
 <body>
