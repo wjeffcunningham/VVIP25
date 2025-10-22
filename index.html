@@ -449,6 +449,35 @@
   }
 }
 
+/* --- Desktop: larger “record-sized” thumbnail --- */
+@media (min-width:561px){
+  .cover{
+    width:520px;          /* was 320px */
+    height:520px;
+    border-radius:18px;
+  }
+  #now-title{
+    font-size:84px;       /* scales proportionally with bigger cover */
+    margin-top:18px;
+  }
+  .controls{
+    justify-content:flex-start; /* keep buttons aligned under the image/title */
+  }
+}
+
+/* --- Desktop: shimmer on title when playing --- */
+@media (min-width:561px){
+  body.playing #now-title {
+    animation: shimmerDesktop 3.5s linear infinite;
+  }
+
+  @keyframes shimmerDesktop {
+    0%   { text-shadow: 0 0 6px rgba(253,246,208,0.3); opacity: 0.95; }
+    50%  { text-shadow: 0 0 14px rgba(253,246,208,0.8); opacity: 1; }
+    100% { text-shadow: 0 0 6px rgba(253,246,208,0.3); opacity: 0.95; }
+  }
+}
+
 /* --- Step B: Mobile bold title + shimmer when playing --- */
 @media (max-width:560px){
   .cover::after{
@@ -470,20 +499,17 @@
   }
 }
 
-/* --- Desktop: larger “record-sized” thumbnail --- */
+/* --- FIX: Desktop shimmer on title when playing --- */
 @media (min-width:561px){
-  .cover{
-    width:520px;          /* was 320px */
-    height:520px;
-    border-radius:18px;
+  body.playing #now-title {
+    animation: shimmerDesktop 3.5s ease-in-out infinite;
   }
-  #now-title{
-    font-size:84px;       /* scales proportionally with bigger cover */
-    margin-top:18px;
-  }
-  .controls{
-    justify-content:flex-start; /* keep buttons aligned under the image/title */
-  }
+}
+
+@keyframes shimmerDesktop {
+  0%   { text-shadow: 0 0 6px rgba(253,246,208,0.2); opacity: 0.95; }
+  50%  { text-shadow: 0 0 14px rgba(253,246,208,0.9); opacity: 1; }
+  100% { text-shadow: 0 0 6px rgba(253,246,208,0.2); opacity: 0.95; }
 }
 
 </style>
