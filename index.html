@@ -547,6 +547,68 @@
   100% { text-shadow: 0 0 6px rgba(253,246,208,0.2); opacity: 0.95; }
 }
 
+/* === SHIMMER FIX (minimal, non-destructive) === */
+
+/* desktop shimmer — visible #now-title only */
+@media (min-width:561px){
+  body.playing #now-title {
+    animation: shimmerDesktop 4s ease-in-out infinite;
+  }
+  @keyframes shimmerDesktop {
+    0%   { text-shadow: 0 0 6px rgba(253,246,208,0.2); opacity: 0.95; }
+    25%  { text-shadow: 0 0 10px rgba(110,231,183,0.4); opacity: 1; }
+    50%  { text-shadow: 0 0 14px rgba(253,246,208,0.9); opacity: 1; }
+    75%  { text-shadow: 0 0 10px rgba(110,231,183,0.4); opacity: 1; }
+    100% { text-shadow: 0 0 6px rgba(253,246,208,0.2); opacity: 0.95; }
+  }
+}
+
+/* mobile shimmer — visible pseudo-element only */
+@media (max-width:560px){
+  body.playing .cover::after {
+    animation: shimmerMobile 3.5s linear infinite;
+  }
+  @keyframes shimmerMobile {
+    0%   { text-shadow: 0 0 4px rgba(253,246,208,0.4); opacity: .9; }
+    50%  { text-shadow: 0 0 10px rgba(253,246,208,0.9); opacity: 1; }
+    100% { text-shadow: 0 0 4px rgba(253,246,208,0.4); opacity: .9; }
+  }
+}
+
+/* === MOBILE FIX: compact stacked badges === */
+@media (max-width:560px){
+  .badge {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr);   /* two per row */
+    gap: 6px 8px;
+    justify-items: center;
+    align-items: center;
+    width: 100%;
+    padding-top: 4px;
+  }
+
+  .badge .pill,
+  .badge .star {
+    font-size: 13px !important;
+    padding: 4px 6px !important;
+    min-width: 50px;
+    height: auto;
+    text-align: center;
+    border-radius: 6px;
+  }
+
+  .badge .pill.gem {
+    font-size: 15px !important;
+  }
+
+  /* prevent overflowing the track list cell */
+  .row .right {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+}
+
 </style>
 </head>
 <body>
@@ -964,12 +1026,14 @@ function updateNowbar(){
 function play(){
   els.audio.play();
   state.playing = true;
+  document.body.classList.add('playing');   // ✅ trigger shimmer
   setControlIcons();
 }
 
 function pause(){
   els.audio.pause();
   state.playing = false;
+  document.body.classList.remove('playing'); // ✅ stop shimmer
   setControlIcons();
 }
 
