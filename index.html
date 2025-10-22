@@ -52,14 +52,12 @@
   }
 
   /* --- Player Core --- */
-  .player{
-    position:sticky;
-    top:0;
-    z-index:10;
-    background:var(--bg);
-    border-bottom:1px solid var(--border);
-  }
-
+.player {
+  position: relative;
+  z-index: 10;
+  background: var(--bg);
+  border-bottom: none;
+}
   /* --- Now Playing --- */
   .now{
     display:flex;
@@ -67,28 +65,36 @@
     align-items:center;
     gap:14px;
     padding:20px 0 28px;
-    border-bottom:1px solid var(--border);
+    border-bottom: none !important;
   }
 
-  .cover{
-    width:320px;
-    height:320px;
-    border-radius:14px;
-    background:#1e1f24;
-    display:grid;
-    place-items:center;
-    color:var(--muted);
-    font-weight:700;
-    border:1px solid var(--border);
-    overflow:hidden;
-    position:relative;
-  }
-  .now .cover img{
-    width:100% !important;
-    height:100% !important;
-    object-fit:cover !important;
-    border-radius:14px !important;
-  }
+.cover {
+  width: 320px;              /* or your larger desktop size */
+  height: 320px;
+  border-radius: 14px;
+  background: #000;          /* pure black to blend with bg */
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-weight: 700;
+  border: none;              /* remove faint edge line */
+  box-shadow: none;          /* eliminate subtle inset glow */
+  overflow: hidden;          /* cleanly clip the image */
+  position: relative;
+  isolation: isolate;        /* fixes anti-alias seam issue */
+}
+
+.now .cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  border: none;
+  margin: 0;
+  border-radius: 0;          /* only the container is rounded */
+  transform: scale(1.002);   /* hides subpixel seam line */
+  background: #000;          /* ensures no residual bright edge */
+}
 
   /* --- Desktop Now Playing Title --- */
   #now-title{
@@ -145,10 +151,12 @@
   .list{
     margin:0;
     border:none;
-    border-top:1px solid var(--border);
+    border-top: 1px solid rgba(255,255,255,0.05);
+  box-shadow: 0 -12px 20px rgba(0,0,0,0.3);
     border-radius:0;
     background:var(--bg);
   }
+
   .row{
     display:grid;
     grid-template-columns:80px 1fr auto;
@@ -849,14 +857,50 @@ document.addEventListener('click', e => {
 });
 
 /* ---------- Rendering ---------- */
-function imgHTML(src){return `<img src="${src}" onerror="this.onerror=null;this.src='${DEFAULT_THUMB}'" style="width:56px;height:56px;border-radius:8px;object-fit:cover;">`;}
-function favHTML(t){const on=state.favorites.has(t.name)?'on':'';return `<button class="star ${on}" data-fav="${t.name}">★</button>`;}
-function badgeHTML(t){const p=[favHTML(t)];
-  if(state.showFormats){p.push(`<a class="pill" href="${t.src}" download>MP3</a>`);p.push(`<a class="pill" href="${BASE_WAV+encodeURIComponent(t.base+'.wav')}" download>WAV</a>`);if(t.video)p.push(`<a class="pill" href="${t.video}" target="_blank">MOV</a>`);if(state.extras[t.baseLower])p.push(`<button class="pill gem" data-gem="${t.baseLower}">💎</button>`);}
-  return `<div class="badge">${p.join('')}</div>`;}
-function rowHTML(t){const sub=[bpmLabel(t),t.length?fmtDur(t.length):'',t.date? t.date.toISOString().slice(0,10):''].filter(Boolean).join(' · ');
-  return `<div class="row" data-id="${t.id}"><div class="left">${imgHTML(getResolvedThumb(t))}</div><div class="middle"><div class="title">${t.title}</div><div class="sub">${sub}</div></div><div class="right">${badgeHTML(t)}</div></div>`;}
-function renderList(){els.list.innerHTML=state.filtered.slice(0,state.renderCount).map(rowHTML).join('');}
+function imgHTML(src, isCover = false) {
+  if (isCover) {
+    // ✅ Full-size player cover image (fills .cover)
+    return `<img src="${src}" alt="Cover" onerror="this.onerror=null;this.src='${DEFAULT_THUMB}'">`;
+  } else {
+    // ✅ Small track list thumbnail
+    return `<img src="${src}" alt="Thumb" onerror="this.onerror=null;this.src='${DEFAULT_THUMB}'" style="width:56px;height:56px;border-radius:8px;object-fit:cover;">`;
+  }
+}
+
+function favHTML(t) {
+  const on = state.favorites.has(t.name) ? 'on' : '';
+  return `<button class="star ${on}" data-fav="${t.name}">★</button>`;
+}
+
+function badgeHTML(t) {
+  const p = [favHTML(t)];
+  if (state.showFormats) {
+    p.push(`<a class="pill" href="${t.src}" download>MP3</a>`);
+    p.push(`<a class="pill" href="${BASE_WAV + encodeURIComponent(t.base + '.wav')}" download>WAV</a>`);
+    if (t.video) p.push(`<a class="pill" href="${t.video}" target="_blank">MOV</a>`);
+    if (state.extras[t.baseLower]) p.push(`<button class="pill gem" data-gem="${t.baseLower}">💎</button>`);
+  }
+  return `<div class="badge">${p.join('')}</div>`;
+}
+
+function rowHTML(t) {
+  const sub = [bpmLabel(t), t.length ? fmtDur(t.length) : '', t.date ? t.date.toISOString().slice(0,10) : '']
+    .filter(Boolean)
+    .join(' · ');
+  return `
+    <div class="row" data-id="${t.id}">
+      <div class="left">${imgHTML(getResolvedThumb(t))}</div>
+      <div class="middle">
+        <div class="title">${t.title}</div>
+        <div class="sub">${sub}</div>
+      </div>
+      <div class="right">${badgeHTML(t)}</div>
+    </div>`;
+}
+
+function renderList() {
+  els.list.innerHTML = state.filtered.slice(0, state.renderCount).map(rowHTML).join('');
+}
 
 /* ---------- Player Core ---------- */
 function preselectPreferred(x){
@@ -883,7 +927,7 @@ function updateNowbar(){
   els.nowSub.textContent = [bpmLabel(t), fmtDur(t.length || 0)].join(' · ');
 
   // cover image
-  els.cover.innerHTML = imgHTML(getResolvedThumb(t));
+  els.cover.innerHTML = imgHTML(getResolvedThumb(t), true);
 
   // ✅ also update mobile overlay title
   els.nowTitleMobile = document.getElementById('now-title-mobile');
