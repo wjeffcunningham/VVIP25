@@ -210,44 +210,99 @@
   }
   .tog{opacity:.6;transition:opacity .15s,box-shadow .15s}
   .tog.on{opacity:1;box-shadow:0 0 0 2px var(--accent) inset}
+.gearwrap {
+  position: relative;
+}
 
-  .gearwrap{position:relative;}
-  #gearBtn.btn{
-    width:40px;
-    height:40px;
-    padding:0;
-    border-radius:10px;
-    display:inline-grid;
-    place-items:center;
-  }
-  #gearBtn svg path{
-    stroke:#fdf6d0;
-    stroke-width:2.2;
-    fill:none;
-    stroke-linecap:round;
-    stroke-linejoin:round;
-  }
-  .gearwrap .sheet{
-    position:absolute;
-    top:calc(100% + 8px);
-    right:0;
-    z-index:20;
-    width:min(420px,calc(100vw - 32px));
-    background:var(--card);
-    border:1px solid var(--border);
-    border-radius:10px;
-    padding:10px;
-    display:none;
-    box-shadow:0 10px 24px rgba(0,0,0,.35);
-  }
-  .gearwrap.open .sheet{display:block;}
+#gearBtn.btn {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 10px;
+  display: inline-grid;
+  place-items: center;
+}
 
-  .btn.icon{width:36px;height:36px;padding:0;display:inline-grid;place-items:center;}
-  .btn.icon svg{width:18px;height:18px;fill:var(--fg);}
+#gearBtn svg path {
+  stroke: #fdf6d0;
+  stroke-width: 2.2;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
 
-  /* --- Stars / Favorites --- */
-  .star{cursor:pointer;color:var(--muted);transition:filter .2s,color .2s;}
-  .star.on{color:#fdf6d0;filter:drop-shadow(0 0 2px var(--accent)) brightness(1.2);}
+/* --- Menu Sheet --- */
+.gearwrap .sheet {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  width: auto;
+  min-width: 260px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px 10px;
+  display: none;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+}
+
+.gearwrap.open .sheet {
+  display: block;
+}
+
+/* --- Toolbar: packed flex grid --- */
+.toolbar {
+  display: flex !important;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 8px 24px; /* row, column */
+  padding: 6px 0;
+}
+
+/* --- Each icon --- */
+.toolbar .btn.icon {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  transition: background 0.2s, transform 0.2s;
+}
+.toolbar .btn.icon:hover {
+  background: #1b1c20;
+  transform: translateY(-2px);
+}
+
+.toolbar .btn.icon svg,
+.toolbar .btn.icon {
+  font-size: 30px !important;
+  line-height: 1;
+}
+
+/* --- Hide sort select by default; show only when + toggled --- */
+.toolbar select#sort {
+  display: none;
+}
+.toolbar.show-sort select#sort {
+  display: inline-block;
+}
+
+/* --- Stars / Favorites --- */
+.star {
+  cursor: pointer;
+  color: var(--muted);
+  transition: filter 0.2s, color 0.2s;
+}
+.star.on {
+  color: #fdf6d0;
+  filter: drop-shadow(0 0 2px var(--accent)) brightness(1.2);
+}
 
   /* --- Favbar (hidden by default) --- */
   .favbar{display:none;}
@@ -341,7 +396,25 @@
       100%{opacity:.9;}
     }
   }
-</style>
+
+/* --- Step 2(2): Hide redundant small title text --- */
+#now-title-mobile,
+#now-sub {
+  display: none !important;       /* removes small white title + 0:00 line */
+}
+
+/* ensure only large gold title remains */
+.now .meta .title {
+  display: block;
+}
+
+/* Optional: keep shimmer overlay on mobile but suppress the small caption below */
+@media (max-width:560px){
+  #now-title-mobile { display: none !important; }
+  /* If you *also* want to remove shimmer text on image, uncomment below: */
+  /* .cover::after { content:none !important; } */
+}
+
 </style>
 </head>
 <body>
