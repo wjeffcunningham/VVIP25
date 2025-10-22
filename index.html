@@ -260,7 +260,7 @@
   display: block;
 }
 
-/* --- Toolbar: packed flex grid --- */
+/* --- Toolbar: packed flex grid (desktop default) --- */
 .toolbar {
   display: flex !important;
   flex-wrap: wrap;
@@ -291,6 +291,33 @@
 .toolbar .btn.icon {
   font-size: 30px !important;
   line-height: 1;
+}
+
+/* --- Responsive: fix mobile layout and spacing --- */
+@media (max-width:560px){
+  .gearwrap .sheet {
+    right: 0;
+    left: auto;
+    transform: none;
+    padding: 10px;
+    min-width: 200px;
+  }
+
+  .toolbar {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    justify-items: center;
+    align-items: center;
+    padding: 8px 0;
+  }
+
+  .toolbar .btn.icon {
+    width: 48px;
+    height: 48px;
+    font-size: 28px;
+    border-radius: 12px;
+  }
 }
 
 /* --- Hide sort select by default; show only when + toggled --- */
