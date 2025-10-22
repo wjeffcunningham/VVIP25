@@ -397,6 +397,26 @@
     }
   }
 
+/* --- Mobile: stronger title + shimmer when playing --- */
+@media (max-width:560px){
+  .cover::after {
+    font-weight: 800;                 /* bolder */
+    font-size: 22px;                  /* slightly larger */
+    color: #fdf6d0;                   /* same gold as logo */
+    text-shadow: 0 0 4px rgba(253,246,208,0.4);
+  }
+
+  /* shimmer only when playing */
+  body.playing .cover::after {
+    animation: shimmerTitle 3.5s linear infinite;
+  }
+  @keyframes shimmerTitle {
+    0% {opacity:.9;text-shadow:0 0 4px rgba(253,246,208,0.4);}
+    50% {opacity:1;text-shadow:0 0 10px rgba(253,246,208,0.8);}
+    100% {opacity:.9;text-shadow:0 0 4px rgba(253,246,208,0.4);}
+  }
+}
+
 /* --- Step 2(2): Hide redundant small title text --- */
 #now-title-mobile,
 #now-sub {
@@ -413,6 +433,57 @@
   #now-title-mobile { display: none !important; }
   /* If you *also* want to remove shimmer text on image, uncomment below: */
   /* .cover::after { content:none !important; } */
+}
+
+/* --- Step A: Desktop left-align cover and title --- */
+@media (min-width:561px){
+  .now{
+    align-items:flex-start;
+    text-align:left;
+  }
+  .cover{
+    margin:0; /* remove auto-centering */
+  }
+  #now-title{
+    text-align:left;
+  }
+}
+
+/* --- Step B: Mobile bold title + shimmer when playing --- */
+@media (max-width:560px){
+  .cover::after{
+    font-weight:800;                 /* stronger text */
+    font-size:22px;                  /* slightly larger */
+    color:#fdf6d0;                   /* same tone as logo */
+    text-shadow:0 0 4px rgba(253,246,208,0.4);
+  }
+
+  /* shimmer only while playing */
+  body.playing .cover::after{
+    animation:shimmerTitle 3.5s linear infinite;
+  }
+
+  @keyframes shimmerTitle{
+    0%{opacity:.9;text-shadow:0 0 4px rgba(253,246,208,0.4);}
+    50%{opacity:1;text-shadow:0 0 10px rgba(253,246,208,0.8);}
+    100%{opacity:.9;text-shadow:0 0 4px rgba(253,246,208,0.4);}
+  }
+}
+
+/* --- Desktop: larger “record-sized” thumbnail --- */
+@media (min-width:561px){
+  .cover{
+    width:520px;          /* was 320px */
+    height:520px;
+    border-radius:18px;
+  }
+  #now-title{
+    font-size:84px;       /* scales proportionally with bigger cover */
+    margin-top:18px;
+  }
+  .controls{
+    justify-content:flex-start; /* keep buttons aligned under the image/title */
+  }
 }
 
 </style>
