@@ -196,6 +196,23 @@
   }
   .badge .muted{color:var(--muted)}
 
+  /* Force uniform right-alignment for star button */
+.row .badge {
+  justify-content: flex-end;
+  min-width: 48px;
+}
+
+/* Keep the star perfectly aligned at the same spot even when formats hidden */
+.row .badge .star {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  margin-left: auto;
+}
+
   /* --- Toolbar / Menu --- */
   .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
   select{
@@ -1037,10 +1054,26 @@ function updateNowbar(){
 }
 
 function play(){
-  els.audio.play();
-  state.playing = true;
-  document.body.classList.add('playing');   // ✅ trigger shimmer
-  setControlIcons();
+  try {
+    const playPromise = els.audio.play();
+    if (playPromise !== undefined) {
+      playPromise
+        .then(() => {
+          state.playing = true;
+          setControlIcons();
+          document.body.classList.add('playing');
+        })
+        .catch(err => {
+          console.warn('Autoplay blocked or failed:', err);
+        });
+    } else {
+      state.playing = true;
+      setControlIcons();
+      document.body.classList.add('playing');
+    }
+  } catch (err) {
+    console.error('play() error:', err);
+  }
 }
 
 function pause(){
