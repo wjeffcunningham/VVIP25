@@ -543,6 +543,16 @@
     100% { text-shadow:0 0 6px rgba(253,246,208,0.2); opacity:.95; }
   }
 }
+
+/* --- FIX: Hide all mobile-only overlays and small titles on desktop --- */
+@media (min-width:561px) {
+  #now-title-mobile,
+  .cover::after {
+    display: none !important;
+    content: none !important;
+  }
+}
+
 </style>
 </head>
 <body>
