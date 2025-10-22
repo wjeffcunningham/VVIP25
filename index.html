@@ -416,229 +416,133 @@
     border-color:var(--accent,#000);
   }
 
-  /* --- Mobile --- */
-  @media (max-width:560px){
-    #site-title{
-      font-size:48px;
-      -webkit-text-stroke:1.8px #fdf6d0;
-      letter-spacing:.08em;
-    }
-    .wrap{padding:12px}
-    .now{
-      gap:12px;
-      padding:12px 0;
-    }
-    .cover{
-      width:84vw;
-      max-width:520px;
-      height:84vw;
-      max-height:520px;
-      margin:0 auto;
-      border-radius:12px;
-    }
+  /* === RESPONSIVE: MOBILE + DESKTOP COMBINED === */
 
-    /* Hide big title, overlay small one on image */
-    #now-title{display:none!important;}
-    .cover::after{
-      content:attr(data-title);
-      position:absolute;
-      bottom:10px;
-      left:0;
-      right:0;
-      text-align:center;
-      font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;
-      font-weight:700;
-      font-size:20px;
-      color:#fdf6d0;
-      text-shadow:0 0 6px rgba(0,0,0,0.4);
-      opacity:.9;
-      animation:shimmer 4s linear infinite;
-    }
-    body:not(.playing) .cover::after{animation:none;}
-    @keyframes shimmer{
-      0%{opacity:.9;}
-      50%{opacity:1;text-shadow:0 0 12px rgba(255,248,200,.7);}
-      100%{opacity:.9;}
-    }
-  }
-
-/* --- Mobile: stronger title + shimmer when playing --- */
+/* --- Mobile layout, title overlay, shimmer, stacked badges --- */
 @media (max-width:560px){
-  .cover::after {
-    font-weight: 800;                 /* bolder */
-    font-size: 22px;                  /* slightly larger */
-    color: #fdf6d0;                   /* same gold as logo */
-    text-shadow: 0 0 4px rgba(253,246,208,0.4);
+  /* Core layout tweaks */
+  #site-title{
+    font-size:48px;
+    -webkit-text-stroke:1.8px #fdf6d0;
+    letter-spacing:.08em;
+  }
+  .wrap{padding:12px}
+  .now{
+    gap:12px;
+    padding:12px 0;
+  }
+  .cover{
+    width:84vw;
+    max-width:520px;
+    height:84vw;
+    max-height:520px;
+    margin:0 auto;
+    border-radius:12px;
+    position:relative;
   }
 
-  /* shimmer only when playing */
-  body.playing .cover::after {
-    animation: shimmerTitle 3.5s linear infinite;
+  /* Hide big desktop title, overlay small one on cover */
+  #now-title{display:none!important;}
+
+  .cover::after{
+    content:attr(data-title);
+    position:absolute;
+    bottom:12px;
+    left:0; right:0;
+    text-align:center;
+    font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;
+    font-weight:800;
+    font-size:22px;
+    color:#fdf6d0;
+    text-shadow:0 0 6px rgba(0,0,0,0.4);
+    opacity:.9;
+    background:linear-gradient(90deg,#6ee7b7,#fdf6d0,#6ee7b7);
+    background-size:200% 100%;
+    -webkit-background-clip:text;
+    -webkit-text-fill-color:transparent;
   }
-  @keyframes shimmerTitle {
-    0% {opacity:.9;text-shadow:0 0 4px rgba(253,246,208,0.4);}
-    50% {opacity:1;text-shadow:0 0 10px rgba(253,246,208,0.8);}
-    100% {opacity:.9;text-shadow:0 0 4px rgba(253,246,208,0.4);}
+
+  /* Shimmer when playing */
+  body.playing .cover::after{
+    animation:shimmerMobile 2s linear infinite;
+  }
+
+  @keyframes shimmerMobile{
+    0%   {background-position:0% 50%;opacity:.9;}
+    50%  {background-position:100% 50%;opacity:1;}
+    100% {background-position:0% 50%;opacity:.9;}
+  }
+
+  /* Hide redundant small title & subtext */
+  #now-title-mobile,
+  #now-sub {display:none!important;}
+  .now .meta .title{display:block;}
+
+  /* Compact stacked badges */
+  .badge {
+    display:grid !important;
+    grid-template-columns:repeat(2,1fr);
+    gap:6px 8px;
+    justify-items:center;
+    align-items:center;
+    width:100%;
+    padding-top:4px;
+  }
+
+  .badge .pill,
+  .badge .star {
+    font-size:13px !important;
+    padding:4px 6px !important;
+    min-width:50px;
+    height:auto;
+    text-align:center;
+    border-radius:6px;
+  }
+
+  .badge .pill.gem {
+    font-size:15px !important;
+  }
+
+  .row .right {
+    display:flex;
+    justify-content:center;
+    align-items:center;
   }
 }
 
-/* --- Step 2(2): Hide redundant small title text --- */
-#now-title-mobile,
-#now-sub {
-  display: none !important;       /* removes small white title + 0:00 line */
-}
-
-/* ensure only large gold title remains */
-.now .meta .title {
-  display: block;
-}
-
-/* Optional: keep shimmer overlay on mobile but suppress the small caption below */
-@media (max-width:560px){
-  #now-title-mobile { display: none !important; }
-  /* If you *also* want to remove shimmer text on image, uncomment below: */
-  /* .cover::after { content:none !important; } */
-}
-
-/* --- Step A: Desktop left-align cover and title --- */
+/* --- Desktop layout: left-aligned, large cover, shimmer title --- */
 @media (min-width:561px){
   .now{
     align-items:flex-start;
     text-align:left;
   }
   .cover{
-    margin:0; /* remove auto-centering */
-  }
-  #now-title{
-    text-align:left;
-  }
-}
-
-/* --- Desktop: larger “record-sized” thumbnail --- */
-@media (min-width:561px){
-  .cover{
-    width:520px;          /* was 320px */
+    margin:0;
+    width:520px;
     height:520px;
     border-radius:18px;
   }
   #now-title{
-    font-size:84px;       /* scales proportionally with bigger cover */
+    text-align:left;
+    font-size:84px;
     margin-top:18px;
   }
   .controls{
-    justify-content:flex-start; /* keep buttons aligned under the image/title */
+    justify-content:flex-start;
   }
-}
 
-/* --- Desktop: shimmer on title when playing --- */
-@media (min-width:561px){
+  /* Shimmer on desktop title when playing */
   body.playing #now-title {
-    animation: shimmerDesktop 3.5s linear infinite;
-  }
-
-  @keyframes shimmerDesktop {
-    0%   { text-shadow: 0 0 6px rgba(253,246,208,0.3); opacity: 0.95; }
-    50%  { text-shadow: 0 0 14px rgba(253,246,208,0.8); opacity: 1; }
-    100% { text-shadow: 0 0 6px rgba(253,246,208,0.3); opacity: 0.95; }
-  }
-}
-
-/* --- Step B: Mobile bold title + shimmer when playing --- */
-@media (max-width:560px){
-  .cover::after{
-    font-weight:800;                 /* stronger text */
-    font-size:22px;                  /* slightly larger */
-    color:#fdf6d0;                   /* same tone as logo */
-    text-shadow:0 0 4px rgba(253,246,208,0.4);
-  }
-
-  /* shimmer only while playing */
-  body.playing .cover::after{
-    animation:shimmerTitle 3.5s linear infinite;
-  }
-
-  @keyframes shimmerTitle{
-    0%{opacity:.9;text-shadow:0 0 4px rgba(253,246,208,0.4);}
-    50%{opacity:1;text-shadow:0 0 10px rgba(253,246,208,0.8);}
-    100%{opacity:.9;text-shadow:0 0 4px rgba(253,246,208,0.4);}
-  }
-}
-
-/* --- FIX: Desktop shimmer on title when playing --- */
-@media (min-width:561px){
-  body.playing #now-title {
-    animation: shimmerDesktop 3.5s ease-in-out infinite;
-  }
-}
-
-@keyframes shimmerDesktop {
-  0%   { text-shadow: 0 0 6px rgba(253,246,208,0.2); opacity: 0.95; }
-  50%  { text-shadow: 0 0 14px rgba(253,246,208,0.9); opacity: 1; }
-  100% { text-shadow: 0 0 6px rgba(253,246,208,0.2); opacity: 0.95; }
-}
-
-/* === SHIMMER FIX (minimal, non-destructive) === */
-
-/* desktop shimmer — visible #now-title only */
-@media (min-width:561px){
-  body.playing #now-title {
-    animation: shimmerDesktop 4s ease-in-out infinite;
+    animation:shimmerDesktop 4s ease-in-out infinite;
   }
   @keyframes shimmerDesktop {
-    0%   { text-shadow: 0 0 6px rgba(253,246,208,0.2); opacity: 0.95; }
-    25%  { text-shadow: 0 0 10px rgba(110,231,183,0.4); opacity: 1; }
-    50%  { text-shadow: 0 0 14px rgba(253,246,208,0.9); opacity: 1; }
-    75%  { text-shadow: 0 0 10px rgba(110,231,183,0.4); opacity: 1; }
-    100% { text-shadow: 0 0 6px rgba(253,246,208,0.2); opacity: 0.95; }
+    0%   { text-shadow:0 0 6px rgba(253,246,208,0.2); opacity:.95; }
+    25%  { text-shadow:0 0 10px rgba(110,231,183,0.4); opacity:1; }
+    50%  { text-shadow:0 0 14px rgba(253,246,208,0.9); opacity:1; }
+    75%  { text-shadow:0 0 10px rgba(110,231,183,0.4); opacity:1; }
+    100% { text-shadow:0 0 6px rgba(253,246,208,0.2); opacity:.95; }
   }
 }
-
-/* mobile shimmer — visible pseudo-element only */
-@media (max-width:560px){
-  body.playing .cover::after {
-    animation: shimmerMobile 3.5s linear infinite;
-  }
-  @keyframes shimmerMobile {
-    0%   { text-shadow: 0 0 4px rgba(253,246,208,0.4); opacity: .9; }
-    50%  { text-shadow: 0 0 10px rgba(253,246,208,0.9); opacity: 1; }
-    100% { text-shadow: 0 0 4px rgba(253,246,208,0.4); opacity: .9; }
-  }
-}
-
-/* === MOBILE FIX: compact stacked badges === */
-@media (max-width:560px){
-  .badge {
-    display: grid !important;
-    grid-template-columns: repeat(2, 1fr);   /* two per row */
-    gap: 6px 8px;
-    justify-items: center;
-    align-items: center;
-    width: 100%;
-    padding-top: 4px;
-  }
-
-  .badge .pill,
-  .badge .star {
-    font-size: 13px !important;
-    padding: 4px 6px !important;
-    min-width: 50px;
-    height: auto;
-    text-align: center;
-    border-radius: 6px;
-  }
-
-  .badge .pill.gem {
-    font-size: 15px !important;
-  }
-
-  /* prevent overflowing the track list cell */
-  .row .right {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-  }
-}
-
 </style>
 </head>
 <body>
