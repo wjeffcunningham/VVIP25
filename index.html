@@ -343,6 +343,15 @@
   filter: drop-shadow(0 0 2px var(--accent)) brightness(1.2);
 }
 
+/* --- Illuminated "+" button when toggled --- */
+.btn.on {
+  color: #fdf6d0;
+  border-color: var(--accent);
+  filter: drop-shadow(0 0 2px var(--accent)) brightness(1.2);
+  background: rgba(110, 231, 183, 0.08); /* faint glow backdrop */
+  transition: all 0.2s ease;
+}
+
   /* --- Favbar (hidden by default) --- */
   .favbar{display:none;}
   body.show-search .favbar{
