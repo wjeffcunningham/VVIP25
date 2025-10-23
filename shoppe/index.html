@@ -3,41 +3,165 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Shoppe — VVIP25</title>
+  <title>VVIP Shoppe</title>
   <link rel="icon" type="image/png" sizes="64x64" href="/favicon-64.png">
   <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
-  <link rel="icon" href="/favicon.ico?v=3">
   <meta name="theme-color" content="#0b0b0c"/>
   <style>
-    :root{--bg:#0b0b0c;--fg:#eceff4;--muted:#9aa0a6;--card:#141416;--border:#26272b;--accent:#6ee7b7}
+    :root {
+      --bg:#0b0b0c;
+      --fg:#eceff4;
+      --muted:#9aa0a6;
+      --card:#141416;
+      --border:#26272b;
+      --accent:#6ee7b7;
+    }
     *{box-sizing:border-box}
     html,body{height:100%}
-    body{margin:0;background:var(--bg);color:var(--fg);
-         font:16px/1.5 -apple-system,BlinkMacSystemFont,"Helvetica Neue",Helvetica,Arial,"Segoe UI",Roboto,Inter,system-ui,sans-serif}
-    .wrap{max-width:920px;margin:0 auto;padding:16px}
-    h1{font-size:32px;margin:24px 0}
-    .grid{display:grid;gap:20px;grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
-    .shop-item{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:8px}
-    .shop-item img{max-width:100%;border-radius:10px;display:block}
-    .shop-item h3{margin:0;font-size:18px}
+    body{
+      margin:0;
+      background:var(--bg);
+      color:var(--fg);
+      font:16px/1.5 -apple-system,BlinkMacSystemFont,"Helvetica Neue",Helvetica,Arial,"Segoe UI",Roboto,Inter,system-ui,sans-serif;
+    }
+    #site-title{
+      text-align:center;
+      font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;
+      font-weight:700;
+      font-size:56px;
+      -webkit-text-stroke:2px #fdf6d0;
+      letter-spacing:.06em;
+      color:transparent;
+      -webkit-text-fill-color:var(--fg);
+      margin:40px 0 10px 0;
+    }
+    .wrap{max-width:980px;margin:0 auto;padding:16px}
+    .toolbar{display:flex;justify-content:center;margin-bottom:24px}
+    .toolbar a{color:var(--accent);text-decoration:none;font-weight:600}
+    .grid{display:grid;gap:24px;grid-template-columns:repeat(auto-fill,minmax(240px,1fr))}
+    .shop-item{
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:14px;
+      padding:12px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      transition:transform .2s ease;
+    }
+    .shop-item:hover{transform:scale(1.02)}
+    .shop-item img{width:100%;border-radius:10px;aspect-ratio:1/1;object-fit:cover}
+    .shop-item h3{margin:0;font-size:17px;line-height:1.3}
     .shop-item .desc{color:var(--muted);font-size:14px}
     .buy{display:flex;align-items:center;justify-content:space-between;margin-top:auto}
-    .price{font-weight:bold}
-    .btn{display:inline-block;padding:6px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--fg);text-decoration:none}
+    .price{font-weight:bold;font-size:15px}
+    .btn{
+      display:inline-block;
+      padding:6px 12px;
+      border:1px solid var(--border);
+      border-radius:8px;
+      background:var(--bg);
+      color:var(--fg);
+      text-decoration:none;
+      font-size:14px;
+      transition:all .2s ease;
+    }
+    .btn:hover{border-color:var(--accent);color:var(--accent)}
+    footer{
+      text-align:center;
+      color:var(--muted);
+      font-size:13px;
+      margin:40px 0;
+    }
+
+    /* Optional mini-player bar */
+    #mini-player{
+      position:fixed;
+      bottom:0;
+      left:0;
+      right:0;
+      background:var(--card);
+      border-top:1px solid var(--border);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:10px;
+      padding:10px 0;
+      font-size:14px;
+    }
+    #mini-player button{
+      background:none;
+      border:1px solid var(--border);
+      border-radius:8px;
+      padding:6px 10px;
+      color:var(--fg);
+      cursor:pointer;
+    }
+    #mini-player button:hover{border-color:var(--accent);color:var(--accent)}
   </style>
 </head>
 <body>
   <main id="page-root" data-page="shoppe">
     <div class="wrap">
-      <div class="toolbar" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0">
-        <a class="btn" href="/" data-nav>← Home</a>
-      </div>
-      <h1>Shoppe</h1>
-      <section class="grid" data-shoppe-grid>
-        <!-- Populated dynamically from /shoppe/shoppe.json -->
-      </section>
+      <h1 id="site-title">VVIP SHOPPE</h1>
+      <div class="toolbar"><a href="/">← Back to VVIP25</a></div>
+      <section class="grid" id="shop-grid"></section>
     </div>
   </main>
+
+  <div id="mini-player" style="display:none">
+    <button id="prev">⏮</button>
+    <button id="playpause">▶️</button>
+    <button id="next">⏭</button>
+    <span id="now-playing">Nothing playing</span>
+  </div>
+
+  <script>
+    async function loadShoppe(){
+      const grid=document.getElementById('shop-grid');
+      try{
+        const res=await fetch('./shoppe.json',{cache:'no-store'});
+        if(!res.ok) throw new Error(`shoppe.json ${res.status}`);
+        const data=await res.json();
+        if(!Array.isArray(data)) throw new Error('Invalid shoppe.json format');
+        data.forEach(item=>{
+          const card=document.createElement('div');
+          card.className='shop-item';
+          card.innerHTML=`
+            <img src="${item.image}" alt="${item.title}">
+            <h3>${item.title}</h3>
+            <p class="desc">${item.description}</p>
+            <div class="buy">
+              <span class="price">${item.currency||''} ${item.price||''}</span>
+              ${
+                item.bandcamp_url
+                  ? `<a href="${item.bandcamp_url}" class="btn" target="_blank" rel="noopener">View</a>`
+                  : `<span class="btn" style="opacity:.4;pointer-events:none">Sold&nbsp;Out</span>`
+              }
+            </div>`;
+          grid.appendChild(card);
+        });
+      }catch(e){
+        console.error('⚠️ Shoppe load failed:',e);
+        grid.innerHTML='<p>⚠️ Failed to load items.</p>';
+      }
+    }
+    loadShoppe();
+
+    // optional mini-player
+    const mini=document.getElementById('mini-player');
+    if(window.Audio){
+      mini.style.display='flex';
+      const play=document.getElementById('playpause');
+      let playing=false;
+      play.onclick=()=>{
+        playing=!playing;
+        play.textContent=playing?'⏸':'▶️';
+        document.getElementById('now-playing').textContent=playing?'Playing sample...':'Paused';
+      };
+    }
+  </script>
+  <footer>© VVIP25 / VVIPMEDIA.NET</footer>
 </body>
 </html>
