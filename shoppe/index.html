@@ -8,6 +8,8 @@
   <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
   <meta name="theme-color" content="#0b0b0c"/>
+
+<p> 
   <style>
     :root {
       --bg:#0b0b0c;
@@ -161,6 +163,46 @@
         document.getElementById('now-playing').textContent=playing?'Playing sample...':'Paused';
       };
     }
+
+// --- restore music state from main page ---
+(async () => {
+  try {
+    const savedSrc = localStorage.getItem('vvip25_src');
+    const savedTime = parseFloat(localStorage.getItem('vvip25_time') || 0);
+    const wasPlaying = localStorage.getItem('vvip25_playing') === 'true';
+    if (!savedSrc) return;
+
+    // Make or reuse audio element
+    const audio = new Audio(savedSrc);
+    audio.currentTime = savedTime;
+
+    const playBtn = document.getElementById('playpause');
+    const nowSpan = document.getElementById('now-playing');
+    playBtn.textContent = '⏸';
+    nowSpan.textContent = 'Now playing from main site';
+
+    if (wasPlaying) {
+      await audio.play().catch(()=>{});
+    }
+
+    // Keep it controlled via your mini player
+    playBtn.onclick = () => {
+      if (audio.paused) {
+        audio.play();
+        playBtn.textContent = '⏸';
+        nowSpan.textContent = 'Playing...';
+      } else {
+        audio.pause();
+        playBtn.textContent = '▶️';
+        nowSpan.textContent = 'Paused';
+      }
+    };
+
+  } catch(e) {
+    console.warn('Player restore failed:', e);
+  }
+})();
+    
   </script>
   <footer>© VVIP25 / VVIPMEDIA.NET</footer>
 </body>

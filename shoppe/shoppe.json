@@ -1,7 +1,7 @@
 [
   {
-    "title": "VVIP+ — Black on Black (Lifetime Guarantee—You Stain, We Fix)",
-    "image": "https://cdn.vvipmedia.net/shoppe/tee-black.jpg",
+    "title": "VVIP+ — Black on Black (Lifetime Guarantee... You stain, we fix.)",
+    "image": "/shoppe/vvipblack.jpg",
     "description": "Heavyweight cotton tee with front logo.",
     "price": 100,
     "currency": "CAD",
@@ -12,9 +12,9 @@
   },
   {
     "title": "VVIP Basic — White on Black",
-    "image": "https://cdn.vvipmedia.net/shoppe/tee-white.jpg",
+    "image": "/shoppe/tee-white.jpg",
     "description": "Heavyweight cotton tee with pocket logo. Basic t's for basic 'bs.",
-    "price": 100,
+    "price": 40,
     "currency": "CAD",
     "bandcamp_url": null,
     "fb_marketplace": null,
@@ -22,20 +22,9 @@
     "tags": ["#tee", "#apparel"]
   },
   {
-    "title": "Sticker Pack (15)",
-    "image": "https://cdn.vvipmedia.net/shoppe/stickers.jpg",
-    "description": "VVIP stickers for the so inclined. Collect them all.",
-    "price": 20,
-    "currency": "CAD",
-    "bandcamp_url": null,
-    "fb_marketplace": null,
-    "available": true,
-    "tags": ["#poster", "#print"]
-  },
-  {
     "title": "The VVIP Tote (1.0 Edition)",
-    "image": "https://cdn.vvipmedia.net/shoppe/tote.jpg",
-    "description": "Art by SF Cook. Garfield? High contrast so babies can see.",
+    "image": "/shoppe/tote.jpg",
+    "description": "Art by SF Cook. High contrast = easier for babies to discern.",
     "price": 20,
     "currency": "CAD",
     "bandcamp_url": null,
@@ -44,9 +33,20 @@
     "tags": ["#bag", "#print"]
   },
   {
+    "title": "Sticker Pack (15)",
+    "image": "/shoppe/stickers.jpg",
+    "description": "VVIP stickers. Collect them all.",
+    "price": 20,
+    "currency": "CAD",
+    "bandcamp_url": null,
+    "fb_marketplace": null,
+    "available": true,
+    "tags": ["#poster", "#print"]
+  },
+  {
     "title": "VVIP Sticker Book (Edition of 15)",
     "image": "https://cdn.vvipmedia.net/shoppe/stickerbook.jpg",
-    "description": "Collector’s albums. Hand-numbered editions of 15.",
+    "description": "Collector’s albums. Hand-numbered editions of 10. Art by SF Cook.",
     "price": 20,
     "currency": "CAD",
     "bandcamp_url": null,
@@ -56,29 +56,29 @@
   },
   {
     "title": "Cassette — VirtualVIP Unlimited",
-    "image": "https://cdn.vvipmedia.net/shoppe/cassette.jpg",
-    "description": "Gary Records. Edition of 10. Includes download code.",
-    "price": 100,
+    "image": "/shoppe/unlimited.jpg",
+    "description": "Gary Records. Edition of 10. Glossy cover. Hand-dubbed. Includes download code.",
+    "price": 89,
     "currency": "CAD",
-    "bandcamp_url": "https://virtualvip.bandcamp.com/album/virtualvip-unlimited",
+    "bandcamp_url": "https://vvip.bandcamp.com/album/unlimited",
     "fb_marketplace": null,
     "available": false,
     "tags": ["#cassette", "#audio"]
   },
   {
     "title": "LP — IJPAUC?",
-    "image": "https://cdn.vvipmedia.net/shoppe/IJPAUCthumb.jpg",
-    "description": "Edition of 10. Includes download code.",
-    "price": 220,
+    "image": "/shoppe/IJPAUCthumb.jpg",
+    "description": "Is JP (1993) An Unconscious Confession? Edition of 10. Includes download code.",
+    "price": 200,
     "currency": "USD",
-    "bandcamp_url": "https://virtualvip.bandcamp.com/album/ijpauc",
+    "bandcamp_url": "https://virtualvip.bandcamp.com/album/ijpaucthumb.jpg",
     "fb_marketplace": null,
     "available": false,
     "tags": ["#lp", "#audio"]
   },
   {
     "title": "LP — VVIP24 ARCADE WATER",
-    "image": "https://cdn.vvipmedia.net/shoppe/arcade-water.jpg",
+    "image": "/shoppe/arcadewater.jpg",
     "description": "Edition of 5. Includes download code.",
     "price": 50,
     "currency": "CAD",
@@ -89,7 +89,7 @@
   },
   {
     "title": "LP — Renders of Music for Video",
-    "image": "https://cdn.vvipmedia.net/shoppe/renders.jpg",
+    "image": "/shoppe/renders.jpg",
     "description": "Edition of 5. Includes download code.",
     "price": 50,
     "currency": "CAD",
@@ -100,7 +100,7 @@
   },
   {
     "title": "LP — VVIP25 SUMMER 25",
-    "image": "https://cdn.vvipmedia.net/shoppe/summer25.jpg",
+    "image": "/shoppe/summer25.jpg",
     "description": "Edition of 5. Includes download code.",
     "price": 50,
     "currency": "CAD",
@@ -111,7 +111,7 @@
   },
   {
     "title": "LP — //Another// Green World",
-    "image": "https://cdn.vvipmedia.net/shoppe/greenworld.jpg",
+    "image": "/shoppe/greenworld.jpg",
     "description": "Edition of 5. Includes download code.",
     "price": 50,
     "currency": "CAD",
@@ -122,7 +122,7 @@
   },
   {
     "title": "LP — ACCESS",
-    "image": "https://cdn.vvipmedia.net/shoppe/access.jpg",
+    "image": "/shoppe/access.jpg",
     "description": "Edition of 5. Includes download code.",
     "price": 50,
     "currency": "CAD",

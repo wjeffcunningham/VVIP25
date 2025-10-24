@@ -1035,10 +1035,11 @@ function buildMenuUI(){
   // 🛍 toggle
   const bShop=document.createElement('button');bShop.className='btn icon';bShop.innerHTML='🛍️';bShop.title='Shop';tb.append(bShop);
   let shopActive=false;
-bShop.onclick = e => {
-  e.preventDefault();
-  window.location.href = '/shoppe/';
-};
+  bShop.onclick=async e=>{
+    e.preventDefault();shopActive=!shopActive;
+    if(shopActive){try{const r=await fetch('/shoppe/index.html',{cache:'no-store'});const html=await r.text();const doc=new DOMParser().parseFromString(html,'text/html');const next=doc.querySelector('main#page-root');const cur=document.querySelector('main#page-root');if(next&&cur)cur.replaceWith(next);}catch{alert('Shop not available');}}
+    else location.href='/';
+  };
 
   const sort=document.createElement('select');sort.id='sort';sort.innerHTML=`<option value="date_desc">Newest</option><option value="date_asc">Oldest</option><option value="bpm_desc">BPM↓</option><option value="bpm_asc">BPM↑</option><option value="len_desc">Longest</option><option value="len_asc">Shortest</option>`;
   sort.onchange=()=>applyFilterSort(false,true);
@@ -1124,5 +1125,22 @@ document.addEventListener('click', e => {
 });
 
 </script>
+
+
+<script>
+// --- Save playback state when leaving page ---
+window.addEventListener('beforeunload', () => {
+  try {
+    const player = document.querySelector('audio');
+    if (!player) return;
+    localStorage.setItem('vvip25_src', player.src);
+    localStorage.setItem('vvip25_time', player.currentTime);
+    localStorage.setItem('vvip25_playing', !player.paused);
+  } catch(e) {
+    console.warn('Could not save player state', e);
+  }
+});
+</script>
+
 </body>
 </html>
