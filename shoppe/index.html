@@ -8,8 +8,6 @@
   <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
   <meta name="theme-color" content="#0b0b0c"/>
-
-<p> 
   <style>
     :root {
       --bg:#0b0b0c;
@@ -176,10 +174,15 @@
     const audio = new Audio(savedSrc);
     audio.currentTime = savedTime;
 
-    const playBtn = document.getElementById('playpause');
-    const nowSpan = document.getElementById('now-playing');
-    playBtn.textContent = '⏸';
-    nowSpan.textContent = 'Now playing from main site';
+const playBtn = document.getElementById('playpause');
+const nowSpan = document.getElementById('now-playing');
+playBtn.textContent = '⏸';
+
+// Try to extract a readable track name from the file path
+const srcFile = savedSrc.split('/').pop().split('?')[0];
+const trackName = decodeURIComponent(srcFile.replace(/\.[a-z0-9]+$/i, '').replace(/[_-]+/g, ' '));
+
+nowSpan.textContent = `Now playing: ${trackName}`;
 
     if (wasPlaying) {
       await audio.play().catch(()=>{});
