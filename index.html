@@ -702,24 +702,40 @@
   to { transform: translateX(120%); opacity: 0; }
 }
 
-/* --- Drag handle styling --- */
+/* --- Drag handle styling (final, mobile + desktop consistent) --- */
 .handle {
   cursor: grab;
   display: inline-flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  width: 24px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
   opacity: 0.45;
-  transition: opacity 0.2s ease;
+  transition: opacity 0.2s ease, transform 0.1s ease;
+  margin-left: 2px; /* tiny visual spacing from star */
 }
-.handle:hover { opacity: 0.9; }
+.handle:hover {
+  opacity: 0.9;
+  transform: scale(1.05);
+}
 .handle::before {
   content: "⋮⋮";
-  font-size: 16px;
+  font-size: 14px;
   line-height: 1;
   color: var(--muted);
+  pointer-events: none;
+}
+
+@media (min-width: 561px) {
+  .handle {
+    width: 32px;
+    height: 32px;
+  }
+  .handle::before {
+    font-size: 16px;
+  }
 }
 
 /* --- Right-end alignment: keep star + handle tidy --- */
@@ -741,6 +757,76 @@
     width: 28px;
     height: 28px;
   }
+}
+
+/* === FINAL MOBILE + DESKTOP ALIGNMENT === */
+.row .right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 68px;
+  flex-shrink: 0;
+}
+
+.star, .handle {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.handle {
+  cursor: grab;
+  flex-direction: column;
+  opacity: 0.45;
+  transition: opacity 0.2s ease;
+}
+.handle:hover { opacity: 0.9; }
+.handle::before {
+  content: "⋮⋮";
+  font-size: 14px;
+  line-height: 1;
+  color: var(--muted);
+}
+
+@media (min-width: 561px) {
+  .star, .handle {
+    width: 32px;
+    height: 32px;
+  }
+}
+
+/* --- Swipe + Collapse Animation --- */
+.row.swiped-left,
+.row.swiped-right {
+  overflow: hidden;
+  transition:
+    transform 0.35s ease,
+    opacity 0.35s ease,
+    height 0.35s ease,
+    margin 0.35s ease,
+    padding 0.35s ease;
+}
+
+.row.swiped-left {
+  transform: translateX(-90%);
+  background: rgba(255, 70, 70, 0.12);
+  opacity: 0;
+  height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.row.swiped-right {
+  transform: translateX(90%);
+  background: rgba(110, 231, 183, 0.15);
+  opacity: 0;
+  height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
 </style>
@@ -1483,47 +1569,61 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  /* ---------- Swipe gestures on mobile ---------- */
-  state.hiddenIds = new Set();
+/* ---------- Swipe gestures on mobile ---------- */
+state.hiddenIds = new Set();
+let touchStartX = 0;
+let touchEndX   = 0;
+const SWIPE_THRESHOLD = 60;
 
-  let touchStartX = 0;
-  let touchEndX   = 0;
-  const SWIPE_THRESHOLD = 60;
+function collapseRow(row) {
+  // Force reflow before applying collapse class to trigger transition
+  row.getBoundingClientRect();
+  row.style.transition = 'transform 0.35s ease, opacity 0.35s ease, height 0.35s ease, margin 0.35s ease, padding 0.35s ease';
+  row.style.height = row.offsetHeight + 'px'; // lock height
+  requestAnimationFrame(() => {
+    row.style.height = '0px';
+    row.style.opacity = '0';
+    row.style.margin = '0';
+    row.style.padding = '0';
+  });
+  row.addEventListener('transitionend', () => row.remove(), { once: true });
+}
 
-  function handleGesture(row) {
-    const id = Number(row.dataset.id);
-    const track = state.filtered.find(t => t.id === id);
-    if (!track) return;
-    const dx = touchEndX - touchStartX;
+function handleGesture(row) {
+  const id = Number(row.dataset.id);
+  const track = state.filtered.find(t => t.id === id);
+  if (!track) return;
 
-    if (dx > SWIPE_THRESHOLD) {
-      // 👉 Swipe Right → Add to favorites
-      if (!state.favorites.has(track.name)) {
-        state.favorites.add(track.name);
-        localStorage.setItem('vvip25:favs', JSON.stringify([...state.favorites]));
-      }
-      row.classList.add('swiped-right');
-      row.addEventListener('transitionend', () => row.remove(), { once: true });
-    } else if (dx < -SWIPE_THRESHOLD) {
-      // 👈 Swipe Left → Hide until refresh
-      state.hiddenIds.add(id);
-      row.classList.add('swiped-left');
-      row.addEventListener('transitionend', () => row.remove(), { once: true });
+  const dx = touchEndX - touchStartX;
+
+  if (dx > SWIPE_THRESHOLD) {
+    // 👉 Swipe Right → Add to favorites
+    if (!state.favorites.has(track.name)) {
+      state.favorites.add(track.name);
+      localStorage.setItem('vvip25:favs', JSON.stringify([...state.favorites]));
     }
+    row.classList.add('swiped-right');
+    collapseRow(row);
+  } else if (dx < -SWIPE_THRESHOLD) {
+    // 👈 Swipe Left → Hide until refresh
+    state.hiddenIds.add(id);
+    row.classList.add('swiped-left');
+    collapseRow(row);
   }
+}
 
-  document.addEventListener('touchstart', e => {
-    const row = e.target.closest('.row');
-    if (!row) return;
-    touchStartX = e.changedTouches[0].screenX;
-  }, { passive: true });
+document.addEventListener('touchstart', e => {
+  const row = e.target.closest('.row');
+  if (!row) return;
+  touchStartX = e.changedTouches[0].screenX;
+}, { passive: true });
 
-  document.addEventListener('touchend', e => {
-    const row = e.target.closest('.row');
-    if (!row) return;
-    touchEndX = e.changedTouches[0].screenX;
-    handleGesture(row);
-  }, { passive: true });
+document.addEventListener('touchend', e => {
+  const row = e.target.closest('.row');
+  if (!row) return;
+  touchEndX = e.changedTouches[0].screenX;
+  handleGesture(row);
+}, { passive: true });
 
   /* ---------- Refresh button logic (clears hidden tracks) ---------- */
   const refreshBtn = document.querySelector('.btn.icon[title="Refresh list"]');
