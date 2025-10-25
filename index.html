@@ -633,6 +633,23 @@
     display:flex;
     justify-content:center;
     align-items:center;
+
+    .row {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+}
+.row .right {
+  display:flex;
+  justify-content:flex-end;
+  align-items:center;
+  gap:8px;
+  min-width:64px;
+}
+.row .star {
+  margin-left:auto;
+  flex-shrink:0;
+}
   }
 }
 
@@ -827,6 +844,17 @@
   height: 0 !important;
   margin: 0 !important;
   padding: 0 !important;
+}
+
+@media (max-width:560px){
+  #now-title {
+    display:block !important;
+    font-size:20px;
+    text-align:center;
+    color:#fdf6d0;
+    margin-top:8px;
+  }
+  .cover::after { content:none !important; }
 }
 
 </style>
@@ -1548,7 +1576,12 @@ document.addEventListener("DOMContentLoaded", () => {
   /* ---------- SortableJS (drag to reorder via handle only) ---------- */
   new Sortable(list, {
     animation: 180,
-    handle: '.handle',          // ⬅ only the handle is draggable
+    onMove: (evt) => {
+  const rect = evt.dragged.getBoundingClientRect();
+  const clickX = evt.originalEvent.clientX;
+  const rightHalf = clickX > rect.left + rect.width / 2;
+  return rightHalf; // ✅ only allow drag on right half
+},
     ghostClass: 'drag-ghost',
     delay: 120,                 // small delay prevents scroll misfires
     delayOnTouchOnly: true,
@@ -1597,7 +1630,7 @@ function handleGesture(row) {
   const dx = touchEndX - touchStartX;
 
   if (dx > SWIPE_THRESHOLD) {
-    // 👉 Swipe Right → Add to favorites
+    // 👉 Swipe Right → Favorite
     if (!state.favorites.has(track.name)) {
       state.favorites.add(track.name);
       localStorage.setItem('vvip25:favs', JSON.stringify([...state.favorites]));
@@ -1605,7 +1638,7 @@ function handleGesture(row) {
     row.classList.add('swiped-right');
     collapseRow(row);
   } else if (dx < -SWIPE_THRESHOLD) {
-    // 👈 Swipe Left → Hide until refresh
+    // 👈 Swipe Left → Remove (hide)
     state.hiddenIds.add(id);
     row.classList.add('swiped-left');
     collapseRow(row);
