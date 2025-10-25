@@ -349,16 +349,69 @@
   display: inline-block;
 }
 
-/* --- Stars / Favorites --- */
+/* --- Star buttons --- */
 .star {
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
   color: var(--muted);
-  transition: filter 0.2s, color 0.2s;
+  background: transparent;
+  border: none;
+  border-radius: 10px;
+  filter: none !important;
+  box-shadow: none !important;
+  backface-visibility: hidden;
+  -webkit-transform: translateZ(0);
+  will-change: filter, color;
+  transition: filter 0.25s ease, color 0.25s ease, background 0.25s ease;
 }
-.star.on {
+
+/* 1) Make sure containers don't clip the glow */
+.row, .row .right, .row .badge { overflow: visible; }
+
+/* 2) Star: base */
+.star{
+  position: relative;                 /* anchor pseudo-element */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px; height: 32px;
+  border: none; border-radius: 10px;
+  background: var(--card);
+  color: var(--muted);
+  transition: color .25s ease, opacity .25s ease;
+  /* no filter/box-shadow here to avoid GPU ghosting */
+}
+
+/* 3) Star glow rendered on a larger pseudo-element (no clipping) */
+.star.on::after{
+  content: "";
+  position: absolute;
+  /* expand beyond the button so the blur never hits the edge */
+  inset: -8px;                         /* <-- increase if you want a bigger halo */
+  border-radius: 14px;
+  pointer-events: none;
+  /* soft, stable halo using box-shadows (not filter) */
+  box-shadow:
+    0 0 10px rgba(110,231,183,.35),
+    0 0 18px rgba(110,231,183,.25);
+  opacity: 1;
+  transition: opacity .25s ease;
+}
+
+.star.on{
   color: #fdf6d0;
-  filter: drop-shadow(0 0 2px var(--accent)) brightness(1.2);
 }
+
+/* cleanly fade the halo out on toggle-off */
+.star:not(.on)::after{ opacity: 0; }
+
+/* optional: during quick clicks, ensure no partial frames stick */
+.star:active::after{ opacity: 0; }
+
 
 /* --- Illuminated "+" button when toggled --- */
 .btn.on {
@@ -366,8 +419,20 @@
   border-color: var(--accent);
   filter: drop-shadow(0 0 2px var(--accent)) brightness(1.2);
   background: rgba(110, 231, 183, 0.08); /* faint glow backdrop */
-  transition: all 0.2s ease;
+  transition: all 0.25s ease;
+  will-change: filter, background;
 }
+
+/* --- Reset glow after illumination turns off --- */
+.btn {
+  transition: all 0.25s ease;
+  filter: none !important;
+  box-shadow: none !important;
+  background: var(--card) !important;
+  backface-visibility: hidden;
+  -webkit-transform: translateZ(0); /* clears any GPU ghosting */
+}
+
 
   /* --- Favbar (hidden by default) --- */
   .favbar{display:none;}
