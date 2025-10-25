@@ -54,8 +54,6 @@
     "available": true,
     "tags": ["#poster", "#print"]
   },
-
-  /* --- Bandcamp / Audio releases --- */
   {
     "title": "Cassette — VirtualVIP Unlimited",
     "image": "./unlimited.jpg",
@@ -144,8 +142,6 @@
     "available": true,
     "tags": ["#lp", "#audio"]
   },
-
-  /* --- Sample Facebook Marketplace listings --- */
   {
     "title": "VVIP Poster Set (Facebook Marketplace)",
     "image": "./poster-fb.jpg",
@@ -179,8 +175,6 @@
     "available": true,
     "tags": ["#zine", "#print", "#marketplace"]
   },
-
-  /* --- Sample eBay listings --- */
   {
     "title": "VVIP Cassette Lot (eBay)",
     "image": "./cassette-ebay.jpg",
