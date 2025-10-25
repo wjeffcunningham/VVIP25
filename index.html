@@ -677,6 +677,13 @@
   }
 }
 
+.drag-ghost {
+  opacity: 0.6;
+  background: var(--card);
+  border: 1px dashed var(--accent);
+  transform: scale(1.02);
+}
+
 </style>
 </head>
 <body>
@@ -1363,6 +1370,34 @@ window.addEventListener('beforeunload', () => {
   }
 });
 </script>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.3/Sortable.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const list = document.getElementById('list');
+  if (!list) return;
 
+  new Sortable(list, {
+    animation: 180,
+    handle: '.row',            // entire row draggable
+    ghostClass: 'drag-ghost',
+    onEnd: (evt) => {
+      // update internal order (state.filtered) to reflect new drag position
+      const newOrder = [...list.querySelectorAll('.row')].map(el => Number(el.dataset.id));
+
+      // reorder state.filtered based on the new visual order
+      const lookup = new Map(state.filtered.map(t => [t.id, t]));
+      state.filtered = newOrder.map(id => lookup.get(id)).filter(Boolean);
+
+      // optional: persist favorites playlist order
+      if (state.viewMode === 'favorites') {
+        const favIds = state.filtered.map(t => t.name);
+        localStorage.setItem('vvip25:favOrder', JSON.stringify(favIds));
+      }
+
+      console.log('✅ New order applied:', newOrder);
+    }
+  });
+});
+</script>
 </body>
 </html>
