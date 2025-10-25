@@ -950,7 +950,15 @@ function setView(mode){state.viewMode=mode;applyFilterSort(true);}
 function applyFilterSort(first=false){
   const toks=(state.searchQuery||'').split(/\s+/).filter(Boolean);
   let out=[...state.tracks];
-  if(state.viewMode==='favorites'&&!toks.length)out=out.filter(t=>state.favorites.has(t.name));
+  if (state.viewMode === 'favorites' && !toks.length) {
+  out = out.filter(t => state.favorites.has(t.name));
+
+  // restore custom order if saved
+  const saved = state.favOrder || [];
+  if (saved.length) {
+    out.sort((a, b) => saved.indexOf(a.name) - saved.indexOf(b.name));
+  }
+}
   else if(state.viewMode==='search')out=out.filter(t=>matchesTokens(t,toks));
   out.sort((a,b)=>(b.date-a.date)||b.name.localeCompare(a.name));
   
