@@ -213,6 +213,65 @@
   margin-left: auto;
 }
 
+/* --- Title row with time beside track title --- */
+.title-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+
+#now-time {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 32px;
+  font-weight: 700;
+  color: #fdf6d0;
+  opacity: 0.9;
+  min-width: 72px;
+  text-align: right;
+}
+
+/* --- Scrub / seek bar under track title --- */
+#scrub {
+  width: 100%;
+  margin-top: 8px;
+  -webkit-appearance: none;
+  height: 6px;
+  background: #1a1a1c;
+  border-radius: 3px;
+  outline: none;
+}
+#scrub::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fdf6d0;
+  cursor: pointer;
+}
+#scrub::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fdf6d0;
+  cursor: pointer;
+}
+
+/* --- Responsive: on narrow screens, stack time below title --- */
+@media (max-width:560px){
+  .title-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+  #now-time {
+    font-size: 20px;
+    text-align: left;
+    opacity: 0.8;
+  }
+}
+
   /* --- Toolbar / Menu --- */
   .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
   select{
@@ -640,10 +699,16 @@
         <div class="cover" id="cover">V25</div>
   <div id="now-title-mobile"></div>
         <div class="meta">
-          <div class="title" id="now-title">—</div>
 
-          <div class="sub" id="now-sub">Ready</div>
-        </div>
+<div class="meta">
+  <div class="title-row">
+    <div class="title" id="now-title">—</div>
+    <div id="now-time">0:00</div>
+  </div>
+  <input type="range" id="scrub" min="0" max="100" value="0" step="0.1" aria-label="Seek bar">
+  <div class="sub" id="now-sub">Ready</div>
+</div>
+
         <div class="controls">
         <button id="prev" aria-label="Previous"></button>
 <button id="toggle" aria-label="Play/Pause"></button>
@@ -1072,6 +1137,29 @@ function setControlIcons(){
   if($('#next'))   $('#next').innerHTML   = svgNext;
   if($('#toggle')) $('#toggle').innerHTML = state.playing ? svgPause : svgPlay;
 }
+
+/* --- Scrubbing + time display for track title --- */
+document.addEventListener('DOMContentLoaded', () => {
+  const audio = document.getElementById('audio');
+  const scrub = document.getElementById('scrub');
+  const nowTime = document.getElementById('now-time');
+  if (!audio || !scrub || !nowTime) return;
+
+  // Update position + time as track plays
+  audio.addEventListener('timeupdate', () => {
+    if (!audio.duration) return;
+    scrub.value = (audio.currentTime / audio.duration) * 100;
+    nowTime.textContent = fmtDur(audio.currentTime);
+  });
+
+  // Allow user to seek
+  scrub.addEventListener('input', () => {
+    if (!audio.duration) return;
+    const pct = scrub.value / 100;
+    audio.currentTime = audio.duration * pct;
+  });
+});
+
 /* ---------- Gear + Toolbar ---------- */
 function setGearOpen(o){$('#gearwrap')?.classList.toggle('open',!!o);}
 document.addEventListener('click',e=>{
@@ -1082,32 +1170,104 @@ document.addEventListener('click',e=>{
 });
 
 function buildMenuUI(){
-  const tb=els.toolbar;if(!tb)return;tb.innerHTML='';
-  const bInfo=document.createElement('button');bInfo.className='btn icon';bInfo.innerHTML='ℹ';bInfo.title='Info';bInfo.onclick=()=>alert('VVIP25 — 2025');tb.append(bInfo);
+  const tb = els.toolbar;
+  if (!tb) return;
+  tb.innerHTML = '';
 
-  const bPlus=document.createElement('button');bPlus.className='btn';bPlus.textContent='+';bPlus.title='Toggle formats';tb.append(bPlus);
-  const updatePlus=()=>{bPlus.classList.toggle('on',state.showFormats);tb.classList.toggle('show-sort',state.showFormats);}
-  bPlus.onclick=e=>{e.preventDefault();state.showFormats=!state.showFormats;state.showWavButtons=state.showFormats;state.showMovButtons=state.showFormats;updatePlus();renderList();};
+  // --- Define link helper early so it's in scope ---
+  function a(h, t, l) {
+    const x = document.createElement('a');
+    x.href = h;
+    x.target = '_blank';
+    x.rel = 'noopener';
+    x.className = 'btn icon';
+    x.title = l;
+    x.innerHTML = t;
+    return x;
+  }
 
-  const bFav=document.createElement('button');bFav.className='btn';const refresh=()=>{const fav=(state.viewMode==='favorites'||state.viewMode==='search');bFav.textContent=fav?'🎵':'⭐';};refresh();
-  bFav.onclick=e=>{e.preventDefault();if(state.viewMode==='all'){setView('favorites');}else{setView('all');}refresh();};
+  // --- Info button ---
+  const bInfo = document.createElement('button');
+  bInfo.className = 'btn icon';
+  bInfo.innerHTML = 'ℹ';
+  bInfo.title = 'Info';
+  bInfo.onclick = () =>
+    alert('Welcome to VVIP PLAYER 1.1! Press the ★ next to tracks to add them to your playlist. 🎶 ');
+  tb.append(bInfo);
+
+  // --- Plus button (toggle formats) ---
+  const bPlus = document.createElement('button');
+  bPlus.className = 'btn';
+  bPlus.textContent = '+';
+  bPlus.title = 'Toggle formats';
+  tb.append(bPlus);
+
+  const updatePlus = () => {
+    bPlus.classList.toggle('on', state.showFormats);
+    tb.classList.toggle('show-sort', state.showFormats);
+  };
+
+  bPlus.onclick = e => {
+    e.preventDefault();
+    state.showFormats = !state.showFormats;
+    state.showWavButtons = state.showFormats;
+    state.showMovButtons = state.showFormats;
+    updatePlus();
+    renderList();
+  };
+
+  // --- Favorites toggle ---
+  const bFav = document.createElement('button');
+  bFav.className = 'btn';
+  const refresh = () => {
+    const fav = state.viewMode === 'favorites' || state.viewMode === 'search';
+    bFav.textContent = fav ? '🎵' : '⭐';
+  };
+  refresh();
+
+  bFav.onclick = e => {
+    e.preventDefault();
+    if (state.viewMode === 'all') setView('favorites');
+    else setView('all');
+    refresh();
+  };
   tb.append(bFav);
 
-  const yt=a('https://www.youtube.com/@VVVVIIPP25','📺','YouTube');
-  const ig=a('https://www.instagram.com/vvipmediadotnet/','📷','Instagram');
-  tb.append(yt,ig);
+  // --- External + shop links ---
+  const yt = a('https://www.youtube.com/@VVVVIIPP25', '📺', 'YouTube');
+  const ig = a('https://www.instagram.com/vvipmediadotnet/', '📷', 'Instagram');
+  const bShop = document.createElement('a');
+  bShop.className = 'btn icon';
+  bShop.href = '/shoppe/index.html';
+  bShop.title = 'Shop';
+  bShop.innerHTML = '🛍️';
+  tb.append(yt, ig, bShop);
 
-// 🛍 Shop link (direct navigation)
-const bShop = document.createElement('a');
-bShop.className = 'btn icon';
-bShop.href = '/shoppe/index.html';
-bShop.title = 'Shop';
-bShop.innerHTML = '🛍️';
-tb.append(bShop);
-  const sort=document.createElement('select');sort.id='sort';sort.innerHTML=`<option value="date_desc">Newest</option><option value="date_asc">Oldest</option><option value="bpm_desc">BPM↓</option><option value="bpm_asc">BPM↑</option><option value="len_desc">Longest</option><option value="len_asc">Shortest</option>`;
-  sort.onchange=()=>applyFilterSort(false,true);
+  // --- Sort select ---
+  const sort = document.createElement('select');
+  sort.id = 'sort';
+  sort.innerHTML = `
+    <option value="date_desc">Newest</option>
+    <option value="date_asc">Oldest</option>
+    <option value="bpm_desc">BPM↓</option>
+    <option value="bpm_asc">BPM↑</option>
+    <option value="len_desc">Longest</option>
+    <option value="len_asc">Shortest</option>`;
+  sort.onchange = () => applyFilterSort(false, true);
   tb.append(sort);
-  function a(h,t,l){const x=document.createElement('a');x.href=h;x.target='_blank';x.rel='noopener';x.className='btn icon';x.title=l;x.innerHTML=t;return x;}
+
+  // --- Show welcome popup once ---
+  try {
+    const hasVisited = localStorage.getItem('vvip_visited');
+    if (!hasVisited) {
+      setTimeout(() => {
+        alert('Welcome to 🎶VVIP MEDIA🎶! Star your faves to create a playlist; check menu for extras.');
+      }, 400);
+      localStorage.setItem('vvip_visited', 'true');
+    }
+  } catch (err) {
+    console.warn('LocalStorage unavailable', err);
+  }
 }
 
 /* ---------- Extras / Gems ---------- */
