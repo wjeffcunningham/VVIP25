@@ -443,6 +443,8 @@
   color: var(--muted);
   transition: color .25s ease, opacity .25s ease;
   /* no filter/box-shadow here to avoid GPU ghosting */
+  flex-shrink: 0;
+  text-align: center;
 }
 
 /* 3) Star glow rendered on a larger pseudo-element (no clipping) */
@@ -698,6 +700,47 @@
 }
 @keyframes swipeRight {
   to { transform: translateX(120%); opacity: 0; }
+}
+
+/* --- Drag handle styling --- */
+.handle {
+  cursor: grab;
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  width: 24px;
+  height: 32px;
+  opacity: 0.45;
+  transition: opacity 0.2s ease;
+}
+.handle:hover { opacity: 0.9; }
+.handle::before {
+  content: "⋮⋮";
+  font-size: 16px;
+  line-height: 1;
+  color: var(--muted);
+}
+
+/* --- Right-end alignment: keep star + handle tidy --- */
+.row .right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 64px;
+}
+
+/* Mobile consistency */
+@media (max-width: 560px) {
+  .row .right {
+    justify-content: flex-end;
+    min-width: 72px;
+  }
+  .star, .handle {
+    width: 28px;
+    height: 28px;
+  }
 }
 
 </style>
@@ -1067,14 +1110,16 @@ function favHTML(t) {
 }
 
 function badgeHTML(t) {
-  const p = [favHTML(t)];
+  const parts = [];
+  parts.push(favHTML(t)); // star first
+  parts.push('<span class="handle" title="Drag to reorder"></span>');
   if (state.showFormats) {
-    p.push(`<a class="pill" href="${t.src}" download>MP3</a>`);
-    p.push(`<a class="pill" href="${BASE_WAV + encodeURIComponent(t.base + '.wav')}" download>WAV</a>`);
-    if (t.video) p.push(`<a class="pill" href="${t.video}" target="_blank">MOV</a>`);
-    if (state.extras[t.baseLower]) p.push(`<button class="pill gem" data-gem="${t.baseLower}">💎</button>`);
+    parts.push(`<a class="pill" href="${t.src}" download>MP3</a>`);
+    parts.push(`<a class="pill" href="${BASE_WAV + encodeURIComponent(t.base + '.wav')}" download>WAV</a>`);
+    if (t.video) parts.push(`<a class="pill" href="${t.video}" target="_blank">MOV</a>`);
+    if (state.extras[t.baseLower]) parts.push(`<button class="pill gem" data-gem="${t.baseLower}">💎</button>`);
   }
-  return `<div class="badge">${p.join('')}</div>`;
+  return `<div class="badge">${parts.join('')}</div>`;
 }
 
 function rowHTML(t) {
@@ -1407,25 +1452,28 @@ window.addEventListener('beforeunload', () => {
   }
 });
 </script>
+
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.3/Sortable.min.js"></script>
 <script>
 document.addEventListener("DOMContentLoaded", () => {
   const list = document.getElementById('list');
   if (!list) return;
 
+  /* ---------- SortableJS (drag to reorder via handle only) ---------- */
   new Sortable(list, {
     animation: 180,
-    handle: '.row',            // entire row draggable
+    handle: '.handle',          // ⬅ only the handle is draggable
     ghostClass: 'drag-ghost',
+    delay: 120,                 // small delay prevents scroll misfires
+    delayOnTouchOnly: true,
     onEnd: (evt) => {
-      // update internal order (state.filtered) to reflect new drag position
       const newOrder = [...list.querySelectorAll('.row')].map(el => Number(el.dataset.id));
 
-      // reorder state.filtered based on the new visual order
+      // reorder state.filtered based on visual order
       const lookup = new Map(state.filtered.map(t => [t.id, t]));
       state.filtered = newOrder.map(id => lookup.get(id)).filter(Boolean);
 
-      // optional: persist favorites playlist order
+      // persist order if in favorites view
       if (state.viewMode === 'favorites') {
         const favIds = state.filtered.map(t => t.name);
         localStorage.setItem('vvip25:favOrder', JSON.stringify(favIds));
@@ -1434,57 +1482,66 @@ document.addEventListener("DOMContentLoaded", () => {
       console.log('✅ New order applied:', newOrder);
     }
   });
-});
 
-/* ---------- Swipe gestures on mobile ---------- */
-state.hiddenIds = new Set();
+  /* ---------- Swipe gestures on mobile ---------- */
+  state.hiddenIds = new Set();
 
-let touchStartX = 0;
-let touchEndX   = 0;
-const SWIPE_THRESHOLD = 60;
+  let touchStartX = 0;
+  let touchEndX   = 0;
+  const SWIPE_THRESHOLD = 60;
 
-function handleGesture(row) {
-  const id = Number(row.dataset.id);
-  const track = state.filtered.find(t => t.id === id);
-  if (!track) return;
+  function handleGesture(row) {
+    const id = Number(row.dataset.id);
+    const track = state.filtered.find(t => t.id === id);
+    if (!track) return;
+    const dx = touchEndX - touchStartX;
 
-  const dx = touchEndX - touchStartX;
-
-  if (dx > SWIPE_THRESHOLD) {
-    // 👉 Swipe Right → Add to favorites
-    if (!state.favorites.has(track.name)) {
-      state.favorites.add(track.name);
-      localStorage.setItem('vvip25:favs', JSON.stringify([...state.favorites]));
+    if (dx > SWIPE_THRESHOLD) {
+      // 👉 Swipe Right → Add to favorites
+      if (!state.favorites.has(track.name)) {
+        state.favorites.add(track.name);
+        localStorage.setItem('vvip25:favs', JSON.stringify([...state.favorites]));
+      }
+      row.classList.add('swiped-right');
+      row.addEventListener('transitionend', () => row.remove(), { once: true });
+    } else if (dx < -SWIPE_THRESHOLD) {
+      // 👈 Swipe Left → Hide until refresh
+      state.hiddenIds.add(id);
+      row.classList.add('swiped-left');
+      row.addEventListener('transitionend', () => row.remove(), { once: true });
     }
-    row.classList.add('swiped-right');
-  } else if (dx < -SWIPE_THRESHOLD) {
-    // 👈 Swipe Left → Hide until refresh
-    state.hiddenIds.add(id);
-    row.classList.add('swiped-left');
-    setTimeout(() => row.remove(), 250);
   }
-}
 
-document.addEventListener('touchstart', e => {
-  const row = e.target.closest('.row');
-  if (!row) return;
-  touchStartX = e.changedTouches[0].screenX;
-}, { passive: true });
+  document.addEventListener('touchstart', e => {
+    const row = e.target.closest('.row');
+    if (!row) return;
+    touchStartX = e.changedTouches[0].screenX;
+  }, { passive: true });
 
-document.addEventListener('touchend', e => {
-  const row = e.target.closest('.row');
-  if (!row) return;
-  touchEndX = e.changedTouches[0].screenX;
-  handleGesture(row);
-}, { passive: true });
+  document.addEventListener('touchend', e => {
+    const row = e.target.closest('.row');
+    if (!row) return;
+    touchEndX = e.changedTouches[0].screenX;
+    handleGesture(row);
+  }, { passive: true });
 
-/* Filter out hidden tracks when rendering */
-const _origRenderList = renderList;
-renderList = function() {
-  const filtered = state.filtered.filter(t => !state.hiddenIds.has(t.id));
-  els.list.innerHTML = filtered.slice(0, state.renderCount).map(rowHTML).join('');
-};
+  /* ---------- Refresh button logic (clears hidden tracks) ---------- */
+  const refreshBtn = document.querySelector('.btn.icon[title="Refresh list"]');
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', () => {
+      state.hiddenIds = new Set();
+      applyFilterSort(true);
+    });
+  }
 
+  /* ---------- Override renderList to skip hidden tracks ---------- */
+  const _origRenderList = renderList;
+  renderList = function() {
+    const filtered = state.filtered.filter(t => !state.hiddenIds.has(t.id));
+    els.list.innerHTML = filtered.slice(0, state.renderCount).map(rowHTML).join('');
+  };
+});
 </script>
+
 </body>
 </html>
