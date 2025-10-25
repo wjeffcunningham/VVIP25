@@ -22,7 +22,7 @@
     "tags": ["#tee", "#apparel"]
   },
   {
-    "title": "The VVIP Tote (1.0 Edition)",
+    "title": "The VVIP Tote {1.0 Ed.}",
     "image": "/shoppe/tote.jpg",
     "description": "Art by SF Cook. High contrast = easier for babies to discern.",
     "price": 20,
@@ -57,7 +57,7 @@
   {
     "title": "Cassette — VirtualVIP Unlimited",
     "image": "/shoppe/unlimited.jpg",
-    "description": "Gary++. Edition of 10. Glossy cover. Hand-dubbed. Includes download code.",
+    "description": "Gary++. Edition of 10. Glossy cover. Hand-cut. Hand-dubbed. Includes download code.",
     "price": 89,
     "currency": "CAD",
     "bandcamp_url": "https://vvip.bandcamp.com/album/unlimited",
