@@ -1,13 +1,13 @@
 [
   {
-    "title": "VVIP+ — Black on Black (Lifetime Guarantee... You stain, we fix.)",
+    "title": "VVIP+ T",
     "image": "./vvipblack.jpg",
     "description": "Heavyweight cotton tee with front logo.",
     "price": 100,
     "currency": "CAD",
     "bandcamp_url": null,
     "fb_marketplace": null,
-    "available": true,
+    "available": false,
     "tags": ["#tee", "#apparel"]
   },
   {
@@ -18,7 +18,7 @@
     "currency": "CAD",
     "bandcamp_url": null,
     "fb_marketplace": null,
-    "available": true,
+    "available": false,
     "tags": ["#tee", "#apparel"]
   },
   {
@@ -29,7 +29,7 @@
     "currency": "CAD",
     "bandcamp_url": null,
     "fb_marketplace": null,
-    "available": true,
+    "available": false,
     "tags": ["#bag", "#print"]
   },
   {
@@ -40,7 +40,7 @@
     "currency": "CAD",
     "bandcamp_url": null,
     "fb_marketplace": null,
-    "available": true,
+    "available": false,
     "tags": ["#poster", "#print"]
   },
   {
@@ -58,7 +58,7 @@
     "title": "Cassette — VirtualVIP Unlimited",
     "image": "./unlimited.jpg",
     "description": "Gary++. Edition of 10. Glossy cover. Hand-cut. Hand-dubbed. Clamshell case. Includes download code.",
-    "price": 89,
+    "price": 100,
     "currency": "CAD",
     "bandcamp_url": "https://vvip.bandcamp.com/album/unlimited",
     "fb_marketplace": null,
@@ -69,7 +69,7 @@
     "title": "LP — IJPAUC?",
     "image": "./IJPAUCthumb.jpg",
     "description": "Is JP (1993) An Unconscious Confession? Edition of 10. Includes download code.",
-    "price": 200,
+    "price": 2000000,
     "currency": "USD",
     "bandcamp_url": "https://www.youtube.com/watch?v=JFxc9OQlFMU",
     "fb_marketplace": null,
@@ -129,6 +129,72 @@
     "bandcamp_url": "https://virtualvip.bandcamp.com/album/access",
     "fb_marketplace": null,
     "available": false,
+    "tags": ["#lp", "#audio"]
+  },
+  {
+    "title": "ARCADE WATER",
+    "image": "./arcadewater.jpg",
+    "description": "Digital download.",
+    "price": 5,
+    "currency": "CAD",
+    "bandcamp_url": "https://virtualvip.bandcamp.com/album/arcade-water",
+    "fb_marketplace": null,
+    "available": true,
+    "tags": ["#audio"]
+  },
+  {
+    "title": "Renders of Music for Video",
+    "image": "./renders.jpg",
+    "description": "Digital download.",
+    "price": 5,
+    "currency": "CAD",
+    "bandcamp_url": "https://virtualvip.bandcamp.com/album/renders-of-music-for-video",
+    "fb_marketplace": null,
+    "available": false,
+    "tags": ["#lp", "#audio"]
+  },
+  {
+    "title": "SUMMER 25",
+    "image": "./summer25.jpg",
+    "description": "Digital download.",
+    "price": 5,
+    "currency": "CAD",
+    "bandcamp_url": "https://virtualvip.bandcamp.com/album/summer-25",
+    "fb_marketplace": null,
+    "available": true,
+    "tags": ["#lp", "#audio"]
+  },
+  {
+    "title": "/Another// Green World",
+    "image": "./greenworld.jpg",
+    "description": "Digital download.",
+    "price": 5,
+    "currency": "CAD",
+    "bandcamp_url": "https://virtualvip.bandcamp.com/album/another-green-world",
+    "fb_marketplace": null,
+    "available": true,
+    "tags": ["#lp", "#audio"]
+  },
+  {
+    "title": "ACCESS",
+    "image": "./access.jpg",
+    "description": "Digital download.",
+    "price": 5,
+    "currency": "CAD",
+    "bandcamp_url": "https://virtualvip.bandcamp.com/album/access",
+    "fb_marketplace": null,
+    "available": true,
+    "tags": ["#lp", "#audio"]
+  },
+  {
+    "title": "Sonic Radio",
+    "image": "./radio.jpg",
+    "description": "Edition of 5. Includes download code.",
+    "price": 5,
+    "currency": "CAD",
+    "bandcamp_url": "https://virtualvip.bandcamp.com/album/sonicradio",
+    "fb_marketplace": null,
+    "available": true,
     "tags": ["#lp", "#audio"]
   }
 ]

@@ -628,29 +628,6 @@
   .badge .pill.gem {
     font-size:15px !important;
   }
-
-  .row .right {
-    display:flex;
-    justify-content:center;
-    align-items:center;
-
-    .row {
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-}
-.row .right {
-  display:flex;
-  justify-content:flex-end;
-  align-items:center;
-  gap:8px;
-  min-width:64px;
-}
-.row .star {
-  margin-left:auto;
-  flex-shrink:0;
-}
-  }
 }
 
 /* --- Desktop layout: left-aligned, large cover, shimmer title --- */
@@ -708,9 +685,11 @@
   animation: swipeLeft 0.25s forwards;
   background: rgba(255,0,0,0.1);
 }
+/* RIGHT swipe = quick flash only (no collapse) */
 .row.swiped-right {
-  animation: swipeRight 0.25s forwards;
-  background: rgba(0,255,120,0.1);
+  animation: swipeRight 0.25s;
+  background: rgba(110,231,183,0.15);
+}
 }
 @keyframes swipeLeft {
   to { transform: translateX(-120%); opacity: 0; }
@@ -894,6 +873,14 @@
   }
 }
 
+  /* Keep the overall layout consistent with header text baseline */
+  #site-title {
+    display: block;
+    text-align: left;
+    margin-left: 16px; /* aligns visual anchor */
+  }
+}
+
 </style>
 </head>
 <body>
@@ -996,23 +983,14 @@ const state={
   searchQuery:'',viewMode:'all',
   extras:{},showFormats:false,showWavButtons:false,showMovButtons:false
 };
-
-state.tracks.forEach(t => {
-  const k = t.base.toLowerCase();
-  if (lookup.has(k)) {
-    const fullTitle = lookup.get(k) || t.title;
-    const [main, alt] = fullTitle.split('//').map(s => s.trim());
-    t.title = main;
-    if (alt) t.altTitle = alt; // optional field for later
-  }
-});
-
 /* ---------- Titles ---------- */
 async function fetchTitles() {
   try {
     const r = await fetch('https://vvipmedia.net/titles.json', { cache: 'no-store' });
     if (!r.ok) throw new Error(`titles.json ${r.status}`);
 
+   // --- Load manifest safely ---
+const res = await fetch('https://vvipmedia.net/manifest.json?v=' + ASSET_VERSION, { cache: 'no-store' });
     const raw = await r.json();
     const json = (raw && typeof raw === 'object' && !Array.isArray(raw))
       ? (raw.titles || raw.data || raw)
@@ -1024,17 +1002,6 @@ async function fetchTitles() {
       const key = stripExt(k).toLowerCase();
       lookup.set(key, v.title || v || '');
     }
-
-    // apply to tracks, respecting "A//B" alternate title rule
-    state.tracks.forEach(t => {
-      const k = t.base.toLowerCase();
-      if (lookup.has(k)) {
-        const fullTitle = lookup.get(k) || t.title;
-        const [main, alt] = fullTitle.split('//').map(s => s.trim());
-        t.title = main || t.title;
-        if (alt) t.altTitle = alt; // optional field for later display
-      }
-    });
 
     console.log('Titles loaded:', lookup.size);
   } catch (err) {
@@ -1075,7 +1042,7 @@ async function init() {
     });
 
     // --- Load manifest safely ---
-    const res = await fetch(`/manifest.json?v=${ASSET_VERSION}`, { cache: 'no-store' });
+const res = await fetch('https://vvipmedia.net/manifest.json', { cache: 'no-store' });
     if (!res.ok) throw new Error(`manifest.json not found (${res.status})`);
     const raw = await res.text();
 
@@ -1639,62 +1606,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-/* ---------- Swipe gestures on mobile ---------- */
-state.hiddenIds = new Set();
-let touchStartX = 0;
-let touchEndX   = 0;
-const SWIPE_THRESHOLD = 60;
-
-function collapseRow(row) {
-  // Force reflow before applying collapse class to trigger transition
-  row.getBoundingClientRect();
-  row.style.transition = 'transform 0.35s ease, opacity 0.35s ease, height 0.35s ease, margin 0.35s ease, padding 0.35s ease';
-  row.style.height = row.offsetHeight + 'px'; // lock height
-  requestAnimationFrame(() => {
-    row.style.height = '0px';
-    row.style.opacity = '0';
-    row.style.margin = '0';
-    row.style.padding = '0';
-  });
-  row.addEventListener('transitionend', () => row.remove(), { once: true });
-}
-
-function handleGesture(row) {
-  const id = Number(row.dataset.id);
-  const track = state.filtered.find(t => t.id === id);
-  if (!track) return;
-
-  const dx = touchEndX - touchStartX;
-
-  if (dx > SWIPE_THRESHOLD) {
-    // 👉 Swipe Right → Favorite
-    if (!state.favorites.has(track.name)) {
-      state.favorites.add(track.name);
-      localStorage.setItem('vvip25:favs', JSON.stringify([...state.favorites]));
-    }
-    row.classList.add('swiped-right');
-    collapseRow(row);
-  } else if (dx < -SWIPE_THRESHOLD) {
-    // 👈 Swipe Left → Remove (hide)
-    state.hiddenIds.add(id);
-    row.classList.add('swiped-left');
-    collapseRow(row);
-  }
-}
-
-document.addEventListener('touchstart', e => {
-  const row = e.target.closest('.row');
-  if (!row) return;
-  touchStartX = e.changedTouches[0].screenX;
-}, { passive: true });
-
-document.addEventListener('touchend', e => {
-  const row = e.target.closest('.row');
-  if (!row) return;
-  touchEndX = e.changedTouches[0].screenX;
-  handleGesture(row);
-}, { passive: true });
-
   /* ---------- Refresh button logic (clears hidden tracks) ---------- */
   const refreshBtn = document.querySelector('.btn.icon[title="Refresh list"]');
   if (refreshBtn) {
@@ -1704,12 +1615,7 @@ document.addEventListener('touchend', e => {
     });
   }
 
-  /* ---------- Override renderList to skip hidden tracks ---------- */
-  const _origRenderList = renderList;
-  renderList = function() {
-    const filtered = state.filtered.filter(t => !state.hiddenIds.has(t.id));
-    els.list.innerHTML = filtered.slice(0, state.renderCount).map(rowHTML).join('');
-  };
+
 });
 </script>
 
@@ -1736,27 +1642,6 @@ if (audioEl) {
     }
   });
 }
-
-// 3️⃣ CSS fixes for star and mobile title alignment
-const styleFix = document.createElement('style');
-styleFix.textContent = `
-@media (max-width: 560px) {
-  .row {
-    position: relative;
-  }
-  .row .star {
-    position: absolute !important;
-    right: 14px;
-    top: 50%;
-    transform: translateY(-50%);
-  }
-  .row .middle .title {
-    text-align: left !important;
-    margin-left: 4px;
-  }
-}
-`;
-document.head.appendChild(styleFix);
 </script>
 
 <script>
@@ -1786,15 +1671,17 @@ function handleSwipe(row) {
   if (!track) return;
 
   if (dx > SWIPE_THRESHOLD) {
-    // 👉 SWIPE RIGHT → toggle favourite
+    // 👉 SWIPE RIGHT → toggle favourite (DO NOT REMOVE)
     const wasFav = state.favorites.has(track.name);
     if (wasFav) state.favorites.delete(track.name);
     else state.favorites.add(track.name);
     localStorage.setItem('vvip25:favs', JSON.stringify([...state.favorites]));
     const star = row.querySelector('.star');
     if (star) star.classList.toggle('on', !wasFav);
-    row.classList.add('swiped-right');
-  } else if (dx < -SWIPE_THRESHOLD) {
+    row.classList.add('swiped-right'); // mild flash only
+    setTimeout(() => row.classList.remove('swiped-right'), 250);
+  } 
+  else if (dx < -SWIPE_THRESHOLD) {
     // 👈 SWIPE LEFT → remove from visible list
     state.hiddenIds.add(id);
     row.classList.add('swiped-left');
