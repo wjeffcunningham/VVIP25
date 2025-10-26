@@ -983,29 +983,41 @@ const state={
   searchQuery:'',viewMode:'all',
   extras:{},showFormats:false,showWavButtons:false,showMovButtons:false
 };
+
 /* ---------- Titles ---------- */
 async function fetchTitles() {
   try {
     const r = await fetch('https://vvipmedia.net/titles.json', { cache: 'no-store' });
     if (!r.ok) throw new Error(`titles.json ${r.status}`);
 
-   // --- Load manifest safely ---
-const res = await fetch('https://vvipmedia.net/manifest.json?v=' + ASSET_VERSION, { cache: 'no-store' });
-    const raw = await r.json();
-    const json = (raw && typeof raw === 'object' && !Array.isArray(raw))
-      ? (raw.titles || raw.data || raw)
-      : raw;
+    let raw = await r.text();
+    raw = raw.trim().replace(/^\uFEFF/, ''); // strip BOM if present
+    if (raw.startsWith('<')) throw new Error('HTML returned instead of JSON');
 
-    // build a lowercase lookup
+    const json = JSON.parse(raw);
     const lookup = new Map();
+
     for (const [k, v] of Object.entries(json || {})) {
       const key = stripExt(k).toLowerCase();
-      lookup.set(key, v.title || v || '');
+      lookup.set(key, typeof v === 'string' ? v : v.title || '');
     }
+
+    // ✅ store titles globally so later functions can use them
+    state.titles = lookup;
 
     console.log('Titles loaded:', lookup.size);
   } catch (err) {
     console.warn('Titles fetch failed:', err);
+  }
+}
+
+function applyTitlesToTracks() {
+  if (!state.titles) return;
+  for (const t of state.tracks) {
+    const nice = state.titles.get(t.baseLower);
+    if (nice && nice.trim()) {
+      t.title = nice.trim();
+    }
   }
 }
 
@@ -1080,36 +1092,28 @@ const res = await fetch('https://vvipmedia.net/manifest.json', { cache: 'no-stor
       };
     });
 
+await fetchThumbs();
+computeThumbCascade();
     console.log(`Loaded ${state.tracks.length} tracks`);
 
-    // --- Supplementary data ---
-    if (typeof fetchTitles === 'function') {
-      await fetchTitles().catch(err => console.warn('Titles fetch failed:', err));
-    } else {
-      console.warn('fetchTitles() not defined — skipping title loading.');
-    }
+await fetchTitles();
+applyTitlesToTracks();
 
-    await fetchThumbs().catch(err => console.warn('Thumbs fetch failed:', err));
+// ✅ Build list first
+applyFilterSort(true);
 
-    // --- Thumbnails + render ---
-    computeThumbCascade();
-    setView('all');
-    preselectPreferred(PREFERRED_TITLE);
+// ✅ THEN preselect your preferred track
+preselectPreferred(PREFERRED_TITLE.toLowerCase());
+updateNowbar();
 
-    console.log('Init completed successfully.');
+console.log('Init completed successfully.');
+
   } catch (err) {
     console.error('Init failed:', err);
-    const list = document.getElementById('list');
-    if (list) {
-      list.innerHTML = `
-        <div class="row">
-          <div style="color:#f88;padding:12px;">
-            Load error: ${err.message || err}
-          </div>
-        </div>`;
-    }
   }
-}
+} // ← this closes init()
+
+
 /* ---------- View / Filter / Favs ---------- */
 function buildFavBar(){
   const wrap=document.querySelector('main .wrap');
@@ -1262,7 +1266,9 @@ function renderList() {
 /* ---------- Player Core ---------- */
 function preselectPreferred(x){
   if(!x||!state.filtered.length) return;
-  const idx = state.filtered.findIndex(t => t.title.toLowerCase().includes(x));
+  const idx = state.filtered.findIndex(
+    t => (t.title || '').toLowerCase().includes(x)
+  );
   if(idx >= 0) select(idx);
 }
 
@@ -1277,16 +1283,14 @@ function updateNowbar(){
   const t = state.filtered[state.i];
   if(!t) return;
 
-  // desktop title
   els.nowTitle.textContent = t.title;
+  els.nowSub.textContent = [bpmLabel(t), fmtDur(t.length || 0)].filter(Boolean).join(' · ');
 
-  // sub info line
-  els.nowSub.textContent = [bpmLabel(t), fmtDur(t.length || 0)].join(' · ');
-
-  // cover image
+  // cover image + data-title for mobile overlay
   els.cover.innerHTML = imgHTML(getResolvedThumb(t), true);
+  els.cover.setAttribute('data-title', t.title || '');
 
-  // ✅ also update mobile overlay title
+  // mobile small title element (if present)
   els.nowTitleMobile = document.getElementById('now-title-mobile');
   if (els.nowTitleMobile) els.nowTitleMobile.textContent = t.title;
 }
