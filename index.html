@@ -857,6 +857,43 @@
   .cover::after { content:none !important; }
 }
 
+/* === FINAL MOBILE ALIGNMENT FIX (Title + Star/Handle order) === */
+@media (max-width:560px){
+  /* 1️⃣ Align track titles with VVIP25 header */
+  .list .row .middle .title {
+    text-align: left;
+    margin-left: 16px; /* matches .wrap horizontal padding */
+  }
+
+  /* 2️⃣ Re-order right-side controls so handle is farthest right */
+  .list .row .right {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    flex-direction: row;
+    gap: 6px;
+    min-width: 80px; /* gives enough room for both icons */
+  }
+
+  .list .row .right .star {
+    order: 1;          /* star first (left) */
+  }
+  .list .row .right .handle {
+    order: 2;          /* handle last (rightmost) */
+    margin-left: 4px;  /* slight spacing from star */
+  }
+
+  /* 3️⃣ Make sure both buttons look balanced */
+  .list .row .right .star,
+  .list .row .right .handle {
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
 </style>
 </head>
 <body>
