@@ -1700,32 +1700,6 @@ if (audioEl) {
   });
 }
 
-// 2️⃣ Swipe-to-favourite toggle refinement
-function handleGesture(row) {
-  const id = Number(row.dataset.id);
-  const track = state.filtered.find(t => t.id === id);
-  if (!track) return;
-
-  const dx = touchEndX - touchStartX;
-
-  if (dx > SWIPE_THRESHOLD) {
-    // 👉 Right swipe: toggle favourite
-    const wasFav = state.favorites.has(track.name);
-    if (wasFav) state.favorites.delete(track.name);
-    else state.favorites.add(track.name);
-    localStorage.setItem('vvip25:favs', JSON.stringify([...state.favorites]));
-    const star = row.querySelector('.star');
-    if (star) star.classList.toggle('on', !wasFav);
-    row.classList.add('swiped-right');
-    collapseRow(row);
-  } else if (dx < -SWIPE_THRESHOLD) {
-    // 👈 Left swipe: remove
-    state.hiddenIds.add(id);
-    row.classList.add('swiped-left');
-    collapseRow(row);
-  }
-}
-
 // 3️⃣ CSS fixes for star and mobile title alignment
 const styleFix = document.createElement('style');
 styleFix.textContent = `
@@ -1747,6 +1721,69 @@ styleFix.textContent = `
 `;
 document.head.appendChild(styleFix);
 </script>
+
+<script>
+
+/* ---------- Swipe gestures on mobile (fixed) ---------- */
+state.hiddenIds = new Set();
+let touchStartX = 0;
+let touchEndX = 0;
+const SWIPE_THRESHOLD = 60;
+
+function collapseRow(row) {
+  row.style.transition = 'transform 0.35s ease, opacity 0.35s ease, height 0.35s ease, margin 0.35s ease, padding 0.35s ease';
+  row.style.height = row.offsetHeight + 'px';
+  requestAnimationFrame(() => {
+    row.style.height = '0px';
+    row.style.opacity = '0';
+    row.style.margin = '0';
+    row.style.padding = '0';
+  });
+  row.addEventListener('transitionend', () => row.remove(), { once: true });
+}
+
+function handleSwipe(row) {
+  const dx = touchEndX - touchStartX;
+  const id = Number(row.dataset.id);
+  const track = state.filtered.find(t => t.id === id);
+  if (!track) return;
+
+  if (dx > SWIPE_THRESHOLD) {
+    // 👉 SWIPE RIGHT → toggle favourite
+    const wasFav = state.favorites.has(track.name);
+    if (wasFav) state.favorites.delete(track.name);
+    else state.favorites.add(track.name);
+    localStorage.setItem('vvip25:favs', JSON.stringify([...state.favorites]));
+    const star = row.querySelector('.star');
+    if (star) star.classList.toggle('on', !wasFav);
+    row.classList.add('swiped-right');
+  } else if (dx < -SWIPE_THRESHOLD) {
+    // 👈 SWIPE LEFT → remove from visible list
+    state.hiddenIds.add(id);
+    row.classList.add('swiped-left');
+    collapseRow(row);
+  }
+}
+
+document.addEventListener('touchstart', e => {
+  const row = e.target.closest('.row');
+  if (!row) return;
+  touchStartX = e.changedTouches[0].screenX;
+}, { passive: true });
+
+document.addEventListener('touchend', e => {
+  const row = e.target.closest('.row');
+  if (!row) return;
+  touchEndX = e.changedTouches[0].screenX;
+  handleSwipe(row);
+}, { passive: true });
+
+/* Override renderList so hidden tracks stay gone until refresh */
+const _origRenderList = renderList;
+renderList = function() {
+  const filtered = state.filtered.filter(t => !state.hiddenIds.has(t.id));
+  els.list.innerHTML = filtered.slice(0, state.renderCount).map(rowHTML).join('');
+};</script>
 
 </body>
 </html>
