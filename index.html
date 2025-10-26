@@ -1676,5 +1676,77 @@ document.addEventListener('touchend', e => {
 });
 </script>
 
+<script>
+// === CONTINUOUS PLAYBACK & ALIGNMENT PATCH (VVIP25) ===
+
+// 1️⃣ Continuous playback
+const audioEl = document.getElementById('audio');
+if (audioEl) {
+  audioEl.addEventListener('ended', () => {
+    // find next visible track after current
+    const visible = [...document.querySelectorAll('.row')];
+    const current = visible.findIndex(r => Number(r.dataset.id) === state.filtered[state.i]?.id);
+    if (current >= 0 && current < visible.length - 1) {
+      const nextRow = visible[current + 1];
+      const nextId = Number(nextRow.dataset.id);
+      const nextIdx = state.filtered.findIndex(t => t.id === nextId);
+      if (nextIdx >= 0) {
+        select(nextIdx);
+        play();
+      }
+    } else {
+      pause();
+    }
+  });
+}
+
+// 2️⃣ Swipe-to-favourite toggle refinement
+function handleGesture(row) {
+  const id = Number(row.dataset.id);
+  const track = state.filtered.find(t => t.id === id);
+  if (!track) return;
+
+  const dx = touchEndX - touchStartX;
+
+  if (dx > SWIPE_THRESHOLD) {
+    // 👉 Right swipe: toggle favourite
+    const wasFav = state.favorites.has(track.name);
+    if (wasFav) state.favorites.delete(track.name);
+    else state.favorites.add(track.name);
+    localStorage.setItem('vvip25:favs', JSON.stringify([...state.favorites]));
+    const star = row.querySelector('.star');
+    if (star) star.classList.toggle('on', !wasFav);
+    row.classList.add('swiped-right');
+    collapseRow(row);
+  } else if (dx < -SWIPE_THRESHOLD) {
+    // 👈 Left swipe: remove
+    state.hiddenIds.add(id);
+    row.classList.add('swiped-left');
+    collapseRow(row);
+  }
+}
+
+// 3️⃣ CSS fixes for star and mobile title alignment
+const styleFix = document.createElement('style');
+styleFix.textContent = `
+@media (max-width: 560px) {
+  .row {
+    position: relative;
+  }
+  .row .star {
+    position: absolute !important;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+  .row .middle .title {
+    text-align: left !important;
+    margin-left: 4px;
+  }
+}
+`;
+document.head.appendChild(styleFix);
+</script>
+
 </body>
 </html>
