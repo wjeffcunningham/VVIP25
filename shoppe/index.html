@@ -124,6 +124,33 @@
       letter-spacing:.04em;
       font-size:15px;
     }
+
+/* --- Collapsed / minimized state for sold-out items --- */
+.shop-item.soldout {
+  max-height: 72px;
+  overflow: hidden;
+  cursor: pointer;
+  opacity: 0.55;
+  transition: all 0.3s ease;
+  position: relative;
+}
+.shop-item.soldout::after {
+  content: "Sold Out — tap to expand";
+  position: absolute;
+  bottom: 8px;
+  left: 0; right: 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted);
+}
+.shop-item.soldout.open {
+  max-height: 800px; /* expands to full */
+  opacity: 1;
+}
+.shop-item.soldout.open::after {
+  content: "";
+}
+    
   </style>
 
 <script>
