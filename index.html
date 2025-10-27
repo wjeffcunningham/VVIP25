@@ -680,7 +680,6 @@
   transform: scale(1.02);
 }
 
-/* Swipe feedback */
 .row.swiped-left {
   animation: swipeLeft 0.25s forwards;
   background: rgba(255,0,0,0.1);
@@ -690,12 +689,9 @@
   animation: swipeRight 0.25s;
   background: rgba(110,231,183,0.15);
 }
-}
+
 @keyframes swipeLeft {
   to { transform: translateX(-120%); opacity: 0; }
-}
-@keyframes swipeRight {
-  to { transform: translateX(120%); opacity: 0; }
 }
 
 /* --- Drag handle styling (final, mobile + desktop consistent) --- */
@@ -743,58 +739,6 @@
   min-width: 64px;
 }
 
-/* Mobile consistency */
-@media (max-width: 560px) {
-  .row .right {
-    justify-content: flex-end;
-    min-width: 72px;
-  }
-  .star, .handle {
-    width: 28px;
-    height: 28px;
-  }
-}
-
-/* === FINAL MOBILE + DESKTOP ALIGNMENT === */
-.row .right {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  min-width: 68px;
-  flex-shrink: 0;
-}
-
-.star, .handle {
-  flex-shrink: 0;
-  width: 28px;
-  height: 28px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.handle {
-  cursor: grab;
-  flex-direction: column;
-  opacity: 0.45;
-  transition: opacity 0.2s ease;
-}
-.handle:hover { opacity: 0.9; }
-.handle::before {
-  content: "⋮⋮";
-  font-size: 14px;
-  line-height: 1;
-  color: var(--muted);
-}
-
-@media (min-width: 561px) {
-  .star, .handle {
-    width: 32px;
-    height: 32px;
-  }
-}
-
 /* --- Swipe + Collapse Animation --- */
 .row.swiped-left,
 .row.swiped-right {
@@ -836,49 +780,53 @@
   .cover::after { content:none !important; }
 }
 
-/* === FINAL MOBILE ALIGNMENT FIX (Title + Star/Handle order) === */
+/* === PATCH: Mobile star/handle alignment & title shimmer === */
 @media (max-width:560px){
-  /* 1️⃣ Align track titles with VVIP25 header */
-  .list .row .middle .title {
-    text-align: left;
-    margin-left: 16px; /* matches .wrap horizontal padding */
+
+  /* Star + handle flush to right, in that order */
+  .row .right{
+    display:flex;
+    justify-content:flex-end;
+    align-items:center;
+    flex-direction:row;
+    gap:6px;
+    min-width:80px;
+    padding-right:6px;
+  }
+  .row .right .star{order:1;}
+  .row .right .handle{order:2;margin-left:2px;}
+
+  /* Gradient shimmer on title when playing (mobile only) */
+  .row.playing .title{
+    background:linear-gradient(90deg,var(--accent),#fdf6d0,var(--accent));
+    background-size:300% 100%;
+    -webkit-background-clip:text;
+    -webkit-text-fill-color:transparent;
+    animation:mobileTitleShimmer 4s linear infinite;
   }
 
-  /* 2️⃣ Re-order right-side controls so handle is farthest right */
-  .list .row .right {
-    display: flex;
-    justify-content: flex-end;
-    align-items: center;
-    flex-direction: row;
-    gap: 6px;
-    min-width: 80px; /* gives enough room for both icons */
-  }
-
-  .list .row .right .star {
-    order: 1;          /* star first (left) */
-  }
-  .list .row .right .handle {
-    order: 2;          /* handle last (rightmost) */
-    margin-left: 4px;  /* slight spacing from star */
-  }
-
-  /* 3️⃣ Make sure both buttons look balanced */
-  .list .row .right .star,
-  .list .row .right .handle {
-    width: 28px;
-    height: 28px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
+  @keyframes mobileTitleShimmer{
+    0%{background-position:0% 50%;}
+    100%{background-position:-300% 50%;}
   }
 }
 
-  /* Keep the overall layout consistent with header text baseline */
-  #site-title {
-    display: block;
-    text-align: left;
-    margin-left: 16px; /* aligns visual anchor */
-  }
+/* === PATCH: Make all thumbs and main cover square === */
+.cover,
+.cover img,
+.row img {
+  border-radius: 0 !important;
+  mask-image: none !important;
+  -webkit-mask-image: none !important;
+}
+
+.cover {
+  overflow: hidden; /* keep scaling tidy */
+  background: #000;
+}
+
+.row img {
+  object-fit: cover;
 }
 
 </style>
@@ -1293,6 +1241,10 @@ function updateNowbar(){
   // mobile small title element (if present)
   els.nowTitleMobile = document.getElementById('now-title-mobile');
   if (els.nowTitleMobile) els.nowTitleMobile.textContent = t.title;
+
+  document.querySelectorAll('.row').forEach(r=>r.classList.remove('playing'));
+  const activeRow=document.querySelector(`.row[data-id="${t.id}"]`);
+  if(activeRow) activeRow.classList.add('playing');
 }
 
 function play(){
