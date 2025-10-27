@@ -150,7 +150,7 @@
 .shop-item.soldout.open::after {
   content: "";
 }
-    
+
   </style>
 
 <script>
@@ -315,6 +315,43 @@ window.addEventListener('DOMContentLoaded', () => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();
       })
+
+.then(data => {
+  console.log('✅ Loaded', data.length, 'shop items');
+  grid.innerHTML = data.map(item => {
+    const available = item.available !== false;
+    const soldClass = available ? '' : 'soldout';
+    const buttonHTML = available
+      ? (item.bandcamp_url
+          ? `<a href="${item.bandcamp_url}" class="btn" target="_blank" rel="noopener">View</a>`
+          : item.fb_marketplace
+            ? `<a href="${item.fb_marketplace}" class="btn" target="_blank" rel="noopener">View</a>`
+            : `<span class="btn" style="opacity:.4;pointer-events:none">Unavailable</span>`)
+      : `<span class="btn" style="opacity:.4;pointer-events:none">Sold&nbsp;Out</span>`;
+
+    return `
+      <div class="shop-item ${soldClass}">
+        <img src="${item.image}" alt="${item.title}">
+        <h3>${item.title}</h3>
+        <p class="desc">${item.description}</p>
+        <div class="buy">
+          <span class="price">${item.currency || ''} ${item.price || ''}</span>
+          ${buttonHTML}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  // Add toggle behavior for sold-out items
+  document.querySelectorAll('.shop-item.soldout').forEach(card => {
+    card.addEventListener('click', e => {
+      // Ignore clicks on links/buttons
+      if (e.target.closest('a,button')) return;
+      card.classList.toggle('open');
+    });
+  });
+})
+
       .then(data => {
         console.log('✅ Loaded', data.length, 'shop items');
         grid.innerHTML = data.map(item => `
