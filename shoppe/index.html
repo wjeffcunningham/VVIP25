@@ -125,6 +125,56 @@
       font-size:15px;
     }
   </style>
+
+<script>
+/* --- Mini-Player Bridge (VVIP25 <-> Shoppe) --- */
+window.addEventListener('DOMContentLoaded', () => {
+  try {
+    // Re-hydrate player from VVIP25 localStorage
+    const src   = localStorage.getItem('vvip25_src');
+    const time  = parseFloat(localStorage.getItem('vvip25_time') || 0);
+    const play  = localStorage.getItem('vvip25_playing') === 'true';
+    const title = localStorage.getItem('vvip25_title') || '—';
+    if (!src) return;
+
+    const audio = new Audio(src);
+    audio.currentTime = time;
+    audio.preload = 'auto';
+
+    // Simple floating mini-player
+    const mini = document.createElement('div');
+    mini.id = 'vvip-mini';
+    mini.innerHTML = `
+      <style>
+        #vvip-mini {
+          position:fixed; bottom:14px; right:14px;
+          background:#0b0b0c; color:#fdf6d0;
+          border:1px solid #26272b; border-radius:10px;
+          padding:8px 12px; display:flex; align-items:center;
+          gap:8px; z-index:9999; font-family:-apple-system,Helvetica,Arial,sans-serif;
+          box-shadow:0 4px 16px rgba(0,0,0,.4);
+        }
+        #vvip-mini button{background:none;border:none;color:#fdf6d0;font-size:20px;cursor:pointer}
+        #vvip-mini span{max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+      </style>
+      <button id="vvip-mini-toggle">▶</button>
+      <span>${title}</span>
+    `;
+    document.body.appendChild(mini);
+
+    const btn = mini.querySelector('#vvip-mini-toggle');
+    const updateIcon = () => { btn.textContent = audio.paused ? '▶' : '⏸'; };
+    btn.onclick = () => { audio.paused ? audio.play() : audio.pause(); };
+    audio.addEventListener('play',  updateIcon);
+    audio.addEventListener('pause', updateIcon);
+    updateIcon();
+
+    // Auto-resume if it was playing
+    if (play) audio.play().catch(()=>{});
+  } catch(e){ console.warn('Mini-player load failed', e); }
+});
+</script>
+
 </head>
 <body>
   <main id="page-root" data-page="shoppe">
