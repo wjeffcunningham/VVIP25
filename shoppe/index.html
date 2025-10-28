@@ -150,79 +150,70 @@
 .shop-item.soldout.open::after {
   content: "";
 }
-
-  </style>
+</style>
 
 <script>
-/* --- Mini-Player Bridge (VVIP25 <-> Shoppe) --- */
-window.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+  const grid = document.getElementById('shop-grid');
+
   try {
-    // Re-hydrate player from VVIP25 localStorage
-    const src   = localStorage.getItem('vvip25_src');
-    const time  = parseFloat(localStorage.getItem('vvip25_time') || 0);
-    const play  = localStorage.getItem('vvip25_playing') === 'true';
-    const title = localStorage.getItem('vvip25_title') || '—';
-    if (!src) return;
+    const res = await fetch('https://shoppe.vvipmedia.net/shoppe.json', { cache: 'no-store' });
+    const txt = await res.text();
 
-    const audio = new Audio(src);
-    audio.currentTime = time;
-    audio.preload = 'auto';
+    let data;
+    try {
+      data = JSON.parse(txt);
+      if (!Array.isArray(data)) throw new Error('shoppe.json is not an array');
+      console.log(`✅ Loaded ${data.length} shop items`);
+    } catch (err) {
+      console.error('⚠️ Failed to parse JSON:', err, txt.slice(0, 200));
+      grid.innerHTML = `<p>⚠️ Failed to load items.<br>${err.message}</p>`;
+      return;
+    }
 
-    // Simple floating mini-player
-    const mini = document.createElement('div');
-    mini.id = 'vvip-mini';
-    mini.innerHTML = `
-      <style>
-        #vvip-mini {
-          position:fixed; bottom:14px; right:14px;
-          background:#0b0b0c; color:#fdf6d0;
-          border:1px solid #26272b; border-radius:10px;
-          padding:8px 12px; display:flex; align-items:center;
-          gap:8px; z-index:9999; font-family:-apple-system,Helvetica,Arial,sans-serif;
-          box-shadow:0 4px 16px rgba(0,0,0,.4);
-        }
-        #vvip-mini button{background:none;border:none;color:#fdf6d0;font-size:20px;cursor:pointer}
-        #vvip-mini span{max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-      </style>
-      <button id="vvip-mini-toggle">▶</button>
-      <span>${title}</span>
-    `;
-    document.body.appendChild(mini);
+    if (!data.length) {
+      grid.innerHTML = `<p style="text-align:center;color:var(--muted)">No items found.</p>`;
+      return;
+    }
 
-    const btn = mini.querySelector('#vvip-mini-toggle');
-    const updateIcon = () => { btn.textContent = audio.paused ? '▶' : '⏸'; };
-    btn.onclick = () => { audio.paused ? audio.play() : audio.pause(); };
-    audio.addEventListener('play',  updateIcon);
-    audio.addEventListener('pause', updateIcon);
-    updateIcon();
+    grid.innerHTML = data.map(item => {
+      const available = item.available !== false;
+      const soldClass = available ? '' : 'soldout';
+      const buttonHTML = available
+        ? (item.bandcamp_url
+            ? `<a href="${item.bandcamp_url}" class="btn" target="_blank" rel="noopener">View</a>`
+            : item.fb_marketplace
+              ? `<a href="${item.fb_marketplace}" class="btn" target="_blank" rel="noopener">View</a>`
+              : `<span class="btn" style="opacity:.4;pointer-events:none">Unavailable</span>`)
+        : `<span class="btn" style="opacity:.4;pointer-events:none">Sold&nbsp;Out</span>`;
 
-    // Auto-resume if it was playing
-    if (play) audio.play().catch(()=>{});
-  } catch(e){ console.warn('Mini-player load failed', e); }
-});
-</script>
+      return `
+        <div class="shop-item ${soldClass}">
+          <img src="${item.image}" alt="${item.title}">
+          <h3>${item.title}</h3>
+          <p class="desc">${item.description}</p>
+          <div class="buy">
+            <span class="price">${item.currency || ''} ${item.price || ''}</span>
+            ${buttonHTML}
+          </div>
+        </div>
+      `;
+    }).join('');
 
-</head>
-<body>
-  <main id="page-root" data-page="shoppe">
-    <div class="wrap">
-      <h1 id="site-title">VVIP SHOPPE</h1>
-      <a href="https://vvipmedia.net" id="back-link">← Back to VVIP25</a>
-      <section class="grid" id="shop-grid"></section>
-    </div>
-  </main>
+    document.querySelectorAll('.shop-item.soldout').forEach(card => {
+      card.addEventListener('click', e => {
+        if (e.target.closest('a,button')) return;
+        card.classList.toggle('open');
+      });
+    });
 
-  <!-- === MINI PLAYER === -->
-  <div id="mini-player" style="display:none">
-    <button id="prev" aria-label="Previous"></button>
-    <button id="playpause" aria-label="Play/Pause"></button>
-    <button id="next" aria-label="Next"></button>
-    <span id="now-playing">Nothing playing</span>
-  </div>
+  } catch (err) {
+    console.error('⚠️ Shoppe load failed:', err);
+    grid.innerHTML = `<p>⚠️ Failed to load items.<br>${err.message}</p>`;
+  }
 
-  <!-- === MINI PLAYER SYNC SCRIPT === -->
-  <script>
-  (async () => {
+  // --- Mini-player restore ---
+  try {
     const mini = document.getElementById('mini-player');
     const prevBtn = document.getElementById('prev');
     const playBtn = document.getElementById('playpause');
@@ -241,143 +232,35 @@ window.addEventListener('DOMContentLoaded', () => {
     const savedSrc   = localStorage.getItem('vvip25_src');
     const savedTime  = parseFloat(localStorage.getItem('vvip25_time')||0);
     const wasPlaying = localStorage.getItem('vvip25_playing')==='true';
+    const savedTitle = localStorage.getItem('vvip25_title') || '—';
     if (!savedSrc) return;
-
-    let manifest = [];
-    try {
-      const m = await fetch('https://vvipmedia.net/manifest.json', { cache: 'no-store' });
-      manifest = await m.json();
-    } catch {}
-
-    let titles = {};
-    try {
-      titles = await fetch('https://vvipmedia.net/titles.json').then(r=>r.json());
-    } catch {};
 
     const audio = new Audio(savedSrc);
     audio.currentTime = savedTime;
-
-    const files = manifest.map(t => t.name);
-    let idx = files.findIndex(f => savedSrc.includes(f));
-    if (idx < 0) idx = 0;
-
-    function getTitle(i){
-      const file = files[i] || '';
-      return titles[file] ||
-        decodeURIComponent(file.replace(/\.[a-z0-9]+$/i,'').replace(/[_-]+/g,' '));
-    }
-
-    function updateNow(label){
-      nowSpan.textContent = `Now Playing: ${label}`;
-    }
-
     mini.style.display = 'flex';
-    updateNow(getTitle(idx));
-
-    if (wasPlaying) {
-      try { await audio.play(); playBtn.innerHTML = svgPause; } catch{}
-    }
+    nowSpan.textContent = `Now Playing: ${savedTitle}`;
 
     playBtn.onclick = () => {
       if (audio.paused) {
         audio.play(); playBtn.innerHTML = svgPause;
-        updateNow(getTitle(idx));
+        nowSpan.textContent = `Now Playing: ${savedTitle}`;
       } else {
         audio.pause(); playBtn.innerHTML = svgPlay;
         nowSpan.textContent = 'Paused';
       }
     };
 
-    prevBtn.onclick = () => {
-      if (!files.length) return;
-      idx = (idx - 1 + files.length) % files.length;
-      audio.src = 'https://cdn.vvipmedia.net/ACCESS/' + encodeURIComponent(files[idx]);
-      updateNow(getTitle(idx));
-      audio.play(); playBtn.innerHTML = svgPause;
-    };
-
-    nextBtn.onclick = () => {
-      if (!files.length) return;
-      idx = (idx + 1) % files.length;
-      audio.src = 'https://cdn.vvipmedia.net/ACCESS/' + encodeURIComponent(files[idx]);
-      updateNow(getTitle(idx));
-      audio.play(); playBtn.innerHTML = svgPause;
-    };
-  })();
-  </script>
-
-  <!-- === SHOPPE LOADER === -->
-  <script>
-  document.addEventListener('DOMContentLoaded', () => {
-    const grid = document.getElementById('shop-grid');
-    fetch('https://shoppe.vvipmedia.net/shoppe.json?v=' + Date.now(), { cache: 'no-store' })
-      .then(res => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
-      })
-
-.then(data => {
-  console.log('✅ Loaded', data.length, 'shop items');
-  grid.innerHTML = data.map(item => {
-    const available = item.available !== false;
-    const soldClass = available ? '' : 'soldout';
-    const buttonHTML = available
-      ? (item.bandcamp_url
-          ? `<a href="${item.bandcamp_url}" class="btn" target="_blank" rel="noopener">View</a>`
-          : item.fb_marketplace
-            ? `<a href="${item.fb_marketplace}" class="btn" target="_blank" rel="noopener">View</a>`
-            : `<span class="btn" style="opacity:.4;pointer-events:none">Unavailable</span>`)
-      : `<span class="btn" style="opacity:.4;pointer-events:none">Sold&nbsp;Out</span>`;
-
-    return `
-      <div class="shop-item ${soldClass}">
-        <img src="${item.image}" alt="${item.title}">
-        <h3>${item.title}</h3>
-        <p class="desc">${item.description}</p>
-        <div class="buy">
-          <span class="price">${item.currency || ''} ${item.price || ''}</span>
-          ${buttonHTML}
-        </div>
-      </div>
-    `;
-  }).join('');
-
-  // Add toggle behavior for sold-out items
-  document.querySelectorAll('.shop-item.soldout').forEach(card => {
-    card.addEventListener('click', e => {
-      // Ignore clicks on links/buttons
-      if (e.target.closest('a,button')) return;
-      card.classList.toggle('open');
+    audio.addEventListener('ended', () => {
+      audio.currentTime = 0;
+      audio.play();
     });
-  });
-})
 
-      .then(data => {
-        console.log('✅ Loaded', data.length, 'shop items');
-        grid.innerHTML = data.map(item => `
-          <div class="shop-item">
-            <img src="${item.image}" alt="${item.title}">
-            <h3>${item.title}</h3>
-            <p class="desc">${item.description}</p>
-            <div class="buy">
-              <span class="price">${item.currency || ''} ${item.price || ''}</span>
-              ${
-                item.bandcamp_url
-                  ? `<a href="${item.bandcamp_url}" class="btn" target="_blank" rel="noopener">View</a>`
-                  : item.fb_marketplace
-                    ? `<a href="${item.fb_marketplace}" class="btn" target="_blank" rel="noopener">View</a>`
-                    : `<span class="btn" style="opacity:.4;pointer-events:none">Sold&nbsp;Out</span>`
-              }
-            </div>
-          </div>
-        `).join('');
-      })
-      .catch(err => {
-        console.error('⚠️ Shoppe load failed:', err);
-        grid.innerHTML = `<p>⚠️ Failed to load items.<br>${err.message}</p>`;
-      });
-  });
-  </script>
+    if (wasPlaying) audio.play().catch(()=>{});
+  } catch (e) {
+    console.warn('Mini-player restore failed', e);
+  }
+});
+</script>
 
   <footer>© VVIP25 / VVIPMEDIA.NET</footer>
 </body>
