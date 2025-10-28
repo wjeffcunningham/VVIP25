@@ -630,6 +630,21 @@
   }
 }
 
+/* --- Temporarily disable WAV buttons --- */
+a.pill[href$=".wav"],
+a.pill[href*=".wav"] {
+  pointer-events: none;
+  opacity: 0.35;
+  filter: grayscale(1) brightness(0.8);
+  border-color: rgba(255,255,255,0.1);
+  color: var(--muted);
+  background: transparent;
+}
+a.pill[href$=".wav"]:hover {
+  opacity: 0.35 !important;
+  transform: none !important;
+}
+
 /* --- Desktop layout: left-aligned, large cover, shimmer title --- */
 @media (min-width:561px){
   .now{
@@ -739,6 +754,27 @@
   min-width: 64px;
 }
 
+@media (max-width:560px){
+  .row .right {
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 4px;
+    padding-right: 0;
+    margin-right: 0;
+    min-width: 72px;
+  }
+  .row .right .star {
+    order: 1;
+    margin: 0;
+  }
+  .row .right .handle {
+    order: 2;
+    margin: 0 2px 0 4px;
+  }
+}
+
 /* --- Swipe + Collapse Animation --- */
 .row.swiped-left,
 .row.swiped-right {
@@ -811,6 +847,24 @@
   }
 }
 
+/* --- Surge gradient styling for mobile title when playing --- */
+@media (max-width:560px){
+  body.playing #now-title {
+    background: linear-gradient(90deg, var(--accent), #fdf6d0, var(--accent));
+    background-size: 250% 100%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: mobileSurge 3.5s ease-in-out infinite;
+  }
+
+  @keyframes mobileSurge {
+    0%   { background-position: 0% 50%; opacity: .9; }
+    45%  { background-position: 100% 50%; opacity: 1; }
+    60%  { filter: drop-shadow(0 0 6px var(--accent)); }
+    100% { background-position: 0% 50%; opacity: .9; filter:none; }
+  }
+}
+
 /* === PATCH: Make all thumbs and main cover square === */
 .cover,
 .cover img,
@@ -827,6 +881,50 @@
 
 .row img {
   object-fit: cover;
+}
+
+/* --- Unified right-aligned badge layout --- */
+.badge {
+  display: flex !important;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 6px;
+  width: 100%;
+  overflow: visible;
+}
+
+.badge .pill,
+.badge .star,
+.badge .handle {
+  flex-shrink: 0;
+}
+
+/* exact visual order */
+.badge .gem       { order: 1; }
+.badge a[href$=".mov"],
+.badge a[href*=".mov"] { order: 2; }
+.badge a[href$=".wav"],
+.badge a[href*=".wav"] { order: 3; }
+.badge a[href$=".mp3"],
+.badge a[href*=".mp3"] { order: 4; }
+.badge .star      { order: 5; }
+.badge .handle    { order: 6; }
+
+/* keep them flush to the right */
+.row .right {
+  justify-content: flex-end;
+  align-items: center;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  min-width: 96px;
+  padding-right: 4px;
+}
+
+@media (max-width:560px){
+  .badge { gap: 4px; }
+  .row .right { gap: 4px; padding-right: 0; }
 }
 
 </style>
