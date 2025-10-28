@@ -51,7 +51,7 @@
     "currency": "CAD",
     "bandcamp_url": null,
     "fb_marketplace": null,
-    "available": true,
+    "available": false,
     "tags": ["#poster", "#print"]
   },
   {
@@ -73,7 +73,7 @@
     "currency": "USD",
     "bandcamp_url": "https://www.youtube.com/watch?v=JFxc9OQlFMU",
     "fb_marketplace": null,
-    "available": false,
+    "available": true,
     "tags": ["#lp", "#audio", "#essay"]
   },
   {
@@ -84,7 +84,7 @@
     "currency": "CAD",
     "bandcamp_url": "https://virtualvip.bandcamp.com/album/arcade-water",
     "fb_marketplace": null,
-    "available": false,
+    "available": true,
     "tags": ["#lp", "#audio"]
   },
   {
@@ -95,7 +95,7 @@
     "currency": "CAD",
     "bandcamp_url": "https://virtualvip.bandcamp.com/album/renders-of-music-for-video",
     "fb_marketplace": null,
-    "available": false,
+    "available": true,
     "tags": ["#lp", "#audio"]
   },
   {
@@ -150,7 +150,7 @@
     "currency": "CAD",
     "bandcamp_url": "https://virtualvip.bandcamp.com/album/renders-of-music-for-video",
     "fb_marketplace": null,
-    "available": false,
+    "available": true,
     "tags": ["#lp", "#audio"]
   },
   {
