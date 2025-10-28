@@ -152,7 +152,26 @@
 }
 </style>
 
+<main id="page-root" data-page="shoppe">
+  <div class="wrap">
+    <h1 id="site-title">VVIP SHOPPE</h1>
+    <a href="https://vvipmedia.net" id="back-link">← Back to VVIP25</a>
+
+    <!-- 👇 This is what the JS expects -->
+    <section class="grid" id="shop-grid"></section>
+  </div>
+</main>
+
+<!-- Mini-player container -->
+<div id="mini-player" style="display:none">
+  <button id="prev" aria-label="Previous"></button>
+  <button id="playpause" aria-label="Play/Pause"></button>
+  <button id="next" aria-label="Next"></button>
+  <span id="now-playing">Nothing playing</span>
+</div>
+
 <script>
+
 document.addEventListener('DOMContentLoaded', async () => {
   const grid = document.getElementById('shop-grid');
 
