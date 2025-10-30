@@ -8,7 +8,12 @@
   <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
   <link rel="icon" href="/favicon.ico?v=3">
+  <link rel="preconnect" href="https://cdn.vvipmedia.net" crossorigin>
   <meta name="theme-color" content="#0b0b0c"/>
+
+
+
+
 <style>
   :root {
     --bg:#0b0b0c;
@@ -588,17 +593,6 @@
     -webkit-text-fill-color:transparent;
   }
 
-  /* Shimmer when playing */
-  body.playing .cover::after{
-    animation:shimmerMobile 2s linear infinite;
-  }
-
-  @keyframes shimmerMobile{
-    0%   {background-position:0% 50%;opacity:.9;}
-    50%  {background-position:100% 50%;opacity:1;}
-    100% {background-position:0% 50%;opacity:.9;}
-  }
-
   /* Hide redundant small title & subtext */
   #now-title-mobile,
   #now-sub {display:none!important;}
@@ -816,10 +810,8 @@ a.pill[href$=".wav"]:hover {
   .cover::after { content:none !important; }
 }
 
-/* === PATCH: Mobile star/handle alignment & title shimmer === */
+/* === Mobile star / handle alignment only === */
 @media (max-width:560px){
-
-  /* Star + handle flush to right, in that order */
   .row .right{
     display:flex;
     justify-content:flex-end;
@@ -831,38 +823,6 @@ a.pill[href$=".wav"]:hover {
   }
   .row .right .star{order:1;}
   .row .right .handle{order:2;margin-left:2px;}
-
-  /* Gradient shimmer on title when playing (mobile only) */
-  .row.playing .title{
-    background:linear-gradient(90deg,var(--accent),#fdf6d0,var(--accent));
-    background-size:300% 100%;
-    -webkit-background-clip:text;
-    -webkit-text-fill-color:transparent;
-    animation:mobileTitleShimmer 4s linear infinite;
-  }
-
-  @keyframes mobileTitleShimmer{
-    0%{background-position:0% 50%;}
-    100%{background-position:-300% 50%;}
-  }
-}
-
-/* --- Surge gradient styling for mobile title when playing --- */
-@media (max-width:560px){
-  body.playing #now-title {
-    background: linear-gradient(90deg, var(--accent), #fdf6d0, var(--accent));
-    background-size: 250% 100%;
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    animation: mobileSurge 3.5s ease-in-out infinite;
-  }
-
-  @keyframes mobileSurge {
-    0%   { background-position: 0% 50%; opacity: .9; }
-    45%  { background-position: 100% 50%; opacity: 1; }
-    60%  { filter: drop-shadow(0 0 6px var(--accent)); }
-    100% { background-position: 0% 50%; opacity: .9; filter:none; }
-  }
 }
 
 /* === PATCH: Make all thumbs and main cover square === */
@@ -927,9 +887,37 @@ a.pill[href$=".wav"]:hover {
   .row .right { gap: 4px; padding-right: 0; }
 }
 
+/* --- Title shimmer / crackle --- */
+@keyframes shimmerDesktop {
+  0%,100% { text-shadow:0 0 4px rgba(253,246,208,0.18); opacity:.95; }
+  25% { text-shadow:0 0 8px rgba(110,231,183,0.28); opacity:1; }
+  50% { text-shadow:0 0 10px rgba(253,246,208,0.5); opacity:1; }
+  75% { text-shadow:0 0 8px rgba(110,231,183,0.28); opacity:1; }
+}
+body.playing #now-title {
+  animation: shimmerDesktop 6s ease-in-out infinite;
+}
+
+/* --- Cover shimmer (mobile) --- */
+@keyframes shimmerMobile {
+  0% { background-position:0% 50%; opacity:.82; }
+  50% { background-position:100% 50%; opacity:.92; }
+  100% { background-position:0% 50%; opacity:.82; }
+}
+body.playing .cover::after {
+  animation: shimmerMobile 4.5s linear infinite;
+  opacity:.85;
+}
+
 </style>
 </head>
 <body>
+  <iframe
+  id="vvip-player-frame"
+  src="./player.html?v=7"
+  allow="autoplay"
+  style="display:none;width:0;height:0;border:0"
+></iframe>
   <div class="player">
     <div class="wrap">
   <header>
@@ -983,13 +971,11 @@ a.pill[href$=".wav"]:hover {
     </div>
   </main>
 
-  <audio id="audio" preload="metadata"></audio>
-
 <script>
 /* ========= VVIPMEDIA — Core Player (Unified List) + Gear Menu ========= */
 
 const ASSET_VERSION = 18;
-const PREFERRED_TITLE = 'vic said';
+const PREFERRED_TITLE = '25.10.19.78.mp3';
 
 /* ---------- Config ---------- */
 const BASE_MP3   = 'https://cdn.vvipmedia.net/ACCESS/';
@@ -1015,7 +1001,7 @@ function matchesTokens(t,toks){if(!toks.length)return true;const n=(t.name||'').
 
 /* ---------- Elements & State ---------- */
 const els={
-  audio:$('#audio'),list:$('#list'),toggle:$('#toggle'),
+  list:$('#list'),toggle:$('#toggle'),
   prev:$('#prev'),next:$('#next'),seek:$('#seek'),vol:$('#vol'),
   nowTitle:$('#now-title'),nowSub:$('#now-sub'),cover:$('#cover'),
   tcur:$('#tcur'),tdur:$('#tdur'),toolbar:$('#toolbar'),
@@ -1321,7 +1307,6 @@ function preselectPreferred(x){
 function select(i){
   state.i = i;
   const t = state.filtered[i];
-  els.audio.src = t.src;
   updateNowbar();
 }
 
@@ -1346,30 +1331,13 @@ function updateNowbar(){
 }
 
 function play(){
-  try {
-    const playPromise = els.audio.play();
-    if (playPromise !== undefined) {
-      playPromise
-        .then(() => {
-          state.playing = true;
-          setControlIcons();
-          document.body.classList.add('playing');
-        })
-        .catch(err => {
-          console.warn('Autoplay blocked or failed:', err);
-        });
-    } else {
-      state.playing = true;
-      setControlIcons();
-      document.body.classList.add('playing');
-    }
-  } catch (err) {
-    console.error('play() error:', err);
-  }
+  sendToPlayer({ cmd: "play" });
+  sendToPlayer({ cmd:"load", src:t.src, play:false });
+  document.body.classList.add("playing");
+  setControlIcons();
 }
 
 function pause(){
-  els.audio.pause();
   state.playing = false;
   document.body.classList.remove('playing'); // ✅ stop shimmer
   setControlIcons();
@@ -1386,26 +1354,14 @@ function setControlIcons(){
   if($('#toggle')) $('#toggle').innerHTML = state.playing ? svgPause : svgPlay;
 }
 
-/* --- Scrubbing + time display for track title --- */
-document.addEventListener('DOMContentLoaded', () => {
-  const audio = document.getElementById('audio');
-  const scrub = document.getElementById('scrub');
-  const nowTime = document.getElementById('now-time');
-  if (!audio || !scrub || !nowTime) return;
-
-  // Update position + time as track plays
-  audio.addEventListener('timeupdate', () => {
-    if (!audio.duration) return;
-    scrub.value = (audio.currentTime / audio.duration) * 100;
-    nowTime.textContent = fmtDur(audio.currentTime);
-  });
-
-  // Allow user to seek
-  scrub.addEventListener('input', () => {
-    if (!audio.duration) return;
-    const pct = scrub.value / 100;
-    audio.currentTime = audio.duration * pct;
-  });
+const scrub = document.getElementById("scrub");
+scrub.addEventListener("input", e => {
+  const fraction = parseFloat(e.target.value) / 100;
+  const d = state.duration || 0;
+  if (d > 0) {
+    const newTime = d * fraction;
+    sendToPlayer({ cmd: "seek", time: newTime });
+  }
 });
 
 /* ---------- Gear + Toolbar ---------- */
@@ -1610,21 +1566,34 @@ document.addEventListener('click', e => {
 
 </script>
 <script>
-// --- Save playback state when leaving page ---
-window.addEventListener('beforeunload', () => {
+// --- Save playback state when leaving page (iframe-aware) ---
+window.addEventListener("beforeunload", () => {
   try {
-    const player = document.querySelector('audio');
-    if (!player) return;
-    localStorage.setItem('vvip25_src', player.src);
-    localStorage.setItem('vvip25_time', player.currentTime);
-    localStorage.setItem('vvip25_playing', !player.paused);
-    localStorage.setItem('vvip25_title', document.querySelector('#now-title')?.textContent || '');
-  } catch(e) {
-    console.warn('Could not save player state', e);
+    const frame = document.getElementById("vvip-player-frame");
+    if (!frame || !frame.contentWindow) return;
+
+    // Ask the iframe to report current status one last time
+    frame.contentWindow.postMessage({ cmd: "report" }, "*");
+
+    // We'll listen synchronously for the reply (best-effort)
+    window.addEventListener("message", (e) => {
+      const d = e.data;
+      if (!d || d.status !== "update") return;
+      try {
+        localStorage.setItem("vvip25_src", d.src || "");
+        localStorage.setItem("vvip25_time", d.time || 0);
+        localStorage.setItem("vvip25_duration", d.duration || 0);
+        localStorage.setItem("vvip25_playing", d.playing);
+        localStorage.setItem("vvip25_title", document.querySelector("#now-title")?.textContent || "");
+      } catch (err) {
+        console.warn("Could not persist state:", err);
+      }
+    }, { once: true });
+  } catch (err) {
+    console.warn("Could not request player state:", err);
   }
 });
 </script>
-
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.3/Sortable.min.js"></script>
 <script>
 document.addEventListener("DOMContentLoaded", () => {
@@ -1671,31 +1640,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
 });
-</script>
-
-<script>
-// === CONTINUOUS PLAYBACK & ALIGNMENT PATCH (VVIP25) ===
-
-// 1️⃣ Continuous playback
-const audioEl = document.getElementById('audio');
-if (audioEl) {
-  audioEl.addEventListener('ended', () => {
-    // find next visible track after current
-    const visible = [...document.querySelectorAll('.row')];
-    const current = visible.findIndex(r => Number(r.dataset.id) === state.filtered[state.i]?.id);
-    if (current >= 0 && current < visible.length - 1) {
-      const nextRow = visible[current + 1];
-      const nextId = Number(nextRow.dataset.id);
-      const nextIdx = state.filtered.findIndex(t => t.id === nextId);
-      if (nextIdx >= 0) {
-        select(nextIdx);
-        play();
-      }
-    } else {
-      pause();
-    }
-  });
-}
 </script>
 
 <script>
@@ -1762,6 +1706,77 @@ renderList = function() {
   const filtered = state.filtered.filter(t => !state.hiddenIds.has(t.id));
   els.list.innerHTML = filtered.slice(0, state.renderCount).map(rowHTML).join('');
 };</script>
+
+<script>
+/* === VVIP25 — Persistent IFrame Player Bridge === */
+const playerFrame = document.getElementById("vvip-player-frame");
+function sendToPlayer(data){ playerFrame?.contentWindow?.postMessage(data,"*"); }
+
+// Replace any call that manipulates <audio> directly with sendToPlayer()
+// Example: when selecting a track, tell the iframe to load and play
+
+function select(i){
+  state.i = i;
+  const t = state.filtered[i];
+  updateNowbar();
+sendToPlayer({ cmd:"load", src:t.src, play:false });
+}
+
+function play(){ sendToPlayer({ cmd:"play" }); state.playing=true; document.body.classList.add("playing"); setControlIcons(); }
+function pause(){ sendToPlayer({ cmd:"pause" }); state.playing=false; document.body.classList.remove("playing"); setControlIcons(); }
+
+/* --- Unified message handler (time, play, scrub, persistence) --- */
+const scrubEl = document.getElementById("scrub");
+const nowTimeEl = document.getElementById("now-time");
+
+window.addEventListener("message", (e) => {
+  const d = e.data || {};
+  if (d.status === "update") {
+    // Core state
+    state.playing  = !!d.playing;
+    state.duration = Number(d.duration) || 0;
+    const t        = Number(d.time) || 0;
+
+    // UI sync
+    setControlIcons();
+    document.body.classList.toggle("playing", state.playing);
+
+    // Time text
+    if (nowTimeEl) {
+      const m = Math.floor(t / 60);
+      const s = Math.floor(t % 60);
+      nowTimeEl.textContent = `${m}:${String(s).padStart(2,"0")}`;
+    }
+
+    // Scrubber progress
+    if (scrubEl && state.duration > 0 && document.activeElement !== scrubEl) {
+      const pct = Math.min(100, Math.max(0, (t / state.duration) * 100));
+      scrubEl.value = pct;
+    }
+
+    // Persist for Shoppe / reload continuity
+    try {
+      localStorage.setItem("vvip25_time", t);
+      localStorage.setItem("vvip25_duration", state.duration);
+      localStorage.setItem("vvip25_playing", String(state.playing));
+      if (state.i >= 0 && state.filtered[state.i]) {
+        const tr = state.filtered[state.i];
+        localStorage.setItem("vvip25_src", tr.src || "");
+        localStorage.setItem("vvip25_title", tr.title || "");
+      }
+    } catch {}
+
+  } else if (d.status === "ended") {
+    // optional: auto-next
+    if (state.filtered.length) {
+      const ni = (state.i + 1) % state.filtered.length;
+      select(ni);
+      play();
+    }
+  }
+});
+
+</script>
 
 </body>
 </html>
