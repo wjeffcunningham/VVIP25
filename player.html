@@ -96,10 +96,14 @@ window.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // --- Forward audio events upward ---
-  ["play","pause","ended","timeupdate","loadedmetadata"].forEach(ev=>{
-    audio.addEventListener(ev, () => postUpdate());
-  });
+  ["play","pause","timeupdate","loadedmetadata"].forEach(ev=>{
+  audio.addEventListener(ev, () => postUpdate());
+});
+
+// ✅ when a track finishes, explicitly tell parent to go next
+audio.addEventListener("ended", () => {
+  window.parent?.postMessage({ status: "ended", src: currentSrc }, "*");
+});
 
   console.log("✅ player.html loaded");
 });
