@@ -96,7 +96,7 @@
     "bpm": 116,
     "bpm_min": null,
     "bpm_max": null,
-    "details": "#bouncy; #optimistic; #guitar; #twang; #BestOfVVIP",
+    "details": "#bouncy; #optimistic; #guitar; #twang",
     "length": 0,
     "date": "2026-06-03",
     "year": 2026,
@@ -365,7 +365,7 @@
   },
   {
     "name": "26.02.16.98.mp3",
-    "title": "Polycrylic//UnLost Cause",
+    "title": "Polycrylic",
     "bpm": 98,
     "bpm_min": null,
     "bpm_max": null,
@@ -417,7 +417,7 @@
   },
   {
     "name": "25.10.19.78.mp3",
-    "title": "25.10.19.78.mp3//World Hub",
+    "title": "World Hub",
     "bpm": 78,
     "bpm_min": null,
     "bpm_max": null,
